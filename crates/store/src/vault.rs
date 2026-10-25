@@ -355,7 +355,8 @@ impl Vault {
             let inverse = op
                 .inverse(current.as_ref())
                 .map_err(|e| StoreError::from(e).blocking_undo())?;
-            txn.apply(inverse).map_err(StoreError::blocking_undo)?;
+            txn.apply_to(inverse, current.as_ref())
+                .map_err(StoreError::blocking_undo)?;
         }
         txn.finish()?
             .ok_or_else(|| StoreError::UndoBlocked("the step has no changes".to_owned()))

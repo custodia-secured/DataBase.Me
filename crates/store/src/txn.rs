@@ -241,6 +241,17 @@ impl<'v> Txn<'v> {
     /// Applies one op and appends it to the log.
     pub(crate) fn apply(&mut self, op: Op) -> Result<()> {
         rows::apply(&self.tx, &op, self.ts)?;
+        self.log(op)
+    }
+
+    /// [`Txn::apply`], given `current`: the row `op` targets as this transaction reads it now.
+    pub(crate) fn apply_to(&mut self, op: Op, current: Option<&Row>) -> Result<()> {
+        rows::apply_to(&self.tx, &op, current, self.ts)?;
+        self.log(op)
+    }
+
+    /// Appends an applied op to the log.
+    fn log(&mut self, op: Op) -> Result<()> {
         let target_id = op.key().target_id();
         let entry = OpEntry {
             op_id: self.ctx.ids.next(self.ts)?,
@@ -561,9 +572,9 @@ impl<'v> Txn<'v> {
     /// Moves an object, and everything below it, to the Trash.
     pub fn trash_object(&mut self, id: Id) -> Result<()> {
         self.guard(|t| {
-            t.live_object(id)?;
+            let root = t.live_object(id)?;
             let trash = kind(Entity::Object, Action::Trash)?;
-            for before in t.read().subtree(id)? {
+            for before in t.read().subtree_of(root)? {
                 if before.deleted_at.is_none() {
                     let mut after = before.clone();
                     after.deleted_at = Some(t.ts);
@@ -588,7 +599,7 @@ impl<'v> Txn<'v> {
                 return Err(rule("its parent is in the Trash: restore that first"));
             }
             let restore = kind(Entity::Object, Action::Restore)?;
-            for before in t.read().subtree(id)? {
+            for before in t.read().subtree_of(object)? {
                 if before.deleted_at == Some(trashed_at) {
                     let mut after = before.clone();
                     after.deleted_at = None;
@@ -604,12 +615,13 @@ impl<'v> Txn<'v> {
     /// the blob store. Like every change, this can be undone in the same session.
     pub fn delete_object(&mut self, id: Id) -> Result<()> {
         self.guard(|t| {
-            if t.read().object(id)?.deleted_at.is_none() {
+            let root = t.read().object(id)?;
+            if root.deleted_at.is_none() {
                 return Err(rule(format!(
                     "object {id} must be in the Trash before it is deleted"
                 )));
             }
-            for object in t.read().subtree(id)?.into_iter().rev() {
+            for object in t.read().subtree_of(root)?.into_iter().rev() {
                 for relation in t.read().relations_touching(object.id)? {
                     t.apply(Op::delete(Row::Relation(relation)))?;
                 }

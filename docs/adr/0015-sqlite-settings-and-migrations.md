@@ -38,8 +38,27 @@ how durable each commit is. It also has to read the M1 budget, "10k-object CRUD 
   index, since the chain already makes it unique, and there are no indexes on `group_id` or
   `target_id`: nothing in M1 looks ops up that way. The milestones that need those lookups add the
   indexes. Indexes are not part of the format (FORMAT.md §3).
-- **Recursive queries** (subtrees, type inheritance) use `CROSS JOIN` to fix the join order.
-  Without it, SQLite's planner picked a slower order for the recursive step.
+- **Query shapes on the paths every change takes.** Each SQLite statement has a fixed cost per
+  run, and on these paths it is paid once or more per object. Measured per call on the
+  development laptop, for a lookup that finds nothing (the usual case): a plain indexed lookup
+  takes 1.9 µs, the same lookup with an `ORDER BY` 4.8 to 5.8 µs (even when an index gives the
+  order), a recursive subtree query 3.6 µs, and the attachment lookup written as a join 9.6 µs.
+  So:
+  - An `UPDATE` sets only the columns that changed. Setting an indexed column, even to its old
+    value, makes SQLite rewrite that index entry. With every column in the `SET`, undoing 10,000
+    trashings took 358 ms; with only the changed columns, 136 ms.
+  - Subtrees of objects and blocks, and an object's block tree, are walked in Rust with one
+    indexed lookup per row. Short per-object lists (relations, attachments, types) are sorted in
+    Rust. The order is exactly the one the SQL `ORDER BY` gave; a test compares each read with its
+    SQL definition.
+  - An attachment's blob size comes from a subquery rather than a join. Every attachment has its
+    blob (a foreign key), so the rows are the same.
+  - Undo applies each inverse op to the row it has just read, instead of reading it a second time.
+    Debug builds, and so the tests, read it again and check that it matches.
+
+  Type inheritance still uses a recursive query. It runs only when an object's field values are
+  checked.
+
 - **How the 2 s budget is read.** The budget is measured as four bulk actions on 10,000 objects:
   create, edit, delete, then undo each of the three. Each action is one transaction, the way the
   app applies an import, a paste or a multi-selection. The release-mode test
@@ -50,16 +69,20 @@ how durable each commit is. It also has to read the M1 budget, "10k-object CRUD 
 ## Consequences
 
 - Measured on the development laptop (Windows 11, NVMe, release build), the gated run takes
-  1.59 to 1.64 s: create about 137 ms, edit 156 ms, delete 570 ms, and undoing the three 740 ms.
-  Run straight after the 40,000-commit measurement it took 1.88 s, so CI runs the two separately.
-- The ungated run, 40,000 commits of one change each, takes 4.59 s: 115 µs per commit, nearly
-  all of it SQLite's commit to disk. The UI applies each user action as one transaction, and a
-  person does not make 40,000 separate edits in two seconds, but this figure is a deviation from a
-  literal reading of the budget and is reported as one.
-- The margin is about 20% on a fast development machine, and neither the CI runner nor the
-  reference machine (ADR-0008) has been measured yet. Trashing and deleting go through about ten
-  queries and two ops per object, and undo re-reads every row it reverses; those are the places
-  to optimise if the gate fails there. Dropping the gate is not the answer.
+  1.05 to 1.08 s over six runs: create about 145 ms, edit 138 ms, delete 261 ms, and undoing the
+  three 516 ms. Before the query changes above it took 1.59 to 1.64 s, and the first CI run, on
+  `ubuntu-latest`, took 2.60 s and failed the gate: create 239 ms, edit 232 ms, delete 1,207 ms,
+  undo 926 ms. CI runs the gated test and the measurement separately, since running them together
+  slowed the gated run to 1.88 s on the laptop.
+- The ungated run, 40,000 commits of one change each, takes 3.97 s: 99 µs per commit (4.59 s and
+  115 µs before). The UI applies each user action as one transaction, and a person does not make
+  40,000 separate edits in two seconds, but this figure is a deviation from a literal reading of
+  the budget and is reported as one.
+- The CI runner was 1.3 to 2.1 times slower than the laptop, phase by phase. At that ratio the
+  gated run lands between about 1.4 and 1.8 s on CI; the next CI run measures it. The reference
+  machine (ADR-0008) has not been measured yet. What remains is spread evenly: about 13 µs per
+  op, of which 2 to 6 µs is building, checking and hashing the op and the rest is SQL. Dropping
+  the gate is not the answer.
 - Turning on `synchronous = FULL` later costs one more fsync per commit. That trade-off is
   revisited if users report losing their last edits after power loss.
 
@@ -72,6 +95,12 @@ how durable each commit is. It also has to read the M1 budget, "10k-object CRUD 
 - **A migration framework crate** (refinery, sqlx migrations). More dependencies for what one
   short function and numbered files already do. Those tools also keep their own bookkeeping table,
   where `user_version` is visible to any SQLite tool.
+- **Deferring WAL checkpoints** (`wal_autocheckpoint = 0`, checkpointing when idle). It saved
+  about 25 ms per bulk action, but it moves the work rather than removing it, and a vault left
+  unchecked grows its WAL file without bound.
+- **Handing every service's row to the op instead of reading it again,** as undo does. It saved
+  3% of the gated run, at the cost of every service having to guarantee that the row it hands
+  over is still the row as it is now.
 - **Indexing `ops` by group, target and hash now.** Each index adds work to every commit, for
   lookups nothing uses yet. Dropping them was one of the changes that took the per-change run from
   15.2 s to 4.58 s.

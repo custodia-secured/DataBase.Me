@@ -1241,3 +1241,145 @@ fn verify_reports_rows_missing_from_or_added_to_the_tables() {
         "{report:?}"
     );
 }
+
+#[test]
+fn tree_and_list_reads_keep_the_order_their_sql_defines() {
+    // These reads walk trees and sort in Rust rather than in SQL (ADR-0015). The trees here have a
+    // sort-key order that differs from their ID order at every level, and each read is compared
+    // with its definition as one SQL query.
+    let mut t = new_vault();
+    let types = ["Note", "Task", "Person"].map(|name| type_id(&t.vault, name));
+    let one = t.vault.blobs().put(b"one").unwrap().hash;
+    let two = t.vault.blobs().put(b"two").unwrap().hash;
+    t.tick();
+    let ((root, top), _) = t
+        .vault
+        .transact(|txn| {
+            let root = txn.create_object(NewObject {
+                type_ids: types.into(),
+                ..object("root")
+            })?;
+            let mut parents = vec![root];
+            for _ in 0..3 {
+                let mut next = Vec::new();
+                for &parent in &parents {
+                    let child = |position| NewObject {
+                        parent_id: Some(parent),
+                        position,
+                        ..object("child")
+                    };
+                    let last = txn.create_object(child(Position::Last))?;
+                    let first = txn.create_object(child(Position::First))?;
+                    let between = txn.create_object(child(Position::After(first)))?;
+                    next.extend([last, first, between]);
+                }
+                parents = next;
+            }
+            let block = |parent, position| NewBlock {
+                object_id: root,
+                parent_block_id: parent,
+                position,
+                kind: "paragraph".into(),
+                content: json!({}),
+            };
+            let top = txn.create_block(block(None, Position::Last))?;
+            let first = txn.create_block(block(None, Position::First))?;
+            for parent in [top, first] {
+                let last = txn.create_block(block(Some(parent), Position::Last))?;
+                let first = txn.create_block(block(Some(parent), Position::First))?;
+                txn.create_block(block(Some(last), Position::Last))?;
+                txn.create_block(block(Some(first), Position::Last))?;
+            }
+            for (blob_hash, role) in [
+                (&two, AttachmentRole::Thumbnail),
+                (&one, AttachmentRole::Original),
+                (&two, AttachmentRole::OcrText),
+                (&one, AttachmentRole::OcrText),
+            ] {
+                txn.attach(NewAttachment {
+                    object_id: root,
+                    blob_hash: blob_hash.clone(),
+                    role,
+                    filename: None,
+                    mime: None,
+                })?;
+            }
+            Ok((root, top))
+        })
+        .unwrap();
+
+    let db = rusqlite::Connection::open(t.path.join(DATABASE_FILE)).unwrap();
+    let sql = |query: &str, id: Id| -> Vec<String> {
+        db.prepare(query)
+            .unwrap()
+            .query_map([id.to_string()], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect()
+    };
+    let read = t.vault.read();
+    let ids = |ids: Vec<Id>| -> Vec<String> { ids.iter().map(Id::to_string).collect() };
+
+    let subtree = ids(read.subtree(root).unwrap().iter().map(|o| o.id).collect());
+    assert_eq!(subtree.len(), 40);
+    assert_eq!(
+        subtree,
+        sql(
+            "WITH RECURSIVE tree(node, depth) AS (SELECT ?1, 0 UNION ALL \
+             SELECT o.id, tree.depth + 1 FROM objects o JOIN tree ON o.parent_id = tree.node) \
+             SELECT objects.id FROM tree CROSS JOIN objects ON objects.id = tree.node \
+             ORDER BY tree.depth, sort_key, objects.id",
+            root
+        )
+    );
+    let blocks = ids(read.blocks(root).unwrap().iter().map(|b| b.id).collect());
+    assert_eq!(blocks.len(), 10);
+    assert_eq!(
+        blocks,
+        sql(
+            "WITH RECURSIVE tree(node, path) AS (SELECT id, sort_key || ' ' || id FROM blocks \
+             WHERE object_id = ?1 AND parent_block_id IS NULL UNION ALL \
+             SELECT b.id, tree.path || '/' || b.sort_key || ' ' || b.id \
+             FROM blocks b JOIN tree ON b.parent_block_id = tree.node) \
+             SELECT node FROM tree ORDER BY path",
+            root
+        )
+    );
+    assert_eq!(
+        ids(read
+            .block_subtree(top)
+            .unwrap()
+            .iter()
+            .map(|b| b.id)
+            .collect()),
+        sql(
+            "WITH RECURSIVE tree(node, depth) AS (SELECT ?1, 0 UNION ALL \
+             SELECT b.id, tree.depth + 1 FROM blocks b JOIN tree ON b.parent_block_id = tree.node) \
+             SELECT blocks.id FROM tree CROSS JOIN blocks ON blocks.id = tree.node \
+             ORDER BY tree.depth, sort_key, blocks.id",
+            top
+        )
+    );
+    assert_eq!(
+        read.attachments(root)
+            .unwrap()
+            .iter()
+            .map(|a| format!("{} {}", a.role.as_str(), a.blob_hash))
+            .collect::<Vec<_>>(),
+        sql(
+            "SELECT role || ' ' || blob_hash FROM attachments WHERE object_id = ?1 \
+             ORDER BY role, blob_hash",
+            root
+        )
+    );
+    assert_eq!(
+        ids(read.object_type_ids(root).unwrap()),
+        sql(
+            "SELECT type_id FROM object_types WHERE object_id = ?1 ORDER BY type_id",
+            root
+        )
+    );
+    assert!(read.subtree(Id::from_parts(9, 9)).unwrap().is_empty());
+    assert!(read.block_subtree(Id::from_parts(9, 9)).unwrap().is_empty());
+    t.assert_verifies();
+}

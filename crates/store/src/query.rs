@@ -2,6 +2,8 @@
 //! Reading a vault. [`Reader`] works the same on an open vault and inside a transaction, where it
 //! sees the transaction's own changes.
 
+use std::collections::HashMap;
+
 use rusqlite::{Connection, OptionalExtension, params};
 
 use dbme_core::chain::OpRecord;
@@ -44,6 +46,26 @@ fn collect<T>(
     let mut statement = conn.prepare_cached(sql)?;
     let rows = statement.query_map(params, map)?;
     Ok(rows.collect::<rusqlite::Result<Vec<T>>>()?)
+}
+
+/// `root` and the rows below it, by depth, then by `key`. `children` reads the rows directly below
+/// a row. Walking the tree here, one indexed lookup per row, took half the time of a recursive
+/// query with the same order when, as usual, nothing is below (ADR-0015).
+fn breadth_first<T>(
+    root: T,
+    key: fn(&T) -> (&SortKey, Id),
+    mut children: impl FnMut(&T) -> Result<Vec<T>>,
+) -> Result<Vec<T>> {
+    let mut tree = vec![(0_usize, root)];
+    let mut next = 0;
+    while let Some((depth, row)) = tree.get(next) {
+        let depth = depth + 1;
+        let below = children(row)?;
+        tree.extend(below.into_iter().map(|row| (depth, row)));
+        next += 1;
+    }
+    tree.sort_by(|(a_depth, a), (b_depth, b)| (a_depth, key(a)).cmp(&(b_depth, key(b))));
+    Ok(tree.into_iter().map(|(_, row)| row).collect())
 }
 
 /// Runs a `count(*)` query.
@@ -154,28 +176,43 @@ impl Reader<'_> {
 
     /// `id` and everything below it in the hierarchy, parents before children.
     pub fn subtree(&self, id: Id) -> Result<Vec<ObjectRow>> {
-        collect(
-            self.conn,
-            concat!(
-                "WITH RECURSIVE tree(node, depth) AS (SELECT ?1, 0 ",
-                "UNION ALL SELECT o.id, tree.depth + 1 FROM objects o JOIN tree ON o.parent_id = tree.node) ",
-                "SELECT ",
-                object_columns!(),
-                " FROM tree CROSS JOIN objects ON objects.id = tree.node ORDER BY tree.depth, sort_key, id"
-            ),
-            [id.to_string()],
-            object_row,
+        let Some(Row::Object(root)) = rows::load(self.conn, &RowKey::Id(Entity::Object, id))?
+        else {
+            return Ok(Vec::new());
+        };
+        self.subtree_of(root)
+    }
+
+    /// `root` and everything below it, by depth, then by sort key and ID.
+    pub(crate) fn subtree_of(&self, root: ObjectRow) -> Result<Vec<ObjectRow>> {
+        breadth_first(
+            root,
+            |o| (&o.sort_key, o.id),
+            |o| {
+                collect(
+                    self.conn,
+                    concat!(
+                        "SELECT ",
+                        object_columns!(),
+                        " FROM objects WHERE parent_id = ?1"
+                    ),
+                    [o.id.to_string()],
+                    object_row,
+                )
+            },
         )
     }
 
-    /// The IDs of an object's types.
+    /// The IDs of an object's types, in order.
     pub fn object_type_ids(&self, object_id: Id) -> Result<Vec<Id>> {
-        collect(
+        let mut ids = collect(
             self.conn,
-            "SELECT type_id FROM object_types WHERE object_id = ?1 ORDER BY type_id",
+            "SELECT type_id FROM object_types WHERE object_id = ?1",
             [object_id.to_string()],
             |r| sql::id(r, 0),
-        )
+        )?;
+        ids.sort_unstable();
+        Ok(ids)
     }
 
     /// How many objects have type `type_id`.
@@ -187,37 +224,72 @@ impl Reader<'_> {
         )
     }
 
-    /// All blocks of an object, in tree order: each block is followed by its children.
+    /// All blocks of an object, in tree order: each block is followed by its children, and
+    /// siblings are ordered by sort key and ID.
     pub fn blocks(&self, object_id: Id) -> Result<Vec<BlockRow>> {
-        collect(
+        let mut blocks = collect(
             self.conn,
             concat!(
-                "WITH RECURSIVE tree(node, path) AS (",
-                "SELECT id, sort_key || ' ' || id FROM blocks WHERE object_id = ?1 AND parent_block_id IS NULL ",
-                "UNION ALL SELECT b.id, tree.path || '/' || b.sort_key || ' ' || b.id ",
-                "FROM blocks b JOIN tree ON b.parent_block_id = tree.node) ",
                 "SELECT ",
                 block_columns!(),
-                " FROM tree CROSS JOIN blocks ON blocks.id = tree.node ORDER BY tree.path"
+                " FROM blocks WHERE object_id = ?1"
             ),
             [object_id.to_string()],
             block_row,
-        )
+        )?;
+        blocks.sort_unstable_by(|a, b| (&a.sort_key, a.id).cmp(&(&b.sort_key, b.id)));
+        let mut children: HashMap<Option<Id>, Vec<usize>> = HashMap::new();
+        for (index, block) in blocks.iter().enumerate() {
+            children
+                .entry(block.parent_block_id)
+                .or_default()
+                .push(index);
+        }
+        let mut order = Vec::with_capacity(blocks.len());
+        let mut stack: Vec<usize> = children
+            .get(&None)
+            .into_iter()
+            .flatten()
+            .rev()
+            .copied()
+            .collect();
+        while let Some(index) = stack.pop() {
+            order.push(index);
+            stack.extend(
+                children
+                    .get(&Some(blocks[index].id))
+                    .into_iter()
+                    .flatten()
+                    .rev(),
+            );
+        }
+        let mut blocks: Vec<Option<BlockRow>> = blocks.into_iter().map(Some).collect();
+        Ok(order
+            .into_iter()
+            .filter_map(|index| blocks[index].take())
+            .collect())
     }
 
-    /// Block `id` and the blocks below it, parents before children.
+    /// Block `id` and the blocks below it, by depth, then by sort key and ID.
     pub fn block_subtree(&self, id: Id) -> Result<Vec<BlockRow>> {
-        collect(
-            self.conn,
-            concat!(
-                "WITH RECURSIVE tree(node, depth) AS (SELECT ?1, 0 ",
-                "UNION ALL SELECT b.id, tree.depth + 1 FROM blocks b JOIN tree ON b.parent_block_id = tree.node) ",
-                "SELECT ",
-                block_columns!(),
-                " FROM tree CROSS JOIN blocks ON blocks.id = tree.node ORDER BY tree.depth, sort_key, id"
-            ),
-            [id.to_string()],
-            block_row,
+        let Some(Row::Block(root)) = rows::load(self.conn, &RowKey::Id(Entity::Block, id))? else {
+            return Ok(Vec::new());
+        };
+        breadth_first(
+            root,
+            |b| (&b.sort_key, b.id),
+            |b| {
+                collect(
+                    self.conn,
+                    concat!(
+                        "SELECT ",
+                        block_columns!(),
+                        " FROM blocks WHERE parent_block_id = ?1"
+                    ),
+                    [b.id.to_string()],
+                    block_row,
+                )
+            },
         )
     }
 
@@ -249,18 +321,20 @@ impl Reader<'_> {
         )
     }
 
-    /// Every relation from or to an object, live or trashed.
+    /// Every relation from or to an object, live or trashed, by ID.
     pub(crate) fn relations_touching(&self, id: Id) -> Result<Vec<RelationRow>> {
-        collect(
+        let mut relations = collect(
             self.conn,
             concat!(
                 "SELECT ",
                 relation_columns!(),
-                " FROM relations WHERE src_id = ?1 OR dst_id = ?1 ORDER BY id"
+                " FROM relations WHERE src_id = ?1 OR dst_id = ?1"
             ),
             [id.to_string()],
             relation_row,
-        )
+        )?;
+        relations.sort_unstable_by_key(|r| r.id);
+        Ok(relations)
     }
 
     /// Every relation that a field or a block is the source of, live or trashed.
@@ -281,17 +355,18 @@ impl Reader<'_> {
         )
     }
 
-    /// An object's attachments.
+    /// An object's attachments, by role name, then by hash.
     pub fn attachments(&self, object_id: Id) -> Result<Vec<AttachmentRow>> {
-        collect(
+        let mut attachments = collect(
             self.conn,
-            concat!(
-                attachment_select!(),
-                " WHERE a.object_id = ?1 ORDER BY a.role, a.blob_hash"
-            ),
+            concat!(attachment_select!(), " WHERE a.object_id = ?1"),
             [object_id.to_string()],
             attachment_row,
-        )
+        )?;
+        attachments.sort_unstable_by(|a, b| {
+            (a.role.as_str(), &a.blob_hash).cmp(&(b.role.as_str(), &b.blob_hash))
+        });
+        Ok(attachments)
     }
 
     /// The most recent ops, newest first.
