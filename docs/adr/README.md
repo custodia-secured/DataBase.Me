@@ -18,3 +18,4 @@ other.
 | [0008](0008-platform-targets-and-budgets.md)    | Platform targets, performance budgets and CI      | Accepted |
 | [0009](0009-dependency-licence-policy.md)       | Dependency licence policy                         | Accepted |
 | [0010](0010-desktop-shell-security-baseline.md) | Desktop shell security baseline                   | Accepted |
+| [0011](0011-funding-through-stripe.md)          | Funding through a Stripe payment link             | Accepted |
