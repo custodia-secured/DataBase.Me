@@ -78,9 +78,9 @@ how durable each commit is. It also has to read the M1 budget, "10k-object CRUD 
   115 µs before). The UI applies each user action as one transaction, and a person does not make
   40,000 separate edits in two seconds, but this figure is a deviation from a literal reading of
   the budget and is reported as one.
-- The CI runner was 1.3 to 2.1 times slower than the laptop, phase by phase. At that ratio the
-  gated run lands between about 1.4 and 1.8 s on CI; the next CI run measures it. The reference
-  machine (ADR-0008) has not been measured yet. What remains is spread evenly: about 13 µs per
+- On the CI runner (`ubuntu-latest`, run 40237915788) the gated run takes 1.68 s: create 234 ms,
+  edit 190 ms, delete 393 ms, undo 859 ms. That is a 16% margin. The ungated run there takes
+  5.69 s, 142 µs per commit. The reference machine (ADR-0008) has not been measured yet. What remains is spread evenly: about 13 µs per
   op, of which 2 to 6 µs is building, checking and hashing the op and the rest is SQL. Dropping
   the gate is not the answer.
 - Turning on `synchronous = FULL` later costs one more fsync per commit. That trade-off is
