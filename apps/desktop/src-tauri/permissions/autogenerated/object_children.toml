@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-object-children"
+description = "Enables the object_children command without any pre-configured scope."
+commands.allow = ["object_children"]
+
+[[permission]]
+identifier = "deny-object-children"
+description = "Denies the object_children command without any pre-configured scope."
+commands.deny = ["object_children"]

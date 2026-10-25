@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/desktop/src-tauri", "crates/cli", "crates/core"]
+members = ["apps/desktop/src-tauri", "crates/cli", "crates/core", "crates/store"]
 
 [workspace.package]
 version = "0.0.0"
@@ -11,14 +11,28 @@ publish = false
 
 [workspace.dependencies]
 dbme-core = { path = "crates/core" }
+dbme-store = { path = "crates/store" }
 
+blake3 = "1.8"
 clap = { version = "4.6", features = ["derive"] }
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
+getrandom = "0.4"
+proptest = "1.12"
+rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# float_roundtrip: numbers read back exactly as written, which op preconditions rely on (ADR-0012).
+serde_json = { version = "1", features = ["float_roundtrip"] }
+# Typed IPC (ADR-0014). Release candidates, so pinned exactly; upgrade them together.
+specta = { version = "=2.0.0-rc.26", features = ["derive", "serde_json"] }
+specta-typescript = "=0.0.13"
 tauri = { version = "2", features = [] }
 tauri-build = { version = "2", features = [] }
+tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
+tempfile = "3.27"
+thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+ulid = { version = "3", default-features = false }
 
 # Coding standards (handoff §9): no unwrap()/expect() outside tests, documented public APIs, and
 # no unsafe code. CI runs clippy with -D warnings, so every warning here fails the build.

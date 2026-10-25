@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Launch test (ADR-0008): starts the built desktop app in smoke-test mode and waits for it to report
-// that the web UI rendered and called back over IPC, after which the app exits on its own with
-// status 0. Fails on a timeout, a crash or a non-zero exit.
+// that the web UI rendered and ran its launch checks over IPC (create a vault in a temporary folder,
+// create an object, undo it, receive both vault-changed events). The app then exits on its own:
+// status 0 if the checks passed, 1 if not. Fails on a timeout, a crash, failed checks or a non-zero
+// exit.
 //
 // Usage: node scripts/smoke-launch.mjs <path-to-dbme-desktop binary> [timeout-seconds, default 120]
 // On Linux CI, run it under a virtual display: xvfb-run -a node scripts/smoke-launch.mjs ...
@@ -54,6 +56,8 @@ child.on("exit", (code, signal) => {
     );
     return;
   }
+  const failed = /DBME_SMOKE_FAILED (.*)/.exec(stdout);
+  if (failed) console.error(`✗ the UI's launch checks failed: ${failed[1]}`);
   console.error(`✗ app exited with code ${code ?? "none"}${signal ? ` (signal ${signal})` : ""}`);
   console.error(stdout);
   process.exitCode = 1;

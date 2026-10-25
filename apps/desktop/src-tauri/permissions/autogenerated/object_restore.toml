@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-object-restore"
+description = "Enables the object_restore command without any pre-configured scope."
+commands.allow = ["object_restore"]
+
+[[permission]]
+identifier = "deny-object-restore"
+description = "Denies the object_restore command without any pre-configured scope."
+commands.deny = ["object_restore"]

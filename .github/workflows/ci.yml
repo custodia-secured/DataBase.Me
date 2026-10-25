@@ -4,7 +4,10 @@
 #   web       ESLint, Prettier, TypeScript, Vitest and the scripts' own tests
 #   licences  cargo-deny and the JS licence check (ADR-0009)
 #   desktop   on Windows, macOS and Linux: rustfmt, clippy -D warnings, cargo test, release build,
-#             then launch the built app and wait for it to report that its UI rendered
+#             then launch the built app and wait for its UI to render and pass its IPC checks
+#   coverage  at least 90% of lines in dbme-core and in dbme-store are tested (M1 acceptance)
+#   mobile    dbme-core and dbme-store build for iOS and Android (M1 acceptance)
+#   budget    10,000 objects created, edited, deleted and undone in under 2 s, release build (M1)
 name: CI
 
 on:
@@ -149,3 +152,71 @@ jobs:
       - name: Launch the app and wait for its UI
         if: runner.os != 'Linux'
         run: node scripts/smoke-launch.mjs target/release/dbme-desktop
+
+  coverage:
+    name: Coverage (core and store, 90% of lines)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install the pinned Rust toolchain and llvm-tools
+        run: |
+          rustup toolchain install
+          rustup component add llvm-tools-preview
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - uses: Swatinem/rust-cache@v2
+      # Each crate is measured by its own tests only: store's tests also run core code, which must
+      # not count towards core.
+      - name: dbme-core
+        run: cargo llvm-cov --locked -p dbme-core --summary-only --fail-under-lines 90
+      - name: dbme-store
+        run: >-
+          cargo llvm-cov --locked -p dbme-store --summary-only --fail-under-lines 90
+          --ignore-filename-regex 'crates/core/'
+
+  mobile:
+    name: Mobile build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-ios
+            os: macos-latest
+          - target: aarch64-linux-android
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install the pinned Rust toolchain and the target
+        run: |
+          rustup toolchain install
+          rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      # The runner's NDK; API level 29 (Android 10) is the oldest the plan supports.
+      - name: Use the Android NDK's compiler for SQLite and the linker
+        if: matrix.target == 'aarch64-linux-android'
+        run: |
+          bin="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          {
+            echo "CC_aarch64_linux_android=$bin/aarch64-linux-android29-clang"
+            echo "AR_aarch64_linux_android=$bin/llvm-ar"
+            echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$bin/aarch64-linux-android29-clang"
+          } >> "$GITHUB_ENV"
+      - run: cargo build --locked --release -p dbme-core -p dbme-store --target ${{ matrix.target }}
+
+  budget:
+    name: Performance budget (release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      # The gate measures bulk changes (ADR-0015). The per-transaction figure is printed for the
+      # record, in its own step afterwards: run together, the two tests slow each other down.
+      - name: 10,000 objects in bulk (gated)
+        run: cargo test --locked --release -p dbme-store --test budget -- --nocapture
+      - name: One transaction per change (measured, not gated)
+        run: cargo test --locked --release -p dbme-store --test budget -- --ignored --nocapture

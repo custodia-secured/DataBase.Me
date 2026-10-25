@@ -10,6 +10,7 @@ yanked = "deny"
 # Every ignored advisory needs a reason and is reviewed when Tauri or the toolchain is upgraded.
 ignore = [
   { id = "RUSTSEC-2024-0370", reason = "proc-macro-error is unmaintained (not a vulnerability). Build-time only, via glib-macros 0.18 in the Linux GTK3 bindings that Tauri 2 requires; goes away when Tauri moves off gtk3-rs." },
+  { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained (not a vulnerability). Build-time proc-macro only, via specta 2.0.0-rc.26 for the typed IPC bindings (ADR-0014); reviewed when specta is upgraded." },
 ]
 
 [licenses]
