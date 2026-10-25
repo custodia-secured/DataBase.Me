@@ -1,8 +1,7 @@
-# DataBase.Me is funded by donations only: no paid tiers, no hosted service (GOVERNANCE.md).
+# DataBase.Me is funded by voluntary support only: no paid tiers, no hosted service, no investors
+# (GOVERNANCE.md). Support is paid through one Stripe payment link to Belmaix Holdings LLC
+# (ADR-0011). It is not a charitable donation, is not tax-deductible, and buys nothing.
 #
-# OPEN DECISION: which donation platform(s) to list is still open (build plan §8). Once the GitHub
-# organisation and accounts exist, uncomment the chosen line(s) with the real account names. Until
-# then this file lists nothing, so GitHub shows no Sponsor button.
-#
-# github: [<github-sponsors-account>]
-# open_collective: <open-collective-slug>
+# The link lives in the Belmaix Holdings LLC Stripe account (product "Support DataBase.Me").
+# A new link means updating this file and the README together.
+custom: ["https://buy.stripe.com/9B65kC5Z7c5j82udqCdUY00"]
