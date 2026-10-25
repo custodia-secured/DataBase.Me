@@ -1,0 +1,51 @@
+# cargo-deny configuration: the Rust half of the dependency licence policy (ADR-0009).
+# The JS half lives in scripts/license-policy.json. Keep the two allow-lists in step.
+
+[graph]
+all-features = false
+
+[advisories]
+version = 2
+yanked = "deny"
+# Every ignored advisory needs a reason and is reviewed when Tauri or the toolchain is upgraded.
+ignore = [
+  { id = "RUSTSEC-2024-0370", reason = "proc-macro-error is unmaintained (not a vulnerability). Build-time only, via glib-macros 0.18 in the Linux GTK3 bindings that Tauri 2 requires; goes away when Tauri moves off gtk3-rs." },
+]
+
+[licenses]
+version = 2
+# The brief's allow-list (MIT, Apache, BSD, ISC, MPL, Zlib) as SPDX identifiers, plus Unicode-3.0,
+# which ADR-0009 accepts because the Unicode tables inside unicode-ident use it. ADR-0009 counts
+# "X WITH <exception>" as X; cargo-deny needs each such pair listed (cfg-expr uses this one).
+allow = [
+  "0BSD",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "MIT",
+  "MIT-0",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Zlib",
+]
+confidence-threshold = 0.93
+exceptions = []
+# The list mirrors scripts/license-policy.json, so some entries are unused on the Rust side.
+unused-allowed-license = "allow"
+
+# Our own crates are AGPL-3.0-or-later and unpublished (publish = false); don't check them.
+[licenses.private]
+ignore = true
+
+[bans]
+# Tauri's dependency tree carries several duplicate versions; flagging them adds noise, not safety.
+multiple-versions = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

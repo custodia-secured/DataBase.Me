@@ -1,0 +1,19 @@
+[package]
+name = "dbme-cli"
+description = "The `dbme` command-line tool: import, export, verify, query and mirror-check a DataBase.Me vault."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "dbme"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+dbme-core.workspace = true
+
+[lints]
+workspace = true

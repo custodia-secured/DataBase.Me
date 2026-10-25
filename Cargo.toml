@@ -1,0 +1,34 @@
+[workspace]
+resolver = "3"
+members = ["apps/desktop/src-tauri", "crates/cli", "crates/core"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.99"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[workspace.dependencies]
+dbme-core = { path = "crates/core" }
+
+clap = { version = "4.6", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+tauri-build = { version = "2", features = [] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Coding standards (handoff §9): no unwrap()/expect() outside tests, documented public APIs, and
+# no unsafe code. CI runs clippy with -D warnings, so every warning here fails the build.
+[workspace.lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+expect_used = "deny"
+todo = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"

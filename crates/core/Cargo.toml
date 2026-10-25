@@ -1,0 +1,13 @@
+[package]
+name = "dbme-core"
+description = "DataBase.Me domain model: objects, types, relations, the op log, the query DSL and policies."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

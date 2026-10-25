@@ -1,0 +1,49 @@
+name: Bug report
+description: Something doesn't work the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. DataBase.Me has no telemetry and no crash reporter,
+        so this report is the only way we learn about the problem.
+
+        **Security problems:** please don't file them here. Follow SECURITY.md to report them privately.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostic-report
+    attributes:
+      label: Diagnostic report
+      description: |
+        In the app, open Help → **Copy diagnostic report** and paste it here. It holds versions, your
+        OS and recent error codes, never your notes or files. (The button ships with 0.1. Before that,
+        tell us the app version and your OS below.)
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: App version and OS
+      placeholder: "e.g. 0.1.0 on Windows 11 24H2"
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I checked that nothing above contains personal content I don't want public.
+          required: true

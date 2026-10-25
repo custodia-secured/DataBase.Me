@@ -1,0 +1,13 @@
+target/
+dist/
+coverage/
+pnpm-lock.yaml
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/icons/
+
+# Verbatim third-party texts and the original planning documents: never reformat.
+LICENSE
+packages/sdk/LICENSE
+CODE_OF_CONDUCT.md
+DataBase.Me_Build_Plan.md
+DataBase.Me_Handoff_Prompt.md

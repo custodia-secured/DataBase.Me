@@ -1,0 +1,28 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  font-family: var(--dbme-font-sans);
+  line-height: 1.5;
+}
+
+.shell {
+  box-sizing: border-box;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--dbme-space-6) var(--dbme-space-4);
+}
+
+.shell h1 {
+  margin: 0 0 var(--dbme-space-3);
+  font-size: 2rem;
+  color: var(--dbme-color-accent);
+}
+
+.shell-meta {
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.875rem;
+}

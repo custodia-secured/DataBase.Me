@@ -1,0 +1,151 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# CI for every push and pull request (M0 acceptance: ADR-0008).
+#   dco       every commit is signed off (ADR-0007)
+#   web       ESLint, Prettier, TypeScript, Vitest and the scripts' own tests
+#   licences  cargo-deny and the JS licence check (ADR-0009)
+#   desktop   on Windows, macOS and Linux: rustfmt, clippy -D warnings, cargo test, release build,
+#             then launch the built app and wait for it to report that its UI rendered
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  dco:
+    name: DCO sign-off
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Check every commit is signed off
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            node scripts/dco-check.mjs "$PR_BASE..$PR_HEAD"
+          elif [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ] \
+               && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+            node scripts/dco-check.mjs "$PUSH_BEFORE..$GITHUB_SHA"
+          else
+            # First push of a branch, or a manual run: check the whole history.
+            node scripts/dco-check.mjs --all "$GITHUB_SHA"
+          fi
+
+  web:
+    name: Web UI (lint, format, types, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  cargo-deny:
+    name: Rust licences and advisories (${{ matrix.checks }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        checks: [advisories, bans licenses sources]
+    # A new advisory against a transitive dependency should not block unrelated work; it is
+    # reported, and fixed in its own pull request.
+    continue-on-error: ${{ matrix.checks == 'advisories' }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup toolchain install
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - run: cargo deny check ${{ matrix.checks }}
+
+  js-licences:
+    name: JS licences
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm licenses:js
+
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-22.04 is the oldest Linux we support (WebKitGTK 4.1), so build and launch there.
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Linux system libraries (WebKitGTK 4.1) and a virtual display
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
+            xvfb
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # rust-toolchain.toml pins the compiler and its components; this installs exactly that.
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install
+          rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build the web UI (the Rust build embeds it)
+        run: pnpm --filter @databaseme/desktop build
+
+      - name: rustfmt
+        if: runner.os == 'Linux'
+        run: cargo fmt --all --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: cargo test
+        run: cargo test --workspace --locked
+
+      - name: Build the desktop app (release, no installer)
+        run: pnpm --filter @databaseme/desktop tauri build --no-bundle
+
+      - name: Launch the app and wait for its UI (Linux, virtual display)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node scripts/smoke-launch.mjs target/release/dbme-desktop
+      - name: Launch the app and wait for its UI
+        if: runner.os != 'Linux'
+        run: node scripts/smoke-launch.mjs target/release/dbme-desktop

@@ -1,0 +1,8 @@
+{
+  "name": "@databaseme/sdk",
+  "private": true,
+  "version": "0.0.0",
+  "description": "DataBase.Me plugin SDK. Reserved: the API ships with milestone M10.",
+  "license": "Apache-2.0",
+  "type": "module"
+}

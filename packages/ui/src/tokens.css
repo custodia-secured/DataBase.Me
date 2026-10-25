@@ -1,0 +1,66 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/*
+ * Design tokens. Every colour, font and spacing value in the UI comes from these variables, so a
+ * theme is just a different set of values (ADR-0001). Light is the base; dark overrides it when the
+ * OS asks for it. Themes chosen in Settings (M7) will set data-theme on <html> and win over the
+ * media query. Text/background pairs meet WCAG 2.2 AA contrast (4.5:1 or better).
+ */
+:root {
+  color-scheme: light dark;
+
+  --dbme-color-bg: #ffffff;
+  --dbme-color-fg: #1b1f24;
+  --dbme-color-fg-muted: #57606a;
+  --dbme-color-accent: #1f4e8c;
+  --dbme-color-border: #d0d7de;
+  --dbme-color-focus: #0b62d6;
+
+  --dbme-font-sans:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Ubuntu, Cantarell, sans-serif;
+  --dbme-font-mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+
+  --dbme-space-1: 0.25rem;
+  --dbme-space-2: 0.5rem;
+  --dbme-space-3: 0.75rem;
+  --dbme-space-4: 1rem;
+  --dbme-space-6: 1.5rem;
+  --dbme-space-8: 2rem;
+
+  --dbme-radius: 0.375rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --dbme-color-bg: #14171b;
+    --dbme-color-fg: #e6e9ed;
+    --dbme-color-fg-muted: #9aa4ae;
+    --dbme-color-accent: #8cb8f2;
+    --dbme-color-border: #30363d;
+    --dbme-color-focus: #6ea8fe;
+  }
+}
+
+:root[data-theme="dark"] {
+  --dbme-color-bg: #14171b;
+  --dbme-color-fg: #e6e9ed;
+  --dbme-color-fg-muted: #9aa4ae;
+  --dbme-color-accent: #8cb8f2;
+  --dbme-color-border: #30363d;
+  --dbme-color-focus: #6ea8fe;
+}
+
+:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
