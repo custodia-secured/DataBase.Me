@@ -1,5 +1,6 @@
 # Pinned so local builds and CI see the same compiler and the same clippy lints. Bump it in its own
-# pull request. Mobile targets (aarch64-apple-ios, aarch64-linux-android) are added in M1.
+# pull request. CI's mobile job adds the iOS and Android targets itself, so not every build downloads
+# them.
 [toolchain]
 channel = "1.99.1"
 components = ["clippy", "rustfmt"]
