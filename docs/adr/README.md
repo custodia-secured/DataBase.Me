@@ -18,6 +18,7 @@ other.
 | [0008](0008-platform-targets-and-budgets.md)    | Platform targets, performance budgets and CI                 | Accepted |
 | [0009](0009-dependency-licence-policy.md)       | Dependency licence policy                                    | Accepted |
 | [0010](0010-desktop-shell-security-baseline.md) | Desktop shell security baseline                              | Accepted |
+| [0011](0011-funding-through-stripe.md)          | Funding through a Stripe payment link                        | Accepted |
 | [0012](0012-op-log.md)                          | Op log: payloads, hashed bytes, groups, undo and redo        | Accepted |
 | [0013](0013-sort-keys.md)                       | Sort keys: the fractional-index algorithm                    | Accepted |
 | [0014](0014-typed-ipc.md)                       | Typed IPC: generated bindings and the change event           | Accepted |

@@ -82,5 +82,11 @@ DataBase.Me files. [ADR-0004](docs/adr/0004-licensing.md) explains why.
 
 ## Funding
 
-DataBase.Me is funded by donations only. The donation platform has not been chosen yet; when it
-has, it will be linked here and in `.github/FUNDING.yml`.
+DataBase.Me is funded by voluntary support only: no paid tiers, no hosted service, no investors.
+If it is useful to you, you can
+**[support DataBase.Me](https://buy.stripe.com/9B65kC5Z7c5j82udqCdUY00)** with a one-time payment
+of any amount from 2 USD.
+
+Payments go to Belmaix Holdings LLC through Stripe. They are not charitable donations and are not
+tax-deductible, and they buy nothing: no features, no priority, no say over the roadmap
+([GOVERNANCE.md](GOVERNANCE.md), [ADR-0011](docs/adr/0011-funding-through-stripe.md)).

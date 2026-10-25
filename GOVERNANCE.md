@@ -1,6 +1,6 @@
 # Governance
 
-DataBase.Me is a small, donation-funded open-source project. This document says who decides what,
+DataBase.Me is a small open-source project funded by voluntary support. This document says who decides what,
 and commits the project to sharing that power as soon as there are enough people to share it with.
 
 ## Today: a benevolent dictator
@@ -49,12 +49,13 @@ group and the project lead's sole final say ends.
 
 ## Money
 
-DataBase.Me is funded by donations only. There are no paid tiers, no hosted service and no
-investors. Donations will go through a platform with a public ledger (GitHub Sponsors and/or Open
-Collective; still to be chosen), and spending will be reported publicly.
+DataBase.Me is funded by voluntary support only. There are no paid tiers, no hosted service and no
+investors. Support is paid through a Stripe payment link to Belmaix Holdings LLC
+([ADR-0011](docs/adr/0011-funding-through-stripe.md)). A support payment is not a charitable
+donation, is not tax-deductible, and buys nothing: no features, no priority, no say over the
+roadmap.
 
 ## Contact
 
-Before the first public release, the project will publish a private contact address here for Code
-of Conduct reports and governance questions. Security reports go through the private channel in
-[SECURITY.md](SECURITY.md).
+Code of Conduct reports and governance questions: **info@belmaix.com**. Security reports go through
+the private channel in [SECURITY.md](SECURITY.md), not this address.
