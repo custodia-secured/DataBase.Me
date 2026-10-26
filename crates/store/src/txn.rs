@@ -11,6 +11,7 @@ use rusqlite::{Connection, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use dbme_core::block::{self, MENTIONS};
 use dbme_core::chain::OpEntry;
 use dbme_core::model::{
     AttachmentRole, AttachmentRow, BlockRow, FieldKind, FieldRow, ObjectRow, ObjectTypeRow, Props,
@@ -103,6 +104,9 @@ pub struct NewObject {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct NewBlock {
+    /// An ID the client made (ADR-0016), or `None` for a fresh one. No other block may have it.
+    #[serde(default)]
+    pub id: Option<Id>,
     pub object_id: Id,
     #[serde(default)]
     pub parent_block_id: Option<Id>,
@@ -674,22 +678,29 @@ impl<'v> Txn<'v> {
 
     // Blocks.
 
-    /// Adds a block to an object's content.
+    /// Adds a block to an object's content, and records the objects it mentions as relations.
     pub fn create_block(&mut self, new: NewBlock) -> Result<Id> {
         self.guard(|t| {
             t.live_object(new.object_id)?;
-            if let Some(parent) = new.parent_block_id
-                && t.read().block(parent)?.object_id != new.object_id
-            {
-                return Err(rule("a block's parent must belong to the same object"));
+            block::validate_block(&new.kind, &new.content)?;
+            if let Some(parent) = new.parent_block_id {
+                t.check_block_parent(new.object_id, parent)?;
             }
-            let id = t.new_id()?;
+            let id = match new.id {
+                Some(id) => {
+                    if rows::load(&t.tx, &RowKey::Id(Entity::Block, id))?.is_some() {
+                        return Err(rule(format!("block ID {id} is already in use")));
+                    }
+                    id
+                }
+                None => t.new_id()?,
+            };
             let sort_key = t.read().sort_key_at(
                 Siblings::Blocks(new.object_id, new.parent_block_id),
                 new.position,
                 None,
             )?;
-            t.apply(Op::create(Row::Block(BlockRow {
+            let row = BlockRow {
                 id,
                 object_id: new.object_id,
                 parent_block_id: new.parent_block_id,
@@ -698,22 +709,57 @@ impl<'v> Txn<'v> {
                 content_json: new.content,
                 created_at: t.ts,
                 updated_at: t.ts,
-            })))?;
+            };
+            t.apply(Op::create(Row::Block(row.clone())))?;
+            t.sync_mentions(&row)?;
             Ok(id)
         })
     }
 
-    /// Edits a block's kind or content. Returns `false` if nothing changed.
+    /// Edits a block's kind or content, and keeps its mention relations in step. Returns `false`
+    /// if nothing changed. Use [`Txn::move_block`] to move it.
     pub fn update_block(&mut self, id: Id, edit: impl FnOnce(&mut BlockRow)) -> Result<bool> {
         self.guard(|t| {
             let before = t.read().block(id)?;
             let mut after = before.clone();
             edit(&mut after);
+            if (
+                after.id,
+                after.object_id,
+                after.parent_block_id,
+                &after.sort_key,
+            ) != (
+                before.id,
+                before.object_id,
+                before.parent_block_id,
+                &before.sort_key,
+            ) {
+                return Err(rule(
+                    "update_block changes kind and content only; use move_block to move",
+                ));
+            }
+            if (&after.kind, &after.content_json) == (&before.kind, &before.content_json) {
+                return Ok(false);
+            }
+            block::validate_block(&after.kind, &after.content_json)?;
+            if !block::may_have_children(&after.kind) && t.has_child_blocks(id)? {
+                return Err(rule(format!(
+                    "a {} block cannot have children, and this one has",
+                    after.kind
+                )));
+            }
+            let mentions_changed =
+                block::mentions(&after.content_json) != block::mentions(&before.content_json);
+            after.updated_at = t.ts;
             t.update(
                 kind(Entity::Block, Action::Update)?,
                 Row::Block(before),
-                Row::Block(after),
-            )
+                Row::Block(after.clone()),
+            )?;
+            if mentions_changed {
+                t.sync_mentions(&after)?;
+            }
+            Ok(true)
         })
     }
 
@@ -721,6 +767,9 @@ impl<'v> Txn<'v> {
     pub fn move_block(&mut self, id: Id, parent: Option<Id>, position: Position) -> Result<bool> {
         self.guard(|t| {
             let before = t.read().block(id)?;
+            if let Some(parent) = parent {
+                t.check_block_parent(before.object_id, parent)?;
+            }
             let mut ancestor = parent;
             while let Some(above) = ancestor {
                 let block = t.read().block(above)?;
@@ -787,6 +836,71 @@ impl<'v> Txn<'v> {
             }
             Ok(())
         })
+    }
+
+    /// Checks that `parent` can take a child block of object `object_id`.
+    fn check_block_parent(&self, object_id: Id, parent: Id) -> Result<()> {
+        let parent = self.read().block(parent)?;
+        if parent.object_id != object_id {
+            return Err(rule("a block's parent must belong to the same object"));
+        }
+        if !block::may_have_children(&parent.kind) {
+            return Err(rule(format!(
+                "a {} block cannot have children; only list items can",
+                parent.kind
+            )));
+        }
+        Ok(())
+    }
+
+    fn has_child_blocks(&self, id: Id) -> Result<bool> {
+        Ok(crate::query::count(
+            &self.tx,
+            "SELECT count(*) FROM blocks WHERE parent_block_id = ?1",
+            [id.to_string()],
+        )? > 0)
+    }
+
+    /// Makes the `mentions` relations of `block` match the mentions in its content (ADR-0016).
+    /// Mentions of objects that are missing or in the Trash get no relation: a relation needs
+    /// both ends live. A mention relation that is in the Trash, because its target is, stays
+    /// there while the block still mentions the target.
+    fn sync_mentions(&mut self, block: &BlockRow) -> Result<()> {
+        let wanted = block::mentions(&block.content_json);
+        let mut kept = Vec::new();
+        for relation in self.read().relations_using(None, Some(block.id))? {
+            if relation.rel_type != MENTIONS {
+                continue;
+            }
+            if wanted.contains(&relation.dst_id) && !kept.contains(&relation.dst_id) {
+                kept.push(relation.dst_id);
+            } else {
+                self.apply(Op::delete(Row::Relation(relation)))?;
+            }
+        }
+        for dst_id in wanted {
+            let live = matches!(
+                rows::load(&self.tx, &RowKey::Id(Entity::Object, dst_id))?,
+                Some(Row::Object(object)) if object.deleted_at.is_none()
+            );
+            if kept.contains(&dst_id) || !live {
+                continue;
+            }
+            let id = self.new_id()?;
+            self.apply(Op::create(Row::Relation(RelationRow {
+                id,
+                src_id: block.object_id,
+                dst_id,
+                rel_type: MENTIONS.to_owned(),
+                field_id: None,
+                src_block_id: Some(block.id),
+                label: None,
+                props_json: Props::new(),
+                created_at: self.ts,
+                deleted_at: None,
+            })))?;
+        }
+        Ok(())
     }
 
     // Relations.

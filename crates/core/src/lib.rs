@@ -6,6 +6,7 @@
 //! This crate must keep compiling for iOS and Android (ADR-0008), so it may not depend on anything
 //! desktop-only.
 
+pub mod block;
 pub mod chain;
 mod error;
 pub mod hash;

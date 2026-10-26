@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-object-ancestors"
+description = "Enables the object_ancestors command without any pre-configured scope."
+commands.allow = ["object_ancestors"]
+
+[[permission]]
+identifier = "deny-object-ancestors"
+description = "Denies the object_ancestors command without any pre-configured scope."
+commands.deny = ["object_ancestors"]

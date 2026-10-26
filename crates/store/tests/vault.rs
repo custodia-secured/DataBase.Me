@@ -344,11 +344,12 @@ fn rebalancing_shortens_long_sort_keys_and_keeps_the_order() {
     assert!(longest(&t) >= Some(10));
 
     let block = |position| NewBlock {
+        id: None,
         object_id: x,
         parent_block_id: None,
         position,
         kind: "paragraph".into(),
-        content: json!({}),
+        content: json!({"inline": []}),
     };
     t.tick();
     let (order, _) = t
@@ -627,19 +628,21 @@ fn tree(t: &mut TestVault) -> Tree {
                 parent_id: Some(child),
                 ..object("grandchild")
             })?;
-            let heading = txn.create_block(NewBlock {
+            let item = txn.create_block(NewBlock {
+                id: None,
                 object_id: parent,
                 parent_block_id: None,
                 position: Position::Last,
-                kind: "heading".into(),
-                content: json!({"text": "Hi"}),
+                kind: "bullet".into(),
+                content: json!({"inline": [{"text": "Hi"}]}),
             })?;
             let mention = txn.create_block(NewBlock {
+                id: None,
                 object_id: parent,
-                parent_block_id: Some(heading),
+                parent_block_id: Some(item),
                 position: Position::Last,
                 kind: "paragraph".into(),
-                content: json!({"text": "see x"}),
+                content: json!({"inline": [{"text": "see x"}]}),
             })?;
             txn.create_relation(NewRelation {
                 src_id: parent,
@@ -894,11 +897,12 @@ fn blocks_form_a_tree_inside_their_object() {
     let x = create(&mut t, object("x"));
     let y = create(&mut t, object("y"));
     let block = |object_id, parent, position, text: &str| NewBlock {
+        id: None,
         object_id,
         parent_block_id: parent,
         position,
-        kind: "paragraph".into(),
-        content: json!({ "text": text }),
+        kind: "bullet".into(),
+        content: json!({ "inline": [{ "text": text }] }),
     };
     t.tick();
     let ((one, two, inner), _) = t
@@ -916,7 +920,12 @@ fn blocks_form_a_tree_inside_their_object() {
             .blocks(x)
             .unwrap()
             .into_iter()
-            .map(|b| b.content_json["text"].as_str().unwrap().to_owned())
+            .map(|b| {
+                b.content_json["inline"][0]["text"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned()
+            })
             .collect()
     };
     assert_eq!(texts(&t), ["one", "inner", "two"]);
@@ -945,7 +954,8 @@ fn blocks_form_a_tree_inside_their_object() {
     t.tick();
     t.vault
         .transact(|txn| {
-            assert!(txn.update_block(inner, |b| b.content_json = json!({"text": "inner!"}))?);
+            assert!(txn.update_block(inner, |b| b.content_json =
+                json!({"inline": [{"text": "inner!"}]}))?);
             assert!(!txn.update_block(inner, |_| {})?);
             txn.move_block(inner, None, Position::After(two))
         })
@@ -1276,11 +1286,12 @@ fn tree_and_list_reads_keep_the_order_their_sql_defines() {
                 parents = next;
             }
             let block = |parent, position| NewBlock {
+                id: None,
                 object_id: root,
                 parent_block_id: parent,
                 position,
-                kind: "paragraph".into(),
-                content: json!({}),
+                kind: "bullet".into(),
+                content: json!({"inline": []}),
             };
             let top = txn.create_block(block(None, Position::Last))?;
             let first = txn.create_block(block(None, Position::First))?;

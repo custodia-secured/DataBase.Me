@@ -1,6 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["apps/desktop/src-tauri", "crates/cli", "crates/core", "crates/store"]
+members = [
+  "apps/desktop/src-tauri",
+  "crates/api",
+  "crates/cli",
+  "crates/core",
+  "crates/e2e-server",
+  "crates/store",
+]
 
 [workspace.package]
 version = "0.0.0"
@@ -10,9 +17,11 @@ license = "AGPL-3.0-or-later"
 publish = false
 
 [workspace.dependencies]
+dbme-api = { path = "crates/api" }
 dbme-core = { path = "crates/core" }
 dbme-store = { path = "crates/store" }
 
+base64 = "0.23"
 blake3 = "1.8"
 clap = { version = "4.6", features = ["derive"] }
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
@@ -30,6 +39,8 @@ tauri-build = { version = "2", features = [] }
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 tempfile = "3.27"
 thiserror = "2"
+# The e2e test server only (ADR-0018); never in the app.
+tiny_http = "0.12"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 ulid = { version = "3", default-features = false }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-object-add-type"
+description = "Enables the object_add_type command without any pre-configured scope."
+commands.allow = ["object_add_type"]
+
+[[permission]]
+identifier = "deny-object-add-type"
+description = "Denies the object_add_type command without any pre-configured scope."
+commands.deny = ["object_add_type"]

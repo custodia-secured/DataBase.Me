@@ -48,3 +48,11 @@ written down, and other implementations should be able to produce the same keys.
   one spot.
 - **A smaller alphabet (base 10 or 36).** Keys grow faster. Base 62 is the largest alphabet of
   plain ASCII letters and digits, which keeps keys safe in JSON, file names and URLs.
+
+## Later changes
+
+These notes record what later milestones did under this decision; the decision itself stands.
+
+- **M2 (2026-10-25):** rebalancing now runs on its own. When a move, a create or an editor flush
+  leaves a sort key longer than 16 characters, `dbme-api` rebalances that parent's children in the
+  same transaction, so the same undo step (`LONG_SORT_KEY`, ADR-0016).

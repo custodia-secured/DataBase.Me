@@ -2,8 +2,13 @@
 import { emit } from "@tauri-apps/api/event";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { afterEach, describe, expect, it } from "vitest";
-import type { Committed_Serialize, IpcError, ObjectRow_Serialize } from "./bindings";
-import { CommandError, runLaunchChecks } from "./ipc";
+import {
+  CommandError,
+  type Committed_Serialize,
+  type IpcError,
+  type ObjectRow_Serialize,
+} from "@databaseme/client";
+import { runLaunchChecks } from "./ipc";
 
 afterEach(clearMocks);
 

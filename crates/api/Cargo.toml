@@ -1,0 +1,27 @@
+[package]
+name = "dbme-api"
+description = "DataBase.Me commands: what the UI can ask of the open vault, as plain Rust functions shared by the desktop shell and the e2e test server."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+base64.workspace = true
+dbme-core.workspace = true
+dbme-store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+specta = { workspace = true, optional = true }
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+# Derives specta::Type on the command types, for the desktop app's bindings (ADR-0014).
+specta = ["dep:specta", "dbme-core/specta", "dbme-store/specta"]
+
+[lints]
+workspace = true

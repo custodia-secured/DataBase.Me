@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-object-remove-type"
+description = "Enables the object_remove_type command without any pre-configured scope."
+commands.allow = ["object_remove_type"]
+
+[[permission]]
+identifier = "deny-object-remove-type"
+description = "Denies the object_remove_type command without any pre-configured scope."
+commands.deny = ["object_remove_type"]

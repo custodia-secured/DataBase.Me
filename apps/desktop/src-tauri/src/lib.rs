@@ -15,6 +15,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+use tauri::Manager;
 use tracing_subscriber::EnvFilter;
 
 mod ipc;
@@ -109,10 +110,12 @@ pub fn run(started: Instant) -> Result<(), Box<dyn std::error::Error>> {
     let builder = ipc::builder();
     tauri::Builder::default()
         .manage(startup)
-        .manage(ipc::Session::default())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
+            // Commands run on the event loop, which starts after setup, so none can arrive before
+            // the session exists.
+            app.manage(ipc::session(app.handle()));
             Ok(())
         })
         .run(tauri::generate_context!())?;

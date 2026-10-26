@@ -23,3 +23,6 @@ other.
 | [0013](0013-sort-keys.md)                       | Sort keys: the fractional-index algorithm                    | Accepted |
 | [0014](0014-typed-ipc.md)                       | Typed IPC: generated bindings and the change event           | Accepted |
 | [0015](0015-sqlite-settings-and-migrations.md)  | SQLite settings, migration policy and the performance budget | Accepted |
+| [0016](0016-blocks-and-the-editor.md)           | Blocks and the editor                                        | Accepted |
+| [0017](0017-ui-architecture.md)                 | UI architecture: packages, state, live views and the CSP     | Accepted |
+| [0018](0018-e2e-harness-and-ui-budgets.md)      | The end-to-end harness and the UI budgets                    | Accepted |

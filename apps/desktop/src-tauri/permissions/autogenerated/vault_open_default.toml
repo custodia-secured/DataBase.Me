@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-vault-open-default"
+description = "Enables the vault_open_default command without any pre-configured scope."
+commands.allow = ["vault_open_default"]
+
+[[permission]]
+identifier = "deny-vault-open-default"
+description = "Denies the vault_open_default command without any pre-configured scope."
+commands.deny = ["vault_open_default"]
