@@ -11,6 +11,7 @@ publish.workspace = true
 tauri-build.workspace = true
 
 [dependencies]
+dbme-api = { workspace = true, features = ["specta"] }
 dbme-core = { workspace = true, features = ["specta"] }
 dbme-store = { workspace = true, features = ["specta"] }
 serde.workspace = true

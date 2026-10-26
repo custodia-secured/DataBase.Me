@@ -137,11 +137,12 @@ fn edit(txn: &mut Txn<'_>, ids: &[Id], action: &Action) -> Result<Vec<Id>, Store
         Action::Delete { target: t } => txn.delete_object(target(t)?)?,
         Action::AddBlock { target: t } => {
             txn.create_block(NewBlock {
+                id: None,
                 object_id: target(t)?,
                 parent_block_id: None,
                 position: Position::Last,
                 kind: "paragraph".into(),
-                content: json!({"text": "x"}),
+                content: json!({"inline": [{"text": "x"}]}),
             })?;
         }
         Action::Link { from, to } => {

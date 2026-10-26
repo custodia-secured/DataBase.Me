@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-blob-read"
+description = "Enables the blob_read command without any pre-configured scope."
+commands.allow = ["blob_read"]
+
+[[permission]]
+identifier = "deny-blob-read"
+description = "Denies the blob_read command without any pre-configured scope."
+commands.deny = ["blob_read"]

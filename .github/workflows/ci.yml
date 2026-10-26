@@ -8,6 +8,8 @@
 #   coverage  at least 90% of lines in dbme-core and in dbme-store are tested (M1 acceptance)
 #   mobile    dbme-core and dbme-store build for iOS and Android (M1 acceptance)
 #   budget    10,000 objects created, edited, deleted and undone in under 2 s, release build (M1)
+#   e2e       every view in Edge (for WebView2) and WebKit, at desktop and phone sizes, with axe
+#             and the M2 budgets: a 100k-row table at 60 fps, typing under 16 ms (ADR-0018)
 name: CI
 
 on:
@@ -134,6 +136,9 @@ jobs:
 
       - name: Build the web UI (the Rust build embeds it)
         run: pnpm --filter @databaseme/desktop build
+      - name: Check the e2e test transport is not in it
+        if: runner.os == 'Linux'
+        run: node scripts/check-e2e-transport.mjs absent apps/desktop/dist
 
       - name: rustfmt
         if: runner.os == 'Linux'
@@ -220,3 +225,47 @@ jobs:
         run: cargo test --locked --release -p dbme-store --test budget -- --nocapture
       - name: One transaction per change (measured, not gated)
         run: cargo test --locked --release -p dbme-store --test budget -- --ignored --nocapture
+
+  e2e:
+    name: End-to-end (Edge and WebKit)
+    # Windows, as on the reference machine: Edge there is the engine WebView2 ships.
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      # Built before the run, so Playwright's wait for the server is not spent compiling it.
+      - name: Build the test server
+        run: cargo build --locked -p dbme-e2e-server
+      # Edge comes with the runner; WebKit is Playwright's own build.
+      - name: Install WebKit for Playwright
+        run: pnpm --filter @databaseme/desktop exec playwright install webkit
+      - name: Run the end-to-end tests
+        run: pnpm --filter @databaseme/desktop e2e
+      # The marker that proves the transport absent from the app must still find it here.
+      - name: Check the e2e build carries the test transport
+        run: node scripts/check-e2e-transport.mjs present apps/desktop/dist-e2e
+      - name: Keep the report and traces of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            target/e2e-report
+            target/e2e-results
+          retention-days: 14
+      - name: Keep the budget results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-budgets
+          path: target/budgets
+          if-no-files-found: ignore

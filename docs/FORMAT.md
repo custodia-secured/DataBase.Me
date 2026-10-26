@@ -2,7 +2,7 @@
 
 # DataBase.Me vault format
 
-**Status: draft 1, 2026-10-25. Format version 0.** Nothing here is stable until FORMAT.md v0.1
+**Status: draft 2, 2026-10-25. Format version 0.** Nothing here is stable until FORMAT.md v0.1
 ships with the MVP (M7). Each section says whether it is **Decided** (fixed by an accepted ADR),
 **Draft** (proposed, to be confirmed in the milestone named) or **Open** (not designed yet).
 
@@ -174,6 +174,38 @@ handoff brief's draft.
 | `conflicts`    | Things the user must resolve                                          | `id`, `object_id`, `kind` (`edit_edit`, `parse_error`, `bulk_change_hold`, `missing_id`, `cloud_conflict_file`), `details_json`, `conflict_copy_id`, `created_at`, `resolved_at`                                                                         |
 | `fts`          | FTS5 full-text index (derived; can be rebuilt)                        | `object_id`, `title`, `body`, `props_text`                                                                                                                                                                                                               |
 | `vec_chunks`   | sqlite-vec embeddings (derived; only with an embedding provider, M11) | `chunk_id`, `embedding`                                                                                                                                                                                                                                  |
+
+### 3.5 Block content (Decided, ADR-0016)
+
+A block's `kind` is a lower-case identifier of at most 64 characters, and its `content_json` is a
+JSON object. These are the kinds of format version 0:
+
+| Kind        | `content_json`                            | May have children |
+| ----------- | ----------------------------------------- | ----------------- |
+| `paragraph` | `inline`                                  | no                |
+| `heading`   | `level` (integer, 1 to 6), `inline`       | no                |
+| `bullet`    | `inline`                                  | yes               |
+| `numbered`  | `inline`                                  | yes               |
+| `todo`      | `checked` (`true` or `false`), `inline`   | yes               |
+| `quote`     | `inline`                                  | no                |
+| `code`      | `code` (string), `language?` (string)     | no                |
+| `divider`   | nothing                                   | no                |
+| `image`     | `blob` (a blob hash, §2), `alt?` (string) | no                |
+
+- **Text.** `inline` is an array of runs, in order. A text run is `{"text": "<not empty>"}`, with
+  any of the marks `bold`, `italic`, `underline`, `strike` and `code` set to `true`. A mark that is
+  not set is left out. A text run may also carry `"link": "<URL>"`. A line break is a `\n` inside
+  a text run.
+- **Mentions.** A mention run is `{"mention": "<object ID>"}`. It is shown with the mentioned
+  object's current title. For each object a block mentions, the vault keeps one `relations` row
+  with `rel_type` `mentions`, `src_id` the block's object, `dst_id` the mentioned object and
+  `src_block_id` the block. It is written in the same transaction as the block. A mention of an
+  object that is missing or in the Trash has no row. Backlinks are these rows read from `dst_id`.
+- **Children.** Only list items (`bullet`, `numbered`, `todo`) have child blocks: the blocks
+  indented under them. Siblings sort by `sort_key`, then by `id` (§2.1).
+- **Kinds and keys a reader does not know.** A reader MUST keep a block whose kind it does not
+  know, with its content and its children, and MAY show it as a placeholder. Such a block may have
+  children. A writer MUST keep `content_json` keys it does not use when it rewrites a block.
 
 ## 4. Blob store (Decided layout, ADR-0002; encryption Open, M9)
 
@@ -360,3 +392,4 @@ losslessly (M5 tests this).
 | ------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Draft 0 | 2026-10-25 | First draft (M0).                                                                                                                        |
 | Draft 1 | 2026-10-25 | M1: vault lock and creation (§1), sort keys (§2.1), the tables of migration 1 (§3), field values (§3.3) and the op log (§5) are decided. |
+| Draft 2 | 2026-10-25 | M2: block content and mentions (§3.5) are decided.                                                                                       |

@@ -22,3 +22,11 @@ All notable changes to DataBase.Me are recorded here. The format follows
   Rust, and its launch test now creates and undoes an object over IPC. CI gains coverage, iOS and
   Android cross-compile, and performance budget jobs. FORMAT.md §1, §2, §3 and §5 are decided;
   ADR-0012 to ADR-0015.
+- M2 editor and basic views: the block editor (TipTap) with formatting, lists, to-dos, `[[`
+  mentions and backlinks; the Document, Outline, Table and Gallery views, live across views and a
+  split pane; the hierarchy sidebar with keyboard moves, drag-and-drop and "Move to…"; vault undo
+  and redo everywhere; a phone layout with a drawer. The commands move into a `dbme-api` crate,
+  and the UI into `@databaseme/client`, `@databaseme/ui` and `@databaseme/views`. End-to-end tests
+  run every view in Edge and WebKit at desktop and phone sizes under the app's CSP, with axe and
+  the table-scroll and typing budgets, in a new CI job. FORMAT.md §3.5 is decided; ADR-0016 to
+  ADR-0018.

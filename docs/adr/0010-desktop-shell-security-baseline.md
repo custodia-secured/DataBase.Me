@@ -45,3 +45,12 @@ network. Tauri 2's defaults are reasonable, but the baseline should be explicit 
   until one is configured.
 - **Disabling CSP in development.** Easier, but development and production would then behave
   differently in exactly the area that matters.
+
+## Later changes
+
+These notes record what later milestones did under this decision; the decision itself stands.
+
+- **M2 (2026-10-25):** the main window's capability grants 31 app commands and the event bridge,
+  each listed in `capabilities/default.json`. The UI keeps to the CSP without relaxing it
+  (ADR-0017), and the end-to-end tests run under the same policy and fail on any violation
+  (ADR-0018).

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-object-set-prop"
+description = "Enables the object_set_prop command without any pre-configured scope."
+commands.allow = ["object_set_prop"]
+
+[[permission]]
+identifier = "deny-object-set-prop"
+description = "Denies the object_set_prop command without any pre-configured scope."
+commands.deny = ["object_set_prop"]

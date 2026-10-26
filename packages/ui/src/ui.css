@@ -1,0 +1,160 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Styles of the shared components. Colours, fonts and spacing come only from tokens.css. */
+
+.dbme-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.dbme-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--dbme-space-2);
+  min-height: var(--dbme-target);
+  padding: 0 var(--dbme-space-3);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.dbme-button:hover:not(:disabled) {
+  background: var(--dbme-color-hover);
+}
+
+.dbme-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.dbme-button--primary {
+  border-color: var(--dbme-color-accent);
+  background: var(--dbme-color-accent);
+  color: var(--dbme-color-bg);
+}
+
+.dbme-button--primary:hover:not(:disabled) {
+  background: var(--dbme-color-accent);
+  filter: brightness(1.1);
+}
+
+.dbme-button--ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.dbme-button--danger {
+  border-color: var(--dbme-color-danger);
+  color: var(--dbme-color-danger);
+}
+
+.dbme-button[aria-pressed="true"] {
+  background: var(--dbme-color-selected);
+}
+
+.dbme-icon-button {
+  min-width: var(--dbme-target);
+  padding: 0;
+}
+
+.dbme-dialog {
+  width: min(32rem, calc(100vw - 2 * var(--dbme-space-4)));
+  max-height: calc(100dvh - 2 * var(--dbme-space-8));
+  padding: 0;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+}
+
+.dbme-dialog::backdrop {
+  background: var(--dbme-color-backdrop);
+}
+
+.dbme-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-3);
+  padding: var(--dbme-space-4);
+}
+
+.dbme-dialog__title {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.dbme-menu {
+  z-index: 50;
+  min-width: 12rem;
+  padding: var(--dbme-space-1);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
+}
+
+.dbme-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--dbme-space-2);
+  min-height: var(--dbme-target);
+  padding: 0 var(--dbme-space-2);
+  border-radius: var(--dbme-radius);
+  font-size: 0.875rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.dbme-menu__item[data-highlighted] {
+  background: var(--dbme-color-selected);
+}
+
+.dbme-menu__item[data-disabled] {
+  opacity: 0.5;
+}
+
+.dbme-menu__item--danger {
+  color: var(--dbme-color-danger);
+}
+
+.dbme-status {
+  margin: 0;
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.875rem;
+}
+
+.dbme-status--error {
+  color: var(--dbme-color-danger);
+}
+
+.dbme-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--dbme-target);
+  padding: 0 var(--dbme-space-2);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  font: inherit;
+}
+
+/* Coarse pointers (touch) get 44px targets. */
+@media (pointer: coarse) {
+  :root {
+    --dbme-target: 2.75rem;
+  }
+}

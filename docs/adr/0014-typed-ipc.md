@@ -68,3 +68,12 @@ refresh.
   events. One event carrying the changed IDs lets each view decide whether it cares.
 - **Strings for every `i64`.** Safe for any value, but timestamps would need parsing everywhere in
   the UI for no benefit at today's ranges.
+
+## Later changes
+
+These notes record what later milestones did under this decision; the decision itself stands.
+
+- **M2 (2026-10-25):** the bindings moved to `packages/client/src/bindings.ts`, so every UI package
+  can use them (ADR-0017). The commands themselves moved into the `dbme-api` crate; the shell's
+  Tauri commands wrap them one line each, and the end-to-end test server calls the same functions
+  (ADR-0018).

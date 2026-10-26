@@ -1,0 +1,23 @@
+[package]
+name = "dbme-e2e-server"
+description = "Test-only HTTP server for the UI's end-to-end tests: serves the built UI under the app's CSP and runs the dbme-api commands on real vaults (ADR-0018). Never shipped."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+base64.workspace = true
+dbme-api.workspace = true
+dbme-core.workspace = true
+dbme-store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tiny_http.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

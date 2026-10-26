@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-blocks-apply"
+description = "Enables the blocks_apply command without any pre-configured scope."
+commands.allow = ["blocks_apply"]
+
+[[permission]]
+identifier = "deny-blocks-apply"
+description = "Denies the blocks_apply command without any pre-configured scope."
+commands.deny = ["blocks_apply"]

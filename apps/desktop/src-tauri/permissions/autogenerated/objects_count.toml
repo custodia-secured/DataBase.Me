@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-objects-count"
+description = "Enables the objects_count command without any pre-configured scope."
+commands.allow = ["objects_count"]
+
+[[permission]]
+identifier = "deny-objects-count"
+description = "Denies the objects_count command without any pre-configured scope."
+commands.deny = ["objects_count"]

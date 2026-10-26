@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-attachments-list"
+description = "Enables the attachments_list command without any pre-configured scope."
+commands.allow = ["attachments_list"]
+
+[[permission]]
+identifier = "deny-attachments-list"
+description = "Denies the attachments_list command without any pre-configured scope."
+commands.deny = ["attachments_list"]

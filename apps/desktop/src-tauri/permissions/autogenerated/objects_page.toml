@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-objects-page"
+description = "Enables the objects_page command without any pre-configured scope."
+commands.allow = ["objects_page"]
+
+[[permission]]
+identifier = "deny-objects-page"
+description = "Denies the objects_page command without any pre-configured scope."
+commands.deny = ["objects_page"]
