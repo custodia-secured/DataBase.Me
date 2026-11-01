@@ -4,7 +4,14 @@
  * shell picks one per pane. Later milestones and plugins add views here.
  */
 import type { Id } from "@databaseme/client";
-import { DocumentIcon, LayoutGrid, ListTree, Network, Table2, type LucideIcon } from "@databaseme/ui";
+import {
+  DocumentIcon,
+  LayoutGrid,
+  ListTree,
+  Network,
+  Table2,
+  type LucideIcon,
+} from "@databaseme/ui";
 import type { ComponentType } from "react";
 import { DocumentView } from "./document/DocumentView";
 import { GalleryView } from "./gallery/GalleryView";
