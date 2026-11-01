@@ -178,6 +178,9 @@ describe("the block diff", () => {
     for (const change of diffBlocks(before, after)) store.apply(change);
     return store.tree();
   };
+  /** Whether `tree` is exactly the empty paragraph a new document opens with. */
+  const isBlankStart = ([only, ...rest]: BlockTree[]) =>
+    only !== undefined && rest.length === 0 && jsonEqual(only, paragraph(only.id, ""));
 
   it("finds no changes between equal trees", () => {
     fc.assert(
@@ -190,6 +193,8 @@ describe("the block diff", () => {
   it("turns any tree into any other through changes the vault accepts", () => {
     fc.assert(
       fc.property(treeArb, treeArb, (before, after) => {
+        // The one change the diff leaves unsaved on purpose, tested on its own below.
+        fc.pre(before.length > 0 || !isBlankStart(after));
         expect(apply(before, after)).toEqual(after);
       }),
       { numRuns: 1000 },
