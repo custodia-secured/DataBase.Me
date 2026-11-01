@@ -21,7 +21,8 @@ mod common;
 use std::time::{Duration, Instant};
 
 use dbme_core::Id;
-use dbme_store::NewObject;
+use dbme_core::model::Props;
+use dbme_store::{NewObject, NewRelation};
 
 use common::{TestVault, new_vault};
 
@@ -129,8 +130,22 @@ fn a_two_thousand_node_tree_is_read_within_budget() {
                 let a = txn.create_object(child(Some(root), format!("{i}")))?;
                 for j in 0..10 {
                     let b = txn.create_object(child(Some(a), format!("{i}.{j}")))?;
+                    // Two relations in each of these 100 families, since nodes with none cost little.
+                    let mut previous = None;
                     for k in 0..19 {
-                        txn.create_object(child(Some(b), format!("{i}.{j}.{k}")))?;
+                        let leaf = txn.create_object(child(Some(b), format!("{i}.{j}.{k}")))?;
+                        if let (Some(src_id), 1 | 2) = (previous, k) {
+                            txn.create_relation(NewRelation {
+                                src_id,
+                                dst_id: leaf,
+                                rel_type: "related".into(),
+                                field_id: None,
+                                src_block_id: None,
+                                label: None,
+                                props: Props::new(),
+                            })?;
+                        }
+                        previous = Some(leaf);
                     }
                 }
             }
@@ -143,8 +158,9 @@ fn a_two_thousand_node_tree_is_read_within_budget() {
         let tree = t.vault.read().tree(root, 5_000).unwrap();
         best = best.min(started.elapsed());
         assert_eq!(tree.nodes.len(), 2_011);
+        assert_eq!(tree.relations.len(), 200);
     }
-    eprintln!("tree, 2,011 objects: best of five {best:?} (budget {TREE_BUDGET:?})");
+    eprintln!("tree, 2,011 objects, 200 relations: best of five {best:?} (budget {TREE_BUDGET:?})");
     assert!(
         best < TREE_BUDGET,
         "took {best:?}, over the {TREE_BUDGET:?} budget"

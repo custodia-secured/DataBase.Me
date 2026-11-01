@@ -326,8 +326,9 @@ impl Reader<'_> {
             .map(|(at, node)| (node.id, at))
             .collect();
         let mut relations = Vec::new();
-        for id in places.keys() {
-            let from = self.relations_from(*id)?;
+        // A node no relation touches has none to read, and on most maps that is most of them.
+        for node in nodes.iter().filter(|node| node.outside_relations > 0) {
+            let from = self.relations_from(node.id)?;
             relations.extend(from.into_iter().filter(|r| places.contains_key(&r.dst_id)));
         }
         for relation in &relations {

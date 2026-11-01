@@ -112,8 +112,11 @@ test("the map works with the keyboard alone", async ({ app, page }) => {
   await expect(tree).toBeFocused();
   await page.keyboard.press("Alt+ArrowUp");
   await expect.poll(() => children(app, "Beta")).toEqual(["Beta notes", "Zeta", "Delta"]);
+  // The keys act on the map as drawn, which follows the vault a moment later.
+  await expect(node(app, "Zeta")).toHaveAttribute("aria-posinset", "2");
   await page.keyboard.press("Alt+ArrowDown");
   await expect.poll(() => children(app, "Beta")).toEqual(["Beta notes", "Delta", "Zeta"]);
+  await expect(node(app, "Zeta")).toHaveAttribute("aria-posinset", "3");
 
   // Delete sends it to the Trash, and the keyboard goes to the nearest sibling.
   await page.keyboard.press("Delete");
