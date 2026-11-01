@@ -129,3 +129,7 @@ These notes record what later milestones did under this decision; the decision i
   sometimes reports "ResizeObserver loop completed with undelivered notifications" while React Flow's
   nodes change. It throws nothing, and the notifications arrive a frame later. That exact message is
   excused on WebKit and nowhere else, and it must be checked again in a real WKWebView at M14.
+- **M3 (2026-11-01):** the server no longer uses `tiny_http`. A race in its thread pool could leave a
+  connection queued behind a kept-alive one, the likely cause of first page loads that hung on CI.
+  `crates/e2e-server/src/http.rs` serves each connection on its own thread, over the standard
+  library. It still listens on 127.0.0.1 only and is never shipped.
