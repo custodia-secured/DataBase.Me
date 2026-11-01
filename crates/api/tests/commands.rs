@@ -14,7 +14,8 @@ use dbme_api::{self as api, BlockChange, IpcError, IpcErrorKind, LONG_SORT_KEY, 
 use dbme_core::model::FieldKind;
 use dbme_core::{CoreError, Id, IdGenerator, ManualClock};
 use dbme_store::{
-    Committed, Identity, NewField, NewObject, Position, Sort, Source, StoreError, VaultOptions,
+    Committed, Identity, NewField, NewObject, NewRelation, Position, Sort, Source, StoreError,
+    VaultOptions,
 };
 use serde_json::{Value, json};
 
@@ -521,4 +522,130 @@ fn search_backlinks_and_ancestors_are_served() {
     api::object_restore(&f.session, a).unwrap();
     api::vault_close(&f.session).unwrap();
     assert_eq!(api::vault_info(&f.session).unwrap(), None);
+}
+
+#[test]
+fn relations_drawn_on_the_map_are_made_once_trashed_and_undone() {
+    let f = Fixture::new();
+    let root = f.object("root");
+    let child = |title: &str| {
+        f.tick();
+        api::object_create(
+            &f.session,
+            NewObject {
+                title: title.into(),
+                parent_id: Some(root),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    };
+    let (a, b) = (child("a"), child("b"));
+    f.take_events();
+    let drawn = || {
+        api::object_tree(&f.session, root, 10)
+            .unwrap()
+            .relations
+            .into_iter()
+            .map(|r| (r.id, r.src_id, r.dst_id, r.rel_type))
+            .collect::<Vec<_>>()
+    };
+
+    f.tick();
+    let relation = api::relation_create(&f.session, a, b).unwrap();
+    assert_eq!(f.take_events().len(), 1);
+    assert_eq!(drawn(), [(relation, a, b, api::RELATED.to_owned())]);
+
+    f.tick();
+    assert_eq!(api::relation_create(&f.session, a, b).unwrap(), relation);
+    assert!(
+        f.take_events().is_empty(),
+        "drawing it again changes nothing"
+    );
+
+    let myself = api::relation_create(&f.session, a, a).unwrap_err();
+    assert_eq!(myself.kind, IpcErrorKind::Rule);
+
+    f.tick();
+    assert!(api::relation_trash(&f.session, relation).unwrap());
+    assert_eq!(f.take_events().len(), 1);
+    assert!(drawn().is_empty());
+    f.tick();
+    assert!(!api::relation_trash(&f.session, relation).unwrap());
+    assert!(f.take_events().is_empty(), "already there, no event");
+
+    f.tick();
+    api::undo(&f.session).unwrap().unwrap();
+    assert_eq!(drawn().len(), 1, "undo brings it back");
+    f.tick();
+    api::redo(&f.session).unwrap().unwrap();
+    assert!(drawn().is_empty(), "redo sends it away again");
+}
+
+#[test]
+fn relations_a_block_or_a_field_holds_cannot_be_trashed_from_the_map() {
+    let f = Fixture::new();
+    let (a, b) = (f.object("a"), f.object("b"));
+    let block = ids(1)[0];
+    f.apply(
+        a,
+        vec![BlockChange::Create {
+            id: block,
+            parent: None,
+            after: None,
+            kind: "paragraph".into(),
+            content: json!({"inline": [{"mention": b.to_string()}]}),
+        }],
+    )
+    .unwrap();
+    let mention = api::backlinks(&f.session, b).unwrap()[0].relation.id;
+    let refused = api::relation_trash(&f.session, mention).unwrap_err();
+    assert_eq!(refused.kind, IpcErrorKind::Rule);
+
+    f.tick();
+    let task = api::types_list(&f.session)
+        .unwrap()
+        .into_iter()
+        .find(|t| t.name == "Task")
+        .unwrap()
+        .id;
+    let field = api::field_create(
+        &f.session,
+        NewField {
+            type_id: task,
+            key: "linked".into(),
+            label: "Linked".into(),
+            kind: FieldKind::Relation,
+            options: json!({}),
+            required: false,
+        },
+    )
+    .unwrap();
+    f.tick();
+    let held = f
+        .session
+        .with(|vault| {
+            vault
+                .transact(|txn| {
+                    txn.create_relation(NewRelation {
+                        src_id: a,
+                        dst_id: b,
+                        rel_type: "linked".into(),
+                        field_id: Some(field),
+                        src_block_id: None,
+                        label: None,
+                        props: Default::default(),
+                    })
+                })
+                .map(|(id, _)| id)
+        })
+        .unwrap();
+    let refused = api::relation_trash(&f.session, held).unwrap_err();
+    assert_eq!(refused.kind, IpcErrorKind::Rule);
+    f.tick();
+    let free = api::relation_create(&f.session, a, b).unwrap();
+    assert_ne!(
+        free, held,
+        "what a field holds is not a relation drawn on the map"
+    );
 }

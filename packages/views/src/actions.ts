@@ -75,4 +75,10 @@ export const actions = {
   trash(id: Id) {
     return attempt(() => unwrap(commands.objectTrash(id)));
   },
+  relate(src: Id, dst: Id) {
+    return attempt(() => unwrap(commands.relationCreate(src, dst)));
+  },
+  unrelate(id: Id) {
+    return attempt(() => unwrap(commands.relationTrash(id)));
+  },
 };

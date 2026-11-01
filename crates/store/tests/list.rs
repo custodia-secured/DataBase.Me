@@ -463,3 +463,123 @@ fn ancestors_run_from_the_top_down() {
         Err(StoreError::NotFound { .. })
     ));
 }
+
+#[test]
+fn a_tree_reads_depth_first_with_the_relations_among_it() {
+    let mut t = new_vault();
+    let child = |parent: Id, title: &str, position: Position| NewObject {
+        title: title.into(),
+        parent_id: Some(parent),
+        position,
+        ..Default::default()
+    };
+    t.tick();
+    let (world, _) = t
+        .vault
+        .transact(|txn| {
+            let outside = txn.create_object(NewObject {
+                title: "Outside".into(),
+                ..Default::default()
+            })?;
+            let root = txn.create_object(NewObject {
+                title: "Root".into(),
+                ..Default::default()
+            })?;
+            // Made out of order: the sort key decides, not the creation.
+            let b = txn.create_object(child(root, "B", Position::Last))?;
+            let a = txn.create_object(child(root, "A", Position::First))?;
+            let a2 = txn.create_object(child(a, "A2", Position::Last))?;
+            let a1 = txn.create_object(child(a, "A1", Position::First))?;
+            let gone = txn.create_object(child(root, "Gone", Position::Last))?;
+            let below_gone = txn.create_object(child(gone, "Below gone", Position::Last))?;
+            let link = |src, dst| NewRelation {
+                src_id: src,
+                dst_id: dst,
+                rel_type: "related".into(),
+                field_id: None,
+                src_block_id: None,
+                label: None,
+                props: Props::new(),
+            };
+            let inside = txn.create_relation(link(a1, b))?;
+            let trashed = txn.create_relation(link(b, a1))?;
+            txn.create_relation(link(a1, outside))?;
+            txn.create_relation(link(outside, a1))?;
+            txn.create_relation(link(a2, below_gone))?;
+            txn.trash_relation(trashed)?;
+            txn.trash_object(gone)?;
+            Ok((root, a, a1, a2, b, inside))
+        })
+        .unwrap();
+    let (root, a, a1, a2, b, inside) = world;
+    let read = t.vault.read();
+
+    let tree = read.tree(root, 100).unwrap();
+    let order: Vec<Id> = tree.nodes.iter().map(|n| n.id).collect();
+    assert_eq!(order, [root, a, a1, a2, b]);
+    assert!(!tree.truncated);
+    assert_eq!(
+        tree.nodes[2].outside_relations, 2,
+        "one each way with Outside; not the one inside, or the trashed one"
+    );
+    assert_eq!(
+        tree.nodes[3].outside_relations, 0,
+        "its other end is in the Trash"
+    );
+    assert_eq!(
+        tree.nodes[4].outside_relations, 0,
+        "its one live relation is inside"
+    );
+    assert_eq!(tree.nodes[0].parent_id, None);
+    assert_eq!(tree.nodes[2].parent_id, Some(a));
+    assert_eq!(tree.nodes[2].title, "A1");
+    assert_eq!(tree.nodes[1].child_count, 2);
+    assert_eq!(
+        tree.nodes[0].child_count, 2,
+        "the trashed child isn't counted"
+    );
+    assert_eq!(
+        tree.relations.iter().map(|r| r.id).collect::<Vec<_>>(),
+        [inside],
+        "only live relations with both ends in the tree"
+    );
+
+    let exact = read.tree(root, 5).unwrap();
+    assert_eq!(exact.nodes.len(), 5);
+    assert!(
+        !exact.truncated,
+        "exactly at the limit, nothing is left out"
+    );
+    let cut = read.tree(root, 3).unwrap();
+    assert_eq!(
+        cut.nodes.iter().map(|n| n.id).collect::<Vec<_>>(),
+        [root, a, a1]
+    );
+    assert!(cut.truncated);
+    assert!(cut.relations.is_empty(), "the other end was cut off");
+    assert_eq!(
+        cut.nodes[2].outside_relations, 3,
+        "and so it counts as off the map"
+    );
+    assert_eq!(
+        cut.nodes[1].child_count, 2,
+        "counts what is there, read or not"
+    );
+
+    let below = read.tree(a, 100).unwrap();
+    assert_eq!(
+        below.nodes[0].parent_id,
+        Some(root),
+        "the root keeps its parent"
+    );
+    assert_eq!(below.nodes.len(), 3);
+
+    assert!(matches!(
+        read.tree(Id::from_parts(1, 1), 10),
+        Err(StoreError::NotFound { .. })
+    ));
+    t.tick();
+    t.vault.transact(|txn| txn.trash_object(root)).unwrap();
+    let empty = t.vault.read().tree(root, 10).unwrap();
+    assert!(empty.nodes.is_empty(), "a trashed root gives an empty tree");
+}

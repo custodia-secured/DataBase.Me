@@ -54,3 +54,5 @@ These notes record what later milestones did under this decision; the decision i
   each listed in `capabilities/default.json`. The UI keeps to the CSP without relaxing it
   (ADR-0017), and the end-to-end tests run under the same policy and fail on any violation
   (ADR-0018).
+- **M3 (2026-11-01):** the capability grants 36 commands, with `object_tree`, `relation_create` and
+  `relation_trash`. This corrects the M2 note above, which says 31: the file granted 33 then.

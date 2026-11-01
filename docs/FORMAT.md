@@ -122,6 +122,8 @@ Rules the schema does not express, which an app MUST keep:
   assignments, its attachments and the relations that start or end at it.
 - A system type (`is_system` = 1) is never deleted. A type is deleted only when no object has it,
   no type extends it and no relation uses one of its fields; its fields go with it.
+- A relation drawn by hand has `rel_type` `related`, and no `field_id` or `src_block_id`. It never
+  links an object to itself, and there is at most one live one in each direction.
 - Every update of a row with an `updated_at` column sets it to the op's `ts`.
 
 ### 3.2 Built-in types
@@ -393,3 +395,4 @@ losslessly (M5 tests this).
 | Draft 0 | 2026-10-25 | First draft (M0).                                                                                                                        |
 | Draft 1 | 2026-10-25 | M1: vault lock and creation (§1), sort keys (§2.1), the tables of migration 1 (§3), field values (§3.3) and the op log (§5) are decided. |
 | Draft 2 | 2026-10-25 | M2: block content and mentions (§3.5) are decided.                                                                                       |
+| Draft 3 | 2026-11-01 | M3: `related` is the `rel_type` of a relation drawn on the mind map; it has no `field_id` or `src_block_id` (§3.1).                      |

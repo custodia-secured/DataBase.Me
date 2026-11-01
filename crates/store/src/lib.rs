@@ -25,7 +25,7 @@ mod verify;
 pub use blobs::{BlobStore, StoredBlob};
 pub use error::{Result, StoreError};
 pub use identity::{IDENTITY_FILE, Identity};
-pub use list::{Backlink, MAX_PAGE, ObjectSummary, Sort, SortBy, Source};
+pub use list::{Backlink, MAX_PAGE, ObjectSummary, ObjectTree, Sort, SortBy, Source, TreeNode};
 pub use migrate::{APPLICATION_ID, SCHEMA_VERSION};
 pub use query::Reader;
 pub use txn::{NewAttachment, NewBlock, NewField, NewObject, NewRelation, NewType, Position, Txn};

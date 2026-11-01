@@ -48,10 +48,13 @@ export {
   Heading2,
   Italic,
   LayoutGrid,
+  Link2,
   List,
   ListOrdered,
   ListTodo,
   ListTree,
+  Maximize,
+  Network,
   PanelLeft,
   Plus,
   Redo2,
@@ -62,6 +65,8 @@ export {
   Trash2,
   Undo2,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 
 const TYPE_ICONS: Readonly<Record<string, LucideIcon>> = {

@@ -252,6 +252,20 @@ h3 {
   overflow: hidden;
 }
 
+.pane__panel--mindmap {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* Five tabs don't fit a phone with their labels: the active one keeps its label. */
+@media (max-width: 767px) {
+  .pane__tab:not([aria-selected="true"]) span {
+    display: none;
+  }
+}
+
 @media (max-width: 767px) {
   .pane__panel {
     padding: var(--dbme-space-3) var(--dbme-space-4);

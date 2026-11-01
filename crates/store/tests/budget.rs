@@ -107,6 +107,50 @@ fn ten_thousand_objects_are_created_edited_deleted_and_undone_within_budget() {
     t.assert_verifies();
 }
 
+/// M3's read for the mind map: a tree of 2,011 objects, within what an edit may spend (100 ms) and
+/// leaving most of it for the layout and the drawing. The best of five, so that this measures the
+/// query rather than whatever else the shared runner was doing at that moment.
+#[test]
+#[cfg_attr(debug_assertions, ignore = "the budget applies to release builds")]
+fn a_two_thousand_node_tree_is_read_within_budget() {
+    const TREE_BUDGET: Duration = Duration::from_millis(50);
+    let mut t = new_vault();
+    t.tick();
+    let (root, _) = t
+        .vault
+        .transact(|txn| {
+            let child = |parent, title: String| NewObject {
+                title,
+                parent_id: parent,
+                ..Default::default()
+            };
+            let root = txn.create_object(child(None, "Root".into()))?;
+            for i in 0..10 {
+                let a = txn.create_object(child(Some(root), format!("{i}")))?;
+                for j in 0..10 {
+                    let b = txn.create_object(child(Some(a), format!("{i}.{j}")))?;
+                    for k in 0..19 {
+                        txn.create_object(child(Some(b), format!("{i}.{j}.{k}")))?;
+                    }
+                }
+            }
+            Ok(root)
+        })
+        .unwrap();
+    let mut best = Duration::MAX;
+    for _ in 0..5 {
+        let started = Instant::now();
+        let tree = t.vault.read().tree(root, 5_000).unwrap();
+        best = best.min(started.elapsed());
+        assert_eq!(tree.nodes.len(), 2_011);
+    }
+    eprintln!("tree, 2,011 objects: best of five {best:?} (budget {TREE_BUDGET:?})");
+    assert!(
+        best < TREE_BUDGET,
+        "took {best:?}, over the {TREE_BUDGET:?} budget"
+    );
+}
+
 #[test]
 #[ignore = "a measurement, not a gate: run with --include-ignored"]
 fn one_transaction_per_change_measurement() {

@@ -4,6 +4,9 @@
  * rules ProseMirror needs are here too.
  */
 
+/* React Flow's structure, as a file: nothing is injected, so the CSP holds (ADR-0019). */
+@import "@xyflow/react/dist/base.css";
+
 .dbme-muted {
   color: var(--dbme-color-fg-muted);
 }
@@ -853,4 +856,228 @@ li.ProseMirror-selectednode::after {
   display: flex;
   justify-content: flex-end;
   gap: var(--dbme-space-2);
+}
+
+/* The mind map (ADR-0019). Nodes have a fixed size, so the layout needs no measuring pass. */
+.dbme-map {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dbme-map__bar {
+  padding-inline: var(--dbme-space-3);
+  border-bottom: 1px solid var(--dbme-color-border);
+}
+
+.dbme-map__zoom {
+  display: inline-flex;
+  gap: var(--dbme-space-1);
+  margin-inline-start: auto;
+}
+
+/* Icons alone on a phone, so the toolbar leaves room for the map. */
+@media (max-width: 40rem) {
+  .dbme-map__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+.dbme-map__stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.dbme-map__relations {
+  position: absolute;
+  z-index: 5;
+  top: var(--dbme-space-2);
+  left: var(--dbme-space-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-1) var(--dbme-space-3);
+  max-width: calc(100% - 2 * var(--dbme-space-2));
+  box-sizing: border-box;
+  margin: 0;
+  padding: var(--dbme-space-1) var(--dbme-space-3);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-surface);
+  font-size: 0.875rem;
+  list-style: none;
+}
+
+.dbme-map__relation-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dbme-space-1);
+}
+
+.dbme-map__canvas {
+  position: absolute;
+  inset: 0;
+  background: var(--dbme-color-bg);
+}
+
+.dbme-map__canvas:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-map__node {
+  display: flex;
+  align-items: center;
+  gap: var(--dbme-space-1);
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--dbme-space-2);
+  overflow: hidden;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-surface);
+  color: var(--dbme-color-fg);
+  font-size: 0.8125rem;
+  line-height: 1.25;
+  contain: strict;
+}
+
+.dbme-map__node--active {
+  border-color: var(--dbme-color-focus);
+  outline: 2px solid var(--dbme-color-focus);
+  background: var(--dbme-color-selected);
+}
+
+.dbme-map__node--drop-inside {
+  border-color: var(--dbme-color-accent);
+  background: var(--dbme-color-selected);
+}
+
+.dbme-map__node--drop-before {
+  border-top: 3px solid var(--dbme-color-accent);
+}
+
+.dbme-map__node--drop-after {
+  border-bottom: 3px solid var(--dbme-color-accent);
+}
+
+.dbme-map__title {
+  display: -webkit-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dbme-map__rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 1.75rem;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  font: inherit;
+}
+
+.dbme-map__toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dbme-radius);
+  background: transparent;
+  color: var(--dbme-color-fg-muted);
+  cursor: pointer;
+}
+
+.dbme-map__toggle:hover {
+  background: var(--dbme-color-hover);
+}
+
+.dbme-map__count {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.6875rem;
+}
+
+/* Too far away to read: one canvas draws the boxes, under React Flow, which keeps the input. */
+.dbme-map__overview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.dbme-map__canvas .react-flow {
+  background: transparent;
+}
+
+/* Handles show only on the node with the keyboard, and take a drop on the whole of a node. */
+.dbme-map__source,
+.dbme-map__target {
+  visibility: hidden;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--dbme-color-bg);
+  border-radius: 50%;
+  background: var(--dbme-color-accent);
+}
+
+.react-flow__node.selected .dbme-map__source {
+  visibility: visible;
+}
+
+.dbme-map__canvas--connecting .dbme-map__target {
+  visibility: visible;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  border-radius: var(--dbme-radius);
+  background: transparent;
+}
+
+.dbme-map__branch .react-flow__edge-path {
+  fill: none;
+  stroke: var(--dbme-color-border);
+  stroke-width: 1.5;
+}
+
+.dbme-map__relation .react-flow__edge-path {
+  fill: none;
+  stroke: var(--dbme-color-accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+
+.dbme-map__relation.selected .react-flow__edge-path {
+  stroke: var(--dbme-color-focus);
+  stroke-width: 2.5;
+}
+
+.dbme-map__relation .react-flow__edge-text {
+  fill: var(--dbme-color-fg-muted);
+  font-size: 0.6875rem;
+}
+
+.dbme-map__relation .react-flow__edge-textbg {
+  fill: var(--dbme-color-bg);
 }

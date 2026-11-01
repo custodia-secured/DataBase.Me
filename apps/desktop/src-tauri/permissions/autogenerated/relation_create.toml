@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-relation-create"
+description = "Enables the relation_create command without any pre-configured scope."
+commands.allow = ["relation_create"]
+
+[[permission]]
+identifier = "deny-relation-create"
+description = "Denies the relation_create command without any pre-configured scope."
+commands.deny = ["relation_create"]

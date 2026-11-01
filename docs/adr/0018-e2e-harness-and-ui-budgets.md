@@ -113,3 +113,11 @@ rules, the op log and undo would never run.
   WebView2 ships, at the same version cadence.
 - **A Rust or WebDriver BiDi harness written for this project.** More to own, and still no phone
   or touch emulation.
+
+## Later changes
+
+These notes record what later milestones did under this decision; the decision itself stands.
+
+- **M3 (2026-11-01):** `mindmap-budget.spec.ts` adds the map's budget on a 2,011-node tree: open
+  within 1 s, pan, zoom and drag at the table's pass mark, and an edit on screen within 100 ms
+  (ADR-0019).

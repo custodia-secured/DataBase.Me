@@ -20,8 +20,8 @@ use dbme_api::{self as api, BlockChange, IpcError, IpcErrorKind, Reply, Session,
 use dbme_core::model::{AttachmentRow, BlockRow, FieldRow, ObjectRow, TypeRow};
 use dbme_core::{ContentHash, Id, SystemClock};
 use dbme_store::{
-    Backlink, Committed, Identity, NewField, NewObject, ObjectSummary, Position, Sort, Source,
-    VaultOptions,
+    Backlink, Committed, Identity, NewField, NewObject, ObjectSummary, ObjectTree, Position, Sort,
+    Source, VaultOptions,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -282,6 +282,31 @@ pub(crate) async fn backlinks(session: State<'_, Session>, id: Id) -> Reply<Vec<
     api::backlinks(&session, id)
 }
 
+/// `root` and up to `limit` objects in all from below it, with the relations among them.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn object_tree(
+    session: State<'_, Session>,
+    root: Id,
+    limit: u32,
+) -> Reply<ObjectTree> {
+    api::object_tree(&session, root, limit)
+}
+
+/// Relates `src` to `dst`, or returns the relation that already does.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn relation_create(session: State<'_, Session>, src: Id, dst: Id) -> Reply<Id> {
+    api::relation_create(&session, src, dst)
+}
+
+/// Moves a relation to the Trash. Returns `false` if it was already there.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn relation_trash(session: State<'_, Session>, id: Id) -> Reply<bool> {
+    api::relation_trash(&session, id)
+}
+
 /// Creates an object and returns its ID.
 #[tauri::command]
 #[specta::specta]
@@ -437,6 +462,9 @@ pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
             objects_count,
             object_search,
             backlinks,
+            object_tree,
+            relation_create,
+            relation_trash,
             object_create,
             object_rename,
             object_set_prop,
@@ -501,7 +529,7 @@ mod tests {
         let list = &build[build.find("const COMMANDS").unwrap()..];
         let list = &list[..list.find("];").unwrap()];
         let commands: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
-        assert_eq!(commands.len(), 33);
+        assert_eq!(commands.len(), 36);
         let capability = include_str!("../capabilities/default.json");
         let source = include_str!("ipc.rs");
         let registered = &source[source.find("collect_commands![").unwrap()..];

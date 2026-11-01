@@ -123,3 +123,23 @@ export function longDocument(count: number): unknown {
 export function bulk(count: number): unknown {
   return { kind: "bulk", count, type_name: "Load item", parent_title: "Big table" };
 }
+
+/** The mind map's budget tree: the root, 10 children, 10 below each, 19 below each of those. */
+export function mindMapTree(): unknown {
+  const range = (count: number) => Array.from({ length: count }, (_, i) => i + 1);
+  return {
+    kind: "tree",
+    objects: [
+      {
+        title: "Mind",
+        children: range(10).map((a) => ({
+          title: String(a),
+          children: range(10).map((b) => ({
+            title: `${String(a)}.${String(b)}`,
+            children: range(19).map((c) => ({ title: `${String(a)}.${String(b)}.${String(c)}` })),
+          })),
+        })),
+      },
+    ],
+  };
+}
