@@ -240,10 +240,19 @@ function sameEdge(before: Edge, now: Edge): boolean {
 
 const NODE_TYPES = { topic: TopicNodeView };
 const PRO_OPTIONS = { hideAttribution: true };
+/** Nodes have one size. Without this, React Flow measures a node again each time its object changes. */
+const NODE_SIZE = { width: NODE_WIDTH, height: NODE_HEIGHT };
+/** A node's wrapper is only a wrapper: a role description would make it an item of the tree. */
+const PLAIN_WRAPPER = { "aria-roledescription": undefined };
 
-/** React Flow names its root an application, which would break the tree's parent-child chain. */
-function asPlainWrapper(element: HTMLDivElement | null): void {
+/**
+ * Leaves only the nodes for assistive technology, so that the tree owns its items. React Flow names
+ * its root an application, and its edges are drawings that the levels and the relations list say in
+ * words.
+ */
+function fitIntoTree(element: HTMLDivElement | null): void {
   element?.setAttribute("role", "none");
+  element?.querySelector(".react-flow__edges")?.setAttribute("aria-hidden", "true");
 }
 
 export function MindMapView({ objectId, onOpen }: ViewProps) {
@@ -273,7 +282,6 @@ function MindMap({ objectId, onOpen }: ViewProps) {
   const [chosenRelation, setChosenRelation] = useState<Id | null>(null);
   const [dragged, setDragged] = useState<{ id: Id; x: number; y: number } | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
-  const [connecting, setConnecting] = useState(false);
   const [moving, setMoving] = useState<MapNode | null>(null);
   const [relating, setRelating] = useState<MapNode | null>(null);
   const treeElement = useRef<HTMLDivElement>(null);
@@ -567,9 +575,11 @@ function MindMap({ objectId, onOpen }: ViewProps) {
             position: { x: isDragged ? dragged.x : node.x, y: isDragged ? dragged.y : node.y },
             width: NODE_WIDTH,
             height: NODE_HEIGHT,
+            measured: NODE_SIZE,
             selected: node.id === active,
             draggable: !coarse && node.parent !== null && !isRenaming,
             ariaRole: "presentation",
+            domAttributes: PLAIN_WRAPPER,
             data: {
               node,
               renaming: isRenaming,
@@ -593,7 +603,6 @@ function MindMap({ objectId, onOpen }: ViewProps) {
         target: node.id,
         selectable: false,
         focusable: false,
-        ariaRole: "presentation",
         className: "dbme-map__branch",
       });
     }
@@ -607,7 +616,6 @@ function MindMap({ objectId, onOpen }: ViewProps) {
         selected: relation.id === chosenRelation,
         selectable: true,
         focusable: false,
-        ariaRole: "presentation",
         markerEnd: { type: MarkerType.ArrowClosed },
         className: "dbme-map__relation",
       });
@@ -667,9 +675,6 @@ function MindMap({ objectId, onOpen }: ViewProps) {
   if (!tree.data) return <StatusMessage>Loading the map…</StatusMessage>;
   if (layout.nodes.length === 0)
     return <StatusMessage>There is nothing to show here.</StatusMessage>;
-
-  const mapClass = ["dbme-map__canvas"];
-  if (connecting) mapClass.push("dbme-map__canvas--connecting");
 
   return (
     <MapContext.Provider value={api}>
@@ -752,7 +757,7 @@ function MindMap({ objectId, onOpen }: ViewProps) {
         <div className="dbme-map__stage">
           <div
             ref={treeElement}
-            className={mapClass.join(" ")}
+            className="dbme-map__canvas"
             role="tree"
             aria-label="Mind map"
             aria-describedby={helpId}
@@ -773,7 +778,7 @@ function MindMap({ objectId, onOpen }: ViewProps) {
             {overview ? <OverviewCanvas scene={scene} /> : null}
             {initial ? (
               <ReactFlow<TopicNode>
-                ref={asPlainWrapper}
+                ref={fitIntoTree}
                 nodes={flowNodes}
                 edges={flowEdges}
                 nodeTypes={NODE_TYPES}
@@ -828,11 +833,17 @@ function MindMap({ objectId, onOpen }: ViewProps) {
                   const point = flow.screenToFlowPosition({ x: clientX, y: clientY });
                   finishDrag(node.id, dropAt(layout, node.id, point.x, point.y));
                 }}
-                onConnectStart={() => {
-                  setConnecting(true);
-                }}
-                onConnectEnd={() => {
-                  setConnecting(false);
+                onConnectEnd={(event, state) => {
+                  // Letting go anywhere on a node will do, not only on its small handle.
+                  const from = state.fromNode?.id;
+                  if (state.isValid || !from) return;
+                  const { clientX, clientY } =
+                    "changedTouches" in event
+                      ? (event.changedTouches[0] ?? { clientX: 0, clientY: 0 })
+                      : event;
+                  const point = flow.screenToFlowPosition({ x: clientX, y: clientY });
+                  const over = nodeAt(layout, point.x, point.y);
+                  if (over && over.id !== from) void actions.relate(from, over.id);
                 }}
                 onConnect={(connection: Connection) => {
                   if (connection.source !== connection.target) {

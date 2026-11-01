@@ -16,6 +16,11 @@ const NODES = 2_011;
 const SECONDS = 3;
 const OPEN_BUDGET_MS = 1_000;
 const EDIT_BUDGET_MS = 100;
+// The map's grid (layout.ts): the sizes of a node, and the distance between columns and half a row.
+const NODE_WIDTH = 184;
+const NODE_HEIGHT = 48;
+const LEAF_COLUMN = 248;
+const HALF_ROW = 30;
 
 test.skip(({ isMobile }) => isMobile, "the budgets are set for the desktop reference machine");
 
@@ -208,7 +213,12 @@ test("a 2,011-node map stays interactive", async ({ app, page, seed, browserName
   const near = app.pane().locator(`.react-flow__node[data-id="${moved}"]`);
   const dragNear = await circleFor(near, 200);
 
-  // A drag far away, on the canvas: zoom out until the map is boxes, and press the next box down.
+  // A drag far away, on the canvas: zoom out until the map is boxes, and press a box. That drag may
+  // have panned 1 out of view, and the keyboard brings it back. The leaves stand in unbroken rows
+  // two columns to its right, and half a row down from its middle is the middle of one of them.
+  await tree.focus();
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowRight");
   for (let out = 0; out < 8; out++) {
     await app.pane().getByRole("button", { name: "Zoom out" }).click();
   }
@@ -216,13 +226,19 @@ test("a 2,011-node map stays interactive", async ({ app, page, seed, browserName
   const box = await near.boundingBox();
   if (!box) throw new Error("the active node is not drawn");
   const dragFar = await circleFor(pane, 200, {
-    x: box.x + box.width / 2,
-    y: box.y + box.height * 1.75,
+    x: box.x + box.width * (0.5 + (2 * LEAF_COLUMN) / NODE_WIDTH),
+    y: box.y + box.height * (0.5 + HALF_ROW / NODE_HEIGHT),
   });
+  // The press found a box: the keyboard went to it, and not on to pan the map.
+  await expect.poll(() => app.activeText(tree)).not.toBe("1");
 
   await tree.focus();
   await page.keyboard.press("ArrowLeft");
-  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowLeft");
+  await expect(app.pane().getByRole("treeitem", { name: "1", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   const edits: number[] = [];
   for (const key of [
     "Alt+ArrowDown",

@@ -1,0 +1,22 @@
+diff --git a/src/define.js b/src/define.js
+index 2bba2d3a4fdf3cdee152aacc711366f91c1d5747..f5211642c20f5fd927238cffe826a252b34895de 100644
+--- a/src/define.js
++++ b/src/define.js
+@@ -1,10 +1,15 @@
+ export default function(constructor, factory, prototype) {
+   constructor.prototype = factory.prototype = prototype;
+-  prototype.constructor = constructor;
++  put(prototype, "constructor", constructor);
+ }
+ 
+ export function extend(parent, definition) {
+   var prototype = Object.create(parent.prototype);
+-  for (var key in definition) prototype[key] = definition[key];
++  for (var key in definition) put(prototype, key, definition[key]);
+   return prototype;
+ }
++
++// Object.prototype may be frozen (Tauri's freezePrototype), and assigning a name it also has then throws.
++function put(object, key, value) {
++  Object.defineProperty(object, key, {value: value, writable: true, enumerable: true, configurable: true});
++}

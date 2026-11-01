@@ -1044,17 +1044,6 @@ li.ProseMirror-selectednode::after {
   visibility: visible;
 }
 
-.dbme-map__canvas--connecting .dbme-map__target {
-  visibility: visible;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  transform: none;
-  border-radius: var(--dbme-radius);
-  background: transparent;
-}
-
 .dbme-map__branch .react-flow__edge-path {
   fill: none;
   stroke: var(--dbme-color-border);

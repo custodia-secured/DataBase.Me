@@ -15,6 +15,10 @@ stays interactive, and names React Flow and either ELK or dagre.
 - **React Flow (`@xyflow/react` 12, MIT) draws the map up close.** Its stylesheet is imported as a
   file and node positions go through the CSSOM, so `style-src 'self'` holds. Its attribution link is
   hidden, because a click on it would navigate the app's webview away.
+- **`d3-color` is patched to load under a frozen `Object.prototype`.** React Flow depends on it
+  through `d3-zoom`. Its `define.js` assigns `constructor` and `toString`, and under Tauri's
+  `freezePrototype` (ADR-0010) those assignments throw while the module loads, which left the app a
+  blank window. `patches/d3-color@3.1.0.patch` defines them instead.
 - **`d3-hierarchy` lays it out.** ELK's licences (EPL-2.0 or GPL-3.0-or-later) aren't on the
   allowlist. dagre (MIT) took 300–395 ms on 2,000 nodes, which alone is three times the 100 ms edit
   budget; the `d3-hierarchy` tidy tree took 0.3–0.5 ms.
@@ -35,14 +39,17 @@ stays interactive, and names React Flow and either ELK or dagre.
 - **One read for the whole map.** `object_tree(root, limit)` is one recursive query, depth first in
   sort-key order, with the relations among the nodes and a count of those that leave the map. Past
   5,000 nodes the map says it shows part of the tree.
-- **Relations are dashed edges, labelled by type.** Dragging between handles or "Relate to…" makes a
-  `related` relation (FORMAT.md §3.1). `relation_create` refuses a self-link and returns an existing
+- **Relations are dashed edges, labelled by type.** Dragging from a node's handle and letting go
+  anywhere on another node, or "Relate to…", makes a `related` relation (FORMAT.md §3.1).
+  `relation_create` refuses a self-link and returns an existing
   relation unchanged. `relation_trash` refuses relations held by a block or a field, because they
   belong to what holds them. The list of the active node's relations floats over the map, so it
   never moves the map under the pointer.
 - **Every pointer action has a keyboard and a touch way.**
-  - The map is an ARIA tree with `aria-activedescendant`. React Flow's `application` role on its
-    root is replaced, or it would cut the tree from its items.
+  - The map is an ARIA tree with `aria-activedescendant`. Three things of React Flow's would cut the
+    tree from its items, so they are changed: the `application` role on its root is replaced, its
+    edges are hidden from assistive technology, and the role description on each node's wrapper is
+    removed.
   - Arrows move. Tab adds a child and Enter a sibling, as mind map tools do, so the keys differ from
     the Outline's. F2 renames, Alt+↑/↓ reorders, Delete trashes, Space folds, Ctrl+Enter opens.
   - One finger pans and a pinch zooms. A long press and a drag moves a node. "Move to…" and "Relate
@@ -59,6 +66,10 @@ stays interactive, and names React Flow and either ELK or dagre.
 - Relation edges run from the right of one node to the left of another, so between siblings they
   loop and pass behind other nodes. They can be read, but they could be routed better.
 - Zustand 4 comes with React Flow, alongside the app's Zustand 5.
+- The `d3-color` patch applies to version 3.1.0 only. An update needs the patch made again, and the
+  e2e fixture and the launch test both fail without it.
+- Panning away from the active node unmounts it, so `aria-activedescendant` names nothing until the
+  keyboard moves again, which brings the node back.
 
 ## Alternatives considered
 
@@ -68,3 +79,5 @@ stays interactive, and names React Flow and either ELK or dagre.
   close, and all of that would have to be written here.
 - **Stored positions.** They would add a format change, a sync surface and a free-placement feature
   that belongs to the canvas view.
+- **Turning `freezePrototype` off for `d3-color`.** It would weaken the security baseline (ADR-0010)
+  for the sake of two assignments in one library's load.
