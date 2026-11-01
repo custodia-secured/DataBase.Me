@@ -25,7 +25,7 @@ test("typing in a long page takes under 16 ms a key", async ({ app, seed, page }
   await expect(app.title()).toHaveValue("Long read");
   await expect(app.editor().locator("p")).toHaveCount(PARAGRAPHS);
   await app.focusEditor();
-  await page.keyboard.press("ControlOrMeta+End");
+  await app.caretToEnd();
   await app.editor().evaluate((editor) => {
     const samples: number[] = [];
     (window as unknown as { __typing: number[] }).__typing = samples;

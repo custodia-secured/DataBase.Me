@@ -72,14 +72,14 @@ test.describe("in a split view", () => {
   test("two editors on one page stay in step", async ({ app, page }) => {
     await app.view("Document", 1);
     await app.focusEditor(0);
-    await page.keyboard.press("ControlOrMeta+End");
+    await app.caretToEnd(0);
     await page.keyboard.press("Enter");
     await page.keyboard.press("Enter");
     await page.keyboard.type("Typed on the left");
     await expect(app.editor(1)).toContainText("Typed on the left");
 
     await app.focusEditor(1);
-    await page.keyboard.press("ControlOrMeta+End");
+    await app.caretToEnd(1);
     await page.keyboard.type(" and the right");
     await expect(app.editor(0)).toContainText("Typed on the left and the right");
   });

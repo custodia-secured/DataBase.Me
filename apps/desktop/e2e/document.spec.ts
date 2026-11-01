@@ -40,7 +40,7 @@ async function blocks(app: App, title: string): Promise<BlockRow[]> {
 /** Leaves the to-do list Home's text ends with: a new item, then Enter again to lift it out. */
 async function newLineAtEnd(app: App): Promise<void> {
   const keyboard = app.page.keyboard;
-  await keyboard.press("ControlOrMeta+End");
+  await app.caretToEnd();
   await keyboard.press("Enter");
   await keyboard.press("Enter");
 }

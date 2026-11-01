@@ -48,7 +48,7 @@ test.describe("with a workspace", () => {
 
   test("the mention list passes axe", async ({ app, page }) => {
     await app.focusEditor();
-    await page.keyboard.press("ControlOrMeta+End");
+    await app.caretToEnd();
     await page.keyboard.press("Enter");
     await page.keyboard.press("Enter");
     await page.keyboard.type("[[");
