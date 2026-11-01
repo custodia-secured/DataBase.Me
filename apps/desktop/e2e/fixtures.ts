@@ -39,6 +39,16 @@ function isWebKitSelectQuirk(violation: Violation, browserName: string): boolean
   );
 }
 
+/** The part of the editor that TipTap leaves on its element, as `caretToEnd` reads it. */
+interface EditorElement extends HTMLElement {
+  editor: {
+    view: {
+      state: { selection: { head: number } };
+      posAtDOM(node: Node, offset: number, bias: number): number;
+    };
+  };
+}
+
 /** What a `tree` seed returns: the IDs of its objects by title, and of its types by name. */
 export interface TreeIds {
   ids: Record<string, string>;
@@ -170,6 +180,28 @@ export class App {
         editor.evaluate((element) => {
           const anchor = document.getSelection()?.anchorNode;
           return anchor != null && element.contains(anchor);
+        }),
+      )
+      .toBe(true);
+  }
+
+  /**
+   * Moves the caret to the end of the Document view's text and waits for the editor to catch up.
+   * The browser moves the page's selection at once, but ProseMirror reads it only on the
+   * `selectionchange` that follows. Until then, a key it handles itself, like Enter, acts on the
+   * old caret.
+   */
+  async caretToEnd(pane: 0 | 1 = 0): Promise<void> {
+    await this.page.keyboard.press("ControlOrMeta+End");
+    await expect
+      .poll(() =>
+        this.editor(pane).evaluate((element) => {
+          const { view } = (element as EditorElement).editor;
+          const selection = document.getSelection();
+          if (!selection?.focusNode) return false;
+          // The bias ProseMirror itself reads the selection with.
+          const head = view.posAtDOM(selection.focusNode, selection.focusOffset, 1);
+          return head === view.state.selection.head;
         }),
       )
       .toBe(true);

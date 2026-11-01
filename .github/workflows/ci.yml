@@ -248,6 +248,11 @@ jobs:
       # Edge comes with the runner; WebKit is Playwright's own build.
       - name: Install WebKit for Playwright
         run: pnpm --filter @databaseme/desktop exec playwright install webkit
+      # The Rust cache keeps this folder's subfolders but deletes its files, marker included, and the
+      # test server refuses a folder it can't recognise as its own.
+      - name: Remove test data restored from the cache
+        shell: bash
+        run: rm -rf target/e2e-data
       - name: Run the end-to-end tests
         run: pnpm --filter @databaseme/desktop e2e
       # The marker that proves the transport absent from the app must still find it here.
