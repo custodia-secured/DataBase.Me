@@ -123,12 +123,18 @@ export function ResultsView({ source, onOpen, onClose, onSaved }: ResultsViewPro
 
   const save = async () => {
     if (!query || name.trim() === "") return;
-    const record = { name: name.trim(), renderer: "list", query, config: {} };
     if (source.kind === "view") {
-      await actions.updateView(source.id, record);
+      // A rename keeps everything else the view has, the query as narrowed on screen included.
+      await actions.updateView(source.id, {
+        name: name.trim(),
+        renderer: view.data?.renderer ?? "list",
+        query,
+        config: view.data?.config_json ?? {},
+        owner_object_id: view.data?.owner_object_id ?? null,
+      });
       setDraft(null);
     } else {
-      const id = await actions.saveView(record);
+      const id = await actions.saveView({ name: name.trim(), renderer: "list", query, config: {} });
       if (id !== undefined) onSaved(id);
     }
     setNaming(false);
