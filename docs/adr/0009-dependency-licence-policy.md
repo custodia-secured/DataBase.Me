@@ -18,12 +18,13 @@ allowed; `AND` needs both; `X WITH <exception>` counts as `X`.
 
 **Additional licences, each flagged and justified here:**
 
-| Licence         | Where                 | Why it is acceptable                                                                                                                |
-| --------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `Unicode-3.0`   | Rust, shipped         | The Unicode data tables in `unicode-ident` and ICU crates, which nearly every Rust program depends on. Permissive and OSI-approved. |
-| `BlueOak-1.0.0` | JS build tooling only | `lru-cache`, `minimatch`. Permissive and OSI-approved.                                                                              |
-| `CC-BY-4.0`     | JS build tooling only | `caniuse-lite` browser-support data, read at build time and not shipped in the app.                                                 |
-| `CC0-1.0`       | JS build tooling only | `mdn-data`, a public-domain dedication.                                                                                             |
+| Licence         | Where                 | Why it is acceptable                                                                                                                                                                                                                                                                                    |
+| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Unicode-3.0`   | Rust, shipped         | The Unicode data tables in `unicode-ident` and ICU crates, which nearly every Rust program depends on. Permissive and OSI-approved.                                                                                                                                                                     |
+| `BlueOak-1.0.0` | JS build tooling only | `lru-cache`, `minimatch`. Permissive and OSI-approved.                                                                                                                                                                                                                                                  |
+| `CC-BY-4.0`     | JS build tooling only | `caniuse-lite` browser-support data, read at build time and not shipped in the app.                                                                                                                                                                                                                     |
+| `CC0-1.0`       | JS build tooling only | `mdn-data`, a public-domain dedication.                                                                                                                                                                                                                                                                 |
+| `CC0-1.0`       | Rust, desktop only    | `notify`, the file watcher behind the files folder (ADR-0006), in `dbme-mirror` alone and never in `dbme-core`. A public-domain dedication with a permissive fallback; not OSI-approved, so ADR-0024 carries the justification. Granted as a per-crate exception in `deny.toml`, not on the allow-list. |
 
 **How it is enforced.**
 

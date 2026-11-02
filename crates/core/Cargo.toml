@@ -9,7 +9,10 @@ publish.workspace = true
 
 [dependencies]
 blake3.workspace = true
+diffy.workspace = true
 getrandom.workspace = true
+pulldown-cmark.workspace = true
+saphyr.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 specta = { workspace = true, optional = true }
