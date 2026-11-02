@@ -262,6 +262,11 @@ impl<'v> Txn<'v> {
         &self.ctx.ids
     }
 
+    /// The transaction's connection, for the bookkeeping tables (`mirror.rs`).
+    pub(crate) fn conn(&self) -> &Connection {
+        &self.tx
+    }
+
     /// Applies one op and appends it to the log.
     pub(crate) fn apply(&mut self, op: Op) -> Result<()> {
         rows::apply(&self.tx, &op, self.ts)?;

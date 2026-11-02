@@ -282,6 +282,16 @@ impl Vault {
         &self.conn
     }
 
+    /// The current time, for bookkeeping rows written outside a transaction.
+    pub(crate) fn now_ms(&self) -> i64 {
+        self.ctx.clock.now_ms()
+    }
+
+    /// A fresh ID, for bookkeeping rows written outside a transaction.
+    pub(crate) fn next_id(&self) -> Result<Id> {
+        Ok(self.ctx.ids.next(self.now_ms())?)
+    }
+
     /// Builds the search index again from the objects and blocks. The index follows every
     /// transaction on its own; this is for a vault whose index [`Vault::verify`] found wrong. Not
     /// a change to the vault: no op is written, and nothing is to undo.

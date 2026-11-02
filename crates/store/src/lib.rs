@@ -16,6 +16,7 @@ mod identity;
 mod list;
 mod log;
 mod migrate;
+mod mirror;
 mod query;
 mod results;
 mod rows;
@@ -31,6 +32,10 @@ pub use error::{Result, StoreError};
 pub use identity::{IDENTITY_FILE, Identity};
 pub use list::{Backlink, MAX_PAGE, ObjectSummary, ObjectTree, Sort, SortBy, Source, TreeNode};
 pub use migrate::{APPLICATION_ID, SCHEMA_VERSION};
+pub use mirror::{
+    Conflict, ConflictKind, FOLDER_ENABLED, FULL_REWRITE_NEEDED, LAST_RESCAN_AT, MirrorFileState,
+    MirrorState, NewConflict,
+};
 pub use query::Reader;
 pub use results::FacetBucket;
 pub use search::{SearchHit, match_expression};
