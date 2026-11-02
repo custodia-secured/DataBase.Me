@@ -9,6 +9,7 @@ Planned contents, added with the milestone that tests them:
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------- |
 | `vaults/`         | Small DataBase.Me vaults at known format versions, for migration and round-trip tests                                                            | M1, M5    |
 | `obsidian/`       | An Obsidian vault with wikilinks, embeds, block references, tags and properties                                                                  | M5, M6    |
+| `obsidian-gate/`  | The sample a person opens in Obsidian at gate 1h: every block kind, both frontmatter shapes, the link cases                                      | M5        |
 | `csv/`, `xlsx/`   | Spreadsheets whose rows become objects                                                                                                           | M6        |
 | `pdf/`, `images/` | PDFs with text, photos with EXIF data                                                                                                            | M6        |
 | `mail/`           | mbox and .eml files                                                                                                                              | M9        |
