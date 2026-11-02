@@ -19,7 +19,7 @@ mod resolver;
 pub use engine::{FileEvent, MAX_RETRIES, Mirror, Outbound, Watcher, schema_of};
 pub use error::{MirrorError, Result};
 pub use fs::{Entry, Fs, MemFs, Stat, StdFs};
-pub use inbound::{GUARD_COUNT, GUARD_PERCENT, Inbound};
+pub use inbound::{GUARD_COUNT, GUARD_PERCENT, HoldDecision, Inbound};
 pub use resolver::VaultResolver;
 
 /// The folder inside the files folder that the app owns: the schema, the trash.

@@ -9,9 +9,9 @@
 //! exists is ignored. Too many removals or rewrites at once are a hold: one inbox entry, nothing
 //! applied.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 
-use dbme_core::files::paths::{file_stem, is_dot_path, path_key};
+use dbme_core::files::paths::{file_stem, path_key};
 use dbme_core::files::{self, FileDoc, Schema};
 use dbme_core::model::AttachmentRole;
 use dbme_core::{ContentHash, Id};
@@ -22,7 +22,7 @@ use dbme_store::{
 use serde_json::{Value, json};
 
 use crate::apply::{self, Placement};
-use crate::engine::{FileEvent, doc_of, latest_seq, schema_of};
+use crate::engine::{FileEvent, doc_of, has_file, ignored, latest_seq, schema_of};
 use crate::fs::Fs;
 use crate::resolver::VaultResolver;
 use crate::{Mirror, MirrorError, Result, TRASH_DIR};
@@ -72,20 +72,20 @@ impl<F: Fs> Mirror<F> {
         for event in events {
             match event {
                 FileEvent::Created(p) | FileEvent::Modified(p) => {
-                    if !is_dot_path(&p) {
+                    if !ignored(&p) {
                         changed.insert(p);
                     }
                 }
                 FileEvent::Removed(p) => {
-                    if !is_dot_path(&p) {
+                    if !ignored(&p) {
                         removed.insert(p);
                     }
                 }
                 FileEvent::Renamed { from, to } => {
-                    if !is_dot_path(&from) {
+                    if !ignored(&from) {
                         removed.insert(from);
                     }
-                    if !is_dot_path(&to) {
+                    if !ignored(&to) {
                         changed.insert(to);
                     }
                 }
@@ -97,7 +97,7 @@ impl<F: Fs> Mirror<F> {
                         .list()
                         .map_err(|e| MirrorError::io("listing", &dir, e))?
                     {
-                        if entry.rel_path.starts_with(&prefix) && !is_dot_path(&entry.rel_path) {
+                        if entry.rel_path.starts_with(&prefix) && !ignored(&entry.rel_path) {
                             changed.insert(entry.rel_path);
                         }
                     }
@@ -112,12 +112,7 @@ impl<F: Fs> Mirror<F> {
         let states = vault.mirror_states(None)?;
         let tracked: HashMap<String, MirrorState> = states
             .iter()
-            .filter(|s| {
-                matches!(
-                    s.state,
-                    MirrorFileState::Synced | MirrorFileState::Pending | MirrorFileState::Held
-                )
-            })
+            .filter(|s| has_file(s))
             .map(|s| (s.path_key.clone(), s.clone()))
             .collect();
         let removed_tracked: Vec<&MirrorState> = removed
@@ -128,14 +123,19 @@ impl<F: Fs> Mirror<F> {
             .iter()
             .filter(|p| tracked.contains_key(&path_key(p)))
             .count();
-        if let Some(id) = self.guard(
-            vault,
-            &tracked,
-            &removed,
-            removed_tracked.len(),
-            &changed,
-            rewrites,
-        )? {
+        let held = if self.skip_guard {
+            None
+        } else {
+            self.guard(
+                vault,
+                &tracked,
+                &removed,
+                removed_tracked.len(),
+                &changed,
+                rewrites,
+            )?
+        };
+        if let Some(id) = held {
             report.held = Some(id);
             report.conflicts.push(id);
             return Ok(report);
@@ -143,6 +143,43 @@ impl<F: Fs> Mirror<F> {
 
         let schema = schema_of(vault)?;
         let mut resolver = VaultResolver::new(&states);
+
+        // Files whose `id:` the vault has never seen get their object first, bare, so that links
+        // between files of one batch (a rebuild, a folder dropped in) find their targets.
+        self.adopted.clear();
+        for rel_path in &changed {
+            if !rel_path.ends_with(".md") {
+                continue;
+            }
+            let Ok(bytes) = self.fs.read(rel_path) else {
+                continue;
+            };
+            let Ok(text) = std::str::from_utf8(&bytes) else {
+                continue;
+            };
+            let Ok(parsed) = files::parse(text, &schema, &resolver) else {
+                continue;
+            };
+            let Some(id) = parsed.doc.front.id else {
+                continue;
+            };
+            if !matches!(vault.read().object(id), Err(StoreError::NotFound { .. })) {
+                continue;
+            }
+            let title = stem_of(rel_path);
+            let parent = self.parent_for(vault, rel_path, &tracked)?;
+            let created = parsed.doc.front.created;
+            vault.transact_external(|txn| {
+                txn.create_object(dbme_store::NewObject {
+                    id: Some(id),
+                    created_at: created,
+                    title,
+                    parent_id: parent,
+                    ..dbme_store::NewObject::default()
+                })
+            })?;
+            self.adopted.insert(id);
+        }
         let mut removed_by_hash: HashMap<ContentHash, &MirrorState> = removed_tracked
             .iter()
             .filter_map(|s| s.last_hash.clone().map(|h| (h, *s)))
@@ -247,9 +284,32 @@ impl<F: Fs> Mirror<F> {
             return Ok(());
         }
 
-        if !rel_path.ends_with(".md") {
-            // Attachments and the drop zone come with Task 4c.
+        // A cloud drive's conflicting copy is for the person, not an object (Decision 1i).
+        let name = rel_path.rsplit('/').next().unwrap_or(rel_path);
+        let dir = rel_path.rsplit_once('/').map_or("", |(d, _)| d);
+        let sibling_exists = |sibling: &str| -> bool {
+            let path = if dir.is_empty() {
+                sibling.to_owned()
+            } else {
+                format!("{dir}/{sibling}")
+            };
+            self.fs.stat(&path).ok().flatten().is_some()
+        };
+        if at_path.is_none()
+            && let Some(found) = dbme_core::files::paths::cloud_conflict(name, &sibling_exists)
+        {
+            let id = vault.conflict_add(NewConflict {
+                rel_path: Some(rel_path.to_owned()),
+                kind: Some(ConflictKind::CloudConflictFile),
+                details: serde_json::to_value(&found).unwrap_or(Value::Null),
+                ..NewConflict::default()
+            })?;
+            report.conflicts.push(id);
             return Ok(());
+        }
+
+        if !rel_path.ends_with(".md") {
+            return self.drop_in(vault, rel_path, &bytes, hash, stat, at_path, report);
         }
         let text = match std::str::from_utf8(&bytes) {
             Ok(text) => text,
@@ -362,9 +422,21 @@ impl<F: Fs> Mirror<F> {
                     None => FileDoc::default(),
                 };
                 let ours = doc_of(&vault.read(), &row, schema, resolver)?;
-                let merged = files::merge(&base, &ours, &theirs, schema, resolver);
-                conflicts = merged.conflicts;
-                theirs = merged.doc;
+                if !self.adopted.contains(&id) {
+                    // `created` and `updated` are informational on the way in (FORMAT.md §6.2):
+                    // the sides are aligned so a timestamp never counts as a conflict.
+                    let mut base = base;
+                    let mut file = theirs.clone();
+                    for side in [&mut base, &mut file] {
+                        side.front.created = ours.front.created;
+                        side.front.updated = ours.front.updated;
+                    }
+                    let merged = files::merge(&base, &ours, &file, schema, resolver);
+                    conflicts = merged.conflicts;
+                    theirs = merged.doc;
+                }
+                // A bare object made for this very file a moment ago has nothing of its own: the
+                // file is taken as it is.
                 let mut next = || self.ids.next(now).unwrap_or_else(|_| Id::from_parts(0, 0));
                 let before = count_unanchored(&theirs.body);
                 files::assign_ids(&mut theirs, &mut next);
@@ -400,7 +472,11 @@ impl<F: Fs> Mirror<F> {
                     vault.mirror_dirty_mark(&below)?;
                     report.moved.push(id);
                 }
-                report.applied.push(id);
+                if self.adopted.contains(&id) {
+                    report.created.push(id);
+                } else {
+                    report.applied.push(id);
+                }
                 id
             }
             Identity::Adopt(_) | Identity::New => {
@@ -668,6 +744,302 @@ impl<F: Fs> Mirror<F> {
     }
 }
 
+/// What to do with a held batch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HoldDecision {
+    /// Apply the held events after all: the removals and rewrites were meant.
+    Proceed,
+    /// Put the folder back the way the vault has it: every held file is written again.
+    Restore,
+}
+
+impl<F: Fs> Mirror<F> {
+    /// Resolves a `bulk_change_hold`: either applies the held events with the guard off, or
+    /// marks every held object for writing again so the folder returns to the vault's state.
+    pub fn hold_decide(
+        &mut self,
+        vault: &mut Vault,
+        conflict: Id,
+        decision: HoldDecision,
+    ) -> Result<Inbound> {
+        let held = vault.conflict(conflict)?;
+        if held.kind != ConflictKind::BulkChangeHold {
+            return Err(StoreError::Rule(format!("conflict {conflict} is not a hold")).into());
+        }
+        if held.resolved_at.is_some() {
+            return Err(StoreError::Rule(format!("hold {conflict} is already resolved")).into());
+        }
+        let paths = |key: &str| -> Vec<String> {
+            held.details[key]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(str::to_owned))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let (removed, changed) = (paths("removed"), paths("changed"));
+        let report = match decision {
+            HoldDecision::Proceed => {
+                let mut events: Vec<FileEvent> =
+                    removed.into_iter().map(FileEvent::Removed).collect();
+                events.extend(changed.into_iter().map(FileEvent::Modified));
+                self.skip_guard = true;
+                let result = self.pump_in(vault, events);
+                self.skip_guard = false;
+                result?
+            }
+            HoldDecision::Restore => {
+                let mut ids = Vec::new();
+                for rel_path in removed.iter().chain(&changed) {
+                    if let Some(state) = vault.mirror_state_by_path_key(&path_key(rel_path))? {
+                        ids.push(state.object_id);
+                    }
+                }
+                vault.mirror_dirty_mark(&ids)?;
+                Inbound::default()
+            }
+        };
+        vault.conflict_resolve(
+            conflict,
+            match decision {
+                HoldDecision::Proceed => "proceed",
+                HoldDecision::Restore => "restore",
+            },
+        )?;
+        Ok(report)
+    }
+
+    /// Builds the vault's objects from the folder alone: the types and fields of
+    /// `.dbme/schema.json` that the vault lacks are made first, then every file is taken in as
+    /// new, with the guard off. On an empty vault this reproduces every object, field, relation
+    /// and block the files carry.
+    pub fn rebuild(&mut self, vault: &mut Vault) -> Result<Inbound> {
+        if let Ok(bytes) = self.fs.read(crate::SCHEMA_FILE)
+            && let Ok(json) = serde_json::from_slice::<Value>(&bytes)
+            && let Ok(schema) = Schema::from_json(&json)
+        {
+            self.adopt_schema(vault, &schema)?;
+        }
+        let events: Vec<FileEvent> = self
+            .fs
+            .list()
+            .map_err(|e| MirrorError::io("listing", "", e))?
+            .into_iter()
+            .filter(|e| !ignored(&e.rel_path))
+            .map(|e| FileEvent::Created(e.rel_path))
+            .collect();
+        self.skip_guard = true;
+        let result = self.pump_in(vault, events);
+        self.skip_guard = false;
+        result
+    }
+
+    /// Makes the types and fields of a schema file that the vault does not have, by name and key.
+    fn adopt_schema(&self, vault: &mut Vault, schema: &Schema) -> Result<()> {
+        let have = schema_of(vault)?;
+        let mut missing_types = Vec::new();
+        let mut missing_fields = Vec::new();
+        for entry in &schema.types {
+            match have.type_by_name(&entry.ty.name) {
+                None => missing_types.push(entry.clone()),
+                Some(existing) => {
+                    let keys: Vec<String> = have
+                        .fields_of(std::slice::from_ref(&existing.name))
+                        .iter()
+                        .map(|f| f.key.clone())
+                        .collect();
+                    for field in &entry.fields {
+                        if !keys.contains(&field.key) {
+                            missing_fields.push((existing.id, field.clone()));
+                        }
+                    }
+                }
+            }
+        }
+        if missing_types.is_empty() && missing_fields.is_empty() {
+            return Ok(());
+        }
+        vault.transact_external(|txn| {
+            for entry in missing_types {
+                let type_id = txn.create_type(dbme_store::NewType {
+                    name: entry.ty.name.clone(),
+                    plural: entry.ty.plural.clone(),
+                    icon: entry.ty.icon.clone(),
+                    color: entry.ty.color.clone(),
+                    extends: None,
+                    description: entry.ty.description.clone(),
+                })?;
+                for field in entry.fields {
+                    txn.create_field(dbme_store::NewField {
+                        type_id,
+                        key: field.key,
+                        label: field.label,
+                        kind: field.kind,
+                        options: field.options_json,
+                        required: field.required,
+                    })?;
+                }
+            }
+            for (type_id, field) in missing_fields {
+                txn.create_field(dbme_store::NewField {
+                    type_id,
+                    key: field.key,
+                    label: field.label,
+                    kind: field.kind,
+                    options: field.options_json,
+                    required: field.required,
+                })?;
+            }
+            Ok(())
+        })?;
+        Ok(())
+    }
+
+    /// A file that is not Markdown: the basic drop zone (Decision 15). It becomes an object named
+    /// after the file, typed by its media type, with the bytes attached as a blob and, for a
+    /// picture, an image block; nothing is extracted. The file stays where it is and is the
+    /// object's own, so no `.md` is written for it.
+    #[allow(clippy::too_many_arguments, reason = "one file's working state")]
+    fn drop_in(
+        &mut self,
+        vault: &mut Vault,
+        rel_path: &str,
+        bytes: &[u8],
+        hash: ContentHash,
+        stat: Option<crate::fs::Stat>,
+        at_path: Option<&MirrorState>,
+        report: &mut Inbound,
+    ) -> Result<()> {
+        let name = rel_path.rsplit('/').next().unwrap_or(rel_path);
+        let (title, ext) = match name.rsplit_once('.') {
+            Some((stem, ext)) if !stem.is_empty() => (stem.to_owned(), ext.to_ascii_lowercase()),
+            _ => (name.to_owned(), String::new()),
+        };
+        let mime = mime_for(&ext);
+        let is_image = mime.starts_with("image/");
+        let blob = vault.blobs().put(bytes)?;
+        let now = self.clock.now_ms();
+        let object_id = match at_path {
+            // The dropped file changed: the object keeps its identity and gets the new bytes.
+            Some(state) => {
+                let id = state.object_id;
+                let attachments = vault.read().attachments(id)?;
+                let blocks = vault.read().blocks(id)?;
+                let new_hash = blob.hash.clone();
+                vault.transact_external(|txn| {
+                    for a in attachments {
+                        if a.role == AttachmentRole::Original {
+                            txn.detach(id, a.blob_hash, AttachmentRole::Original)?;
+                        }
+                    }
+                    txn.attach(NewAttachment {
+                        object_id: id,
+                        blob_hash: new_hash.clone(),
+                        role: AttachmentRole::Original,
+                        filename: Some(name.to_owned()),
+                        mime: Some(mime.to_owned()),
+                    })?;
+                    for block in blocks.iter().filter(|b| b.kind == "image") {
+                        let new_hash = new_hash.clone();
+                        txn.update_block(block.id, |b| {
+                            b.content_json["blob"] = Value::String(new_hash.to_string());
+                        })?;
+                    }
+                    Ok(())
+                })?;
+                id
+            }
+            None => {
+                let parent = self.parent_for(vault, rel_path, &HashMap::new())?;
+                let schema = schema_of(vault)?;
+                let type_id = schema
+                    .type_by_name(if is_image { "Media" } else { "Document" })
+                    .map(|t| t.id);
+                let new_hash = blob.hash.clone();
+                let alt = title.clone();
+                let (id, _) = vault.transact_external(|txn| {
+                    let id = txn.create_object(dbme_store::NewObject {
+                        title: title.clone(),
+                        parent_id: parent,
+                        type_ids: type_id.into_iter().collect(),
+                        ..dbme_store::NewObject::default()
+                    })?;
+                    txn.attach(NewAttachment {
+                        object_id: id,
+                        blob_hash: new_hash.clone(),
+                        role: AttachmentRole::Original,
+                        filename: Some(name.to_owned()),
+                        mime: Some(mime.to_owned()),
+                    })?;
+                    if is_image {
+                        txn.create_block(dbme_store::NewBlock {
+                            id: None,
+                            object_id: id,
+                            parent_block_id: None,
+                            position: Position::Last,
+                            kind: "image".to_owned(),
+                            content: json!({"blob": new_hash.to_string(), "alt": alt}),
+                        })?;
+                    }
+                    Ok(id)
+                })?;
+                report.created.push(id);
+                id
+            }
+        };
+        vault.mirror_state_set(&MirrorState {
+            object_id,
+            rel_path: rel_path.to_owned(),
+            path_key: path_key(rel_path),
+            last_hash: Some(hash),
+            base_text: None,
+            synced_seq: Some(latest_seq(vault)?),
+            synced_at: Some(now),
+            file_size: stat.map(|s| s.size as i64),
+            file_mtime_ms: stat.map(|s| s.mtime_ms),
+            // Excluded with a real path: the file is the object's own, and no `.md` is written.
+            state: MirrorFileState::Excluded,
+        })?;
+        if at_path.is_some() {
+            report.applied.push(object_id);
+        }
+        Ok(())
+    }
+}
+
+/// The media type for a file extension; `application/octet-stream` when unknown.
+fn mime_for(ext: &str) -> &'static str {
+    match ext {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "heic" => "image/heic",
+        "pdf" => "application/pdf",
+        "txt" => "text/plain",
+        "csv" => "text/csv",
+        "json" => "application/json",
+        "mp3" => "audio/mpeg",
+        "m4a" => "audio/mp4",
+        "mp4" => "video/mp4",
+        "zip" => "application/zip",
+        _ => "application/octet-stream",
+    }
+}
+
+/// The file name without its folder and `.md`.
+fn stem_of(rel_path: &str) -> String {
+    rel_path
+        .rsplit('/')
+        .next()
+        .and_then(|n| n.strip_suffix(".md"))
+        .unwrap_or(rel_path)
+        .to_owned()
+}
+
 /// Takes every block's id away, so `assign_ids` gives fresh ones.
 fn strip_ids(blocks: &mut [files::FileBlock]) {
     for block in blocks {
@@ -691,6 +1063,3 @@ fn is_dedupe_of(stem: &str, current: &str) -> bool {
         .and_then(|rest| rest.strip_suffix(')'))
         .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
 }
-
-#[allow(dead_code, reason = "kept for the hold decision in Task 4c")]
-fn _unused(_: BTreeMap<(), ()>) {}

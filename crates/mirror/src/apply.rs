@@ -257,6 +257,8 @@ pub(crate) fn apply_doc(
             txn.trash_relation(relation.id)?;
         }
     }
+    // Blocks first: a link may name its source block.
+    apply_blocks(txn, object_id, &doc.body, &mut applied)?;
     let block_ids: HashSet<Id> = txn.read().blocks(object_id)?.iter().map(|b| b.id).collect();
     for (key, (label, props)) in wanted {
         if present.contains(&key) {
@@ -285,7 +287,6 @@ pub(crate) fn apply_doc(
         })?;
     }
 
-    apply_blocks(txn, object_id, &doc.body, &mut applied)?;
     Ok(applied)
 }
 

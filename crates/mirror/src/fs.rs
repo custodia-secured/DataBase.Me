@@ -66,6 +66,7 @@ pub struct MemFs {
     dirs: std::collections::BTreeSet<String>,
     clock: i64,
     fail_renames: u32,
+    fail_writes: u32,
     writes: u64,
 }
 
@@ -79,6 +80,12 @@ impl MemFs {
     /// holds open fails on Windows (ADR-0024).
     pub fn fail_next_renames(&mut self, count: u32) {
         self.fail_renames = count;
+    }
+
+    /// Makes the next `count` atomic writes fail before anything reaches the destination, the way
+    /// a crash mid-write or a full disk does: the old file, if any, is untouched.
+    pub fn fail_next_writes(&mut self, count: u32) {
+        self.fail_writes = count;
     }
 
     /// Writes a file as another program would: directly, with a new modification time.
@@ -135,6 +142,13 @@ impl Fs for MemFs {
     }
 
     fn write_atomic(&mut self, rel_path: &str, bytes: &[u8]) -> io::Result<()> {
+        if self.fail_writes > 0 {
+            self.fail_writes -= 1;
+            return Err(io::Error::new(
+                ErrorKind::StorageFull,
+                "the write did not reach the disk",
+            ));
+        }
         self.writes += 1;
         self.put(rel_path, bytes);
         Ok(())

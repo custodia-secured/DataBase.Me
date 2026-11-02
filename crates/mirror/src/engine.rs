@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use dbme_core::block::MENTIONS;
 use dbme_core::files::paths::{self, file_stem, is_dot_path, path_key};
-use dbme_core::files::{self, FileDoc, ObjectRows, Schema, TAGGED};
+use dbme_core::files::{self, FileDoc, LinkResolver, ObjectRows, Schema, TAGGED};
 use dbme_core::model::{ObjectRow, Sensitivity, TypeRow};
 use dbme_core::{Clock, ContentHash, Id, IdGenerator};
 use dbme_store::{MirrorFileState, MirrorState, Reader, StoreError, Vault};
@@ -75,6 +75,10 @@ pub struct Mirror<F: Fs> {
     pub(crate) retries: HashMap<Id, u32>,
     /// For the blocks a person typed without an anchor, and for new objects.
     pub(crate) ids: IdGenerator,
+    /// Set while a hold is being applied on purpose, or a folder rebuilt.
+    pub(crate) skip_guard: bool,
+    /// The objects the current batch made for files with an unknown `id:`.
+    pub(crate) adopted: std::collections::BTreeSet<Id>,
 }
 
 impl<F: Fs> std::fmt::Debug for Mirror<F> {
@@ -140,6 +144,23 @@ pub(crate) fn doc_of(
     ))
 }
 
+/// Whether a row says a file of the object's is in the folder: a Markdown file (`synced`,
+/// `pending`, `held`), or a dropped file that is the object's own (`excluded` with a real path,
+/// Decision 15). An excluded row under `.dbme/` has no file.
+pub(crate) fn has_file(state: &MirrorState) -> bool {
+    match state.state {
+        MirrorFileState::Synced | MirrorFileState::Pending | MirrorFileState::Held => true,
+        MirrorFileState::Excluded => !state.rel_path.starts_with(".dbme/"),
+        MirrorFileState::Trashed => false,
+    }
+}
+
+/// Paths the engine never reads as objects: dot paths (ours and other tools') and the attachments
+/// it writes itself.
+pub(crate) fn ignored(rel_path: &str) -> bool {
+    is_dot_path(rel_path) || rel_path.starts_with("attachments/")
+}
+
 /// The `seq` of the vault's newest op, or `0`.
 pub(crate) fn latest_seq(vault: &Vault) -> Result<i64> {
     Ok(vault.read().history(1)?.first().map_or(0, |r| r.seq))
@@ -153,6 +174,8 @@ impl<F: Fs> Mirror<F> {
             clock,
             retries: HashMap::new(),
             ids: IdGenerator::new(),
+            skip_guard: false,
+            adopted: std::collections::BTreeSet::new(),
         }
     }
 
@@ -233,6 +256,14 @@ impl<F: Fs> Mirror<F> {
                 self.trash(vault, &row, state, &mut by_key, &mut resolver, &mut report)?;
                 continue;
             }
+            if let Some(s) = &state
+                && s.state == MirrorFileState::Excluded
+                && !s.rel_path.starts_with(".dbme/")
+            {
+                // A dropped file is the object's own; no Markdown is written for it.
+                report.unchanged.push(id);
+                continue;
+            }
             if row.sensitivity == Sensitivity::Sensitive {
                 self.exclude(vault, &row, state, &mut by_key, &mut resolver, &mut report)?;
                 continue;
@@ -272,12 +303,7 @@ impl<F: Fs> Mirror<F> {
         let states = vault.mirror_states(None)?;
         let mut tracked: HashMap<String, &MirrorState> = states
             .iter()
-            .filter(|s| {
-                matches!(
-                    s.state,
-                    MirrorFileState::Synced | MirrorFileState::Pending | MirrorFileState::Held
-                )
-            })
+            .filter(|s| has_file(s))
             .map(|s| (s.path_key.clone(), s))
             .collect();
         let mut events = Vec::new();
@@ -286,7 +312,7 @@ impl<F: Fs> Mirror<F> {
             .list()
             .map_err(|e| MirrorError::io("listing", "", e))?
         {
-            if is_dot_path(&entry.rel_path) {
+            if ignored(&entry.rel_path) {
                 continue;
             }
             match tracked.remove(&path_key(&entry.rel_path)) {
@@ -437,6 +463,25 @@ impl<F: Fs> Mirror<F> {
         let target = paths::join(&[dir.as_str()], &paths::dedupe(&stem, &taken));
 
         let doc = doc_of(&read, row, schema, resolver)?;
+        // The blobs the file embeds go under `attachments/`, once each (Decision 9).
+        for attachment in read.attachments(row.id)? {
+            let name = format!(
+                "{}/{}",
+                crate::ATTACHMENTS_DIR,
+                resolver.attachment_name(&attachment.blob_hash)
+            );
+            if self
+                .fs
+                .stat(&name)
+                .map_err(|e| MirrorError::io("reading", &name, e))?
+                .is_none()
+            {
+                let bytes = vault.blobs().read(&attachment.blob_hash)?;
+                self.fs
+                    .write_atomic(&name, &bytes)
+                    .map_err(|e| MirrorError::io("writing", &name, e))?;
+            }
+        }
         // The file names its own path in no link, but other files name it: register the final
         // path before rendering anything that could link here (children render after).
         resolver.add(row.id, &target);
