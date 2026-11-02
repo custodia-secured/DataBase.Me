@@ -50,9 +50,31 @@ fn total(phases: &[(&str, Duration)]) -> Duration {
     phases.iter().map(|(_, d)| *d).sum()
 }
 
+/// How many times the bulk gate runs; the best total is the measurement. A shared CI runner
+/// varies by a third between identical builds (2026-11-02: the same code took 1.68 s and 2.20 s
+/// on two runs of `main`), so one run cannot gate a 2 s budget.
+const ROUNDS: usize = 3;
+
 #[test]
 #[cfg_attr(debug_assertions, ignore = "the budget applies to release builds")]
 fn ten_thousand_objects_are_created_edited_deleted_and_undone_within_budget() {
+    let rounds: Vec<Vec<(&str, Duration)>> = (0..ROUNDS).map(|_| bulk_round()).collect();
+    let best = rounds.iter().min_by_key(|phases| total(phases)).unwrap();
+    let total = total(best);
+    eprintln!(
+        "bulk, {OBJECTS} objects, best of {ROUNDS}: {best:?}, total {total:?} (budget {BUDGET:?})"
+    );
+    for phases in &rounds {
+        eprintln!("  round: {:?}", self::total(phases));
+    }
+    assert!(
+        total < BUDGET,
+        "took {total:?}, over the {BUDGET:?} budget: {best:?}"
+    );
+}
+
+/// One run of the bulk flow on a fresh vault: the four timed phases.
+fn bulk_round() -> Vec<(&'static str, Duration)> {
     let mut t = new_vault();
     let mut phases = Vec::new();
     let mut ids: Vec<Id> = Vec::new();
@@ -102,14 +124,8 @@ fn ten_thousand_objects_are_created_edited_deleted_and_undone_within_budget() {
         0,
         "undoing the create removes them again"
     );
-
-    let total = total(&phases);
-    eprintln!("bulk, {OBJECTS} objects: {phases:?}, total {total:?} (budget {BUDGET:?})");
-    assert!(
-        total < BUDGET,
-        "took {total:?}, over the {BUDGET:?} budget: {phases:?}"
-    );
     t.assert_verifies();
+    phases
 }
 
 /// M3's read for the mind map: a tree of 2,011 objects, within what an edit may spend (100 ms) and

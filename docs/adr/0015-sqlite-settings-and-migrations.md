@@ -83,6 +83,10 @@ how durable each commit is. It also has to read the M1 budget, "10k-object CRUD 
   5.69 s, 142 µs per commit. The reference machine (ADR-0008) has not been measured yet. What remains is spread evenly: about 13 µs per
   op, of which 2 to 6 µs is building, checking and hashing the op and the rest is SQL. Dropping
   the gate is not the answer.
+- 2026-11-02: two runner runs of `main` at the M4 merge took 1.68 s and 2.20 s, code that takes
+  1.05 s on the laptop both times; the runner's own spread is wider than the 16% margin. The gate
+  now runs the bulk flow three times on fresh vaults and takes the best total, as the tree read
+  does with five. The spread is printed with the result.
 - Turning on `synchronous = FULL` later costs one more fsync per commit. That trade-off is
   revisited if users report losing their last edits after power loss.
 

@@ -147,6 +147,10 @@ fn shell_rename(verb: &[&str], from: &Path, to: &str) {
 
 // Probe 1: our own atomic write, first creating the target, then replacing it.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+)]
 fn atomic_write_new_then_replace() {
     let w = Watched::start(|_| {});
     let tmp = atomic_write(&w.root, "Title.md", "one");
@@ -163,6 +167,10 @@ fn atomic_write_new_then_replace() {
 
 // Probe 2: an editor's temp-and-rename, with a tilde backup name and a Vim swap name.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+)]
 fn editor_temp_and_rename() {
     let w = Watched::start(|root| fs::write(root.join("Title.md"), "old").unwrap());
     fs::write(w.path("Title.md~"), "tilde").unwrap();
@@ -191,6 +199,10 @@ fn editor_temp_and_rename() {
 
 // Probe 3: writes that keep the path: truncate, append, same bytes, mtime only.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+)]
 fn in_place_writes_all_look_alike() {
     let w = Watched::start(|root| fs::write(root.join("Title.md"), "same").unwrap());
 
@@ -227,6 +239,10 @@ fn in_place_writes_all_look_alike() {
 
 // Probe 4: a rename inside one folder.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+)]
 fn rename_within_folder_is_one_event() {
     let w = Watched::start(|root| fs::write(root.join("A.md"), "a").unwrap());
     fs::rename(w.path("A.md"), w.path("B.md")).unwrap();
@@ -242,6 +258,10 @@ fn rename_within_folder_is_one_event() {
 
 // Probe 5: a folder with three files moved into another folder, then a single file.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+)]
 fn moving_across_folders_is_remove_plus_create() {
     let w = Watched::start(|root| {
         fs::create_dir(root.join("src")).unwrap();
@@ -270,6 +290,10 @@ fn moving_across_folders_is_remove_plus_create() {
 
 // Probe 6a: one file deleted.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+)]
 fn deleting_a_file() {
     let w = Watched::start(|root| fs::write(root.join("Gone.md"), "x").unwrap());
     fs::remove_file(w.path("Gone.md")).unwrap();
@@ -282,6 +306,10 @@ fn deleting_a_file() {
 
 // Probe 6b: a folder with files deleted.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+)]
 fn deleting_a_folder_with_files() {
     let w = Watched::start(|root| {
         fs::create_dir(root.join("sub")).unwrap();
@@ -299,6 +327,10 @@ fn deleting_a_folder_with_files() {
 // Probe 6d: a write into an existing folder; in probe 5 the folder receiving a move reported a
 // modify of its own, here it does not.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+)]
 fn a_write_inside_a_folder_reports_the_file_only() {
     let w = Watched::start(|root| fs::create_dir(root.join("sub")).unwrap());
     fs::write(w.path("sub/new.md"), "n").unwrap();
@@ -311,6 +343,10 @@ fn a_write_inside_a_folder_reports_the_file_only() {
 
 // Probe 6c: a folder created and filled at once, with recursion armed beforehand.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+)]
 fn files_inside_a_new_folder_are_reported() {
     let w = Watched::start(|_| {});
     fs::create_dir(w.path("new")).unwrap();
@@ -366,6 +402,10 @@ fn rename_over_an_open_file() {
 
 // Probe 8: a rename that changes only the case of the name.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+)]
 fn case_only_rename_is_not_stitched() {
     let w = Watched::start(|root| fs::write(root.join("Note.md"), "n").unwrap());
     fs::rename(w.path("Note.md"), w.path("note.md")).unwrap();
@@ -411,6 +451,10 @@ fn case_only_rename_is_not_stitched() {
 
 // Probe 9: fifty files deleted in one loop. The batch count depends on timing: printed only.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+)]
 fn fifty_deletes_arrive_once_each() {
     let w = Watched::start(|root| {
         for i in 0..50 {
@@ -428,6 +472,10 @@ fn fifty_deletes_arrive_once_each() {
 
 // Probe 10: which path an own write carries, since that is what the echo ledger must match.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+)]
 fn own_write_events_name_the_final_path_only() {
     let w = Watched::start(|root| fs::write(root.join("Title.md"), "old").unwrap());
     let tmp = atomic_write(&w.root, "Title.md", "new");
@@ -439,6 +487,10 @@ fn own_write_events_name_the_final_path_only() {
 
 // Probe 11: files that appear between the folder's creation and watch() are not reported.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+)]
 fn files_from_before_the_watch_are_silent() {
     let w = Watched::start(|root| fs::write(root.join("Early.md"), "e").unwrap());
     // One live change proves the channel works, so silence about Early.md means something.

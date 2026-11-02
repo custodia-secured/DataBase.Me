@@ -200,6 +200,9 @@ pub struct Txn<'v> {
     touched: BTreeSet<Id>,
     /// The objects whose files the folder must write again (ADR-0021).
     mirror_touched: BTreeSet<Id>,
+    /// The objects whose title or place changed: at commit, everything below them and everything
+    /// linking to those joins `mirror_touched` in one query.
+    mirror_moved: BTreeSet<Id>,
     /// Whether a type or field changed, so every file needs writing again.
     full_rewrite: bool,
     failed: bool,
@@ -227,6 +230,7 @@ impl<'v> Txn<'v> {
             changed: BTreeSet::new(),
             touched: BTreeSet::new(),
             mirror_touched: BTreeSet::new(),
+            mirror_moved: BTreeSet::new(),
             full_rewrite: false,
             failed: false,
         })
@@ -241,6 +245,10 @@ impl<'v> Txn<'v> {
         }
         search::mark_dirty(&self.tx, &self.touched)?;
         mirror::mark_dirty(&self.tx, &self.mirror_touched)?;
+        if !self.mirror_moved.is_empty() {
+            let below = mirror::below_and_linking(&self.tx, &self.mirror_moved)?;
+            mirror::mark_dirty(&self.tx, &below)?;
+        }
         if self.full_rewrite {
             mirror::meta_set(&self.tx, mirror::FULL_REWRITE_NEEDED, Some("1"))?;
         }
@@ -336,12 +344,7 @@ impl<'v> Txn<'v> {
                     Action::Create | Action::Delete => false,
                 };
                 if paths_changed {
-                    for object in self.read().subtree(id)? {
-                        self.mirror_touched.insert(object.id);
-                        for relation in self.read().relations_touching(object.id)? {
-                            self.mirror_touched.insert(relation.src_id);
-                        }
-                    }
+                    self.mirror_moved.insert(id);
                 }
             }
             (Entity::ObjectType, _) => {

@@ -315,6 +315,27 @@ pub(crate) fn mark_dirty<'a>(
     Ok(())
 }
 
+/// The objects whose files change path or content when the objects in `moved` change title or
+/// place: `moved` themselves, everything below them (their paths contain the parent's), and the
+/// source of every relation pointing at any of those (its wikilink names the path). One query for
+/// the whole set, so a bulk edit of 10,000 titles costs one walk, not 10,000 (ADR-0021).
+pub(crate) fn below_and_linking<'a>(
+    conn: &Connection,
+    moved: impl IntoIterator<Item = &'a Id>,
+) -> Result<Vec<Id>> {
+    let seeds: Vec<String> = moved.into_iter().map(ToString::to_string).collect();
+    collect(
+        conn,
+        "WITH RECURSIVE moved(id) AS (\
+            SELECT value FROM json_each(?1) \
+            UNION SELECT objects.id FROM objects JOIN moved ON objects.parent_id = moved.id) \
+         SELECT id FROM moved \
+         UNION SELECT src_id FROM relations WHERE dst_id IN (SELECT id FROM moved)",
+        [sql::to_json(&seeds)?],
+        |r| sql::id(r, 0),
+    )
+}
+
 pub(crate) fn take_dirty(conn: &Connection) -> Result<Vec<Id>> {
     let mut ids = collect(conn, "SELECT object_id FROM mirror_dirty", [], |r| {
         sql::id(r, 0)
