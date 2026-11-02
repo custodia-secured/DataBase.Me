@@ -12,6 +12,7 @@ import type {
   Id,
   ObjectRow_Serialize,
   ObjectSummary_Serialize,
+  ObjectTree_Serialize,
   Sort,
   Source,
   TypeRow_Serialize,
@@ -36,6 +37,7 @@ export const keys = {
   blocks: (objectId: Id) => [VAULT, "blocks", objectId] as const,
   backlinks: (id: Id) => [VAULT, "backlinks", id] as const,
   search: (text: string, limit: number) => [VAULT, "search", text, limit] as const,
+  tree: (root: Id, limit: number) => [VAULT, "tree", root, limit] as const,
 };
 
 /** Blobs never change, so their key is outside {@link VAULT} and no refresh reloads them. */
@@ -112,6 +114,21 @@ export function useBlocks(objectId: Id | null) {
     queryKey: keys.blocks(objectId ?? ""),
     queryFn: () => unwrap(commands.blocksList(objectId ?? "")),
     enabled: objectId !== null,
+  });
+}
+
+/** The most objects one mind map shows (ADR-0019). */
+export const TREE_LIMIT = 5000;
+
+/**
+ * An object and what lies below it, in one read: the mind map would otherwise take a round trip
+ * per branch. Structural sharing keeps the nodes that didn't change identical from read to read.
+ */
+export function useTree(root: Id | null, limit = TREE_LIMIT) {
+  return useQuery<ObjectTree_Serialize>({
+    queryKey: keys.tree(root ?? "", limit),
+    queryFn: () => unwrap(commands.objectTree(root ?? "", limit)),
+    enabled: root !== null,
   });
 }
 

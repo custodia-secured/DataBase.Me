@@ -18,7 +18,7 @@
 //! - `POST /seed` `{"session", "seed"}` → the IDs it created (see `seed.rs`).
 
 use std::collections::HashMap;
-use std::io::Read;
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -26,9 +26,11 @@ use dbme_api::{IpcError, IpcErrorKind, Session};
 use dbme_store::Committed;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tiny_http::{Header, Method, Request, Response, Server};
+
+use crate::http::{Reply, Request};
 
 mod dispatch;
+mod http;
 mod seed;
 
 /// The app's window configuration, for its Content-Security-Policy.
@@ -36,11 +38,6 @@ const TAURI_CONF: &str = include_str!("../../../apps/desktop/src-tauri/tauri.con
 
 /// A file that marks a data folder as this server's, so it may empty it.
 const MARKER: &str = ".dbme-e2e";
-
-/// The largest request body: base64 of a 32 MiB attachment, with room to spare.
-const MAX_BODY: u64 = 48 * 1024 * 1024;
-
-const WORKERS: usize = 8;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
@@ -149,35 +146,18 @@ fn prepare_data(data: &Path) -> Result<(), Error> {
     Ok(())
 }
 
-type Reply = Response<std::io::Cursor<Vec<u8>>>;
-
-/// Adds a header. `from_bytes` refuses only non-ASCII text, and every name and value here is
-/// ASCII, including the policy built from `tauri.conf.json`.
-fn with(response: Reply, name: &str, value: &str) -> Reply {
-    match Header::from_bytes(name.as_bytes(), value.as_bytes()) {
-        Ok(header) => response.with_header(header),
-        Err(()) => response,
-    }
-}
-
 fn json_reply(status: u16, body: &Value) -> Reply {
-    let response = Response::from_data(body.to_string().into_bytes()).with_status_code(status);
-    let response = with(response, "Content-Type", "application/json");
-    with(response, "Cache-Control", "no-store")
+    Reply::new(status, body.to_string().into_bytes())
+        .with("Content-Type", "application/json")
+        .with("Cache-Control", "no-store")
 }
 
 fn text_reply(status: u16, text: &str) -> Reply {
-    let response = Response::from_data(text.as_bytes().to_vec()).with_status_code(status);
-    with(response, "Content-Type", "text/plain; charset=utf-8")
+    Reply::new(status, text.as_bytes().to_vec()).with("Content-Type", "text/plain; charset=utf-8")
 }
 
-fn read_json<T: for<'de> Deserialize<'de>>(request: &mut Request) -> Result<T, Error> {
-    let mut body = String::new();
-    request
-        .as_reader()
-        .take(MAX_BODY)
-        .read_to_string(&mut body)?;
-    Ok(serde_json::from_str(&body)?)
+fn read_json<T: for<'de> Deserialize<'de>>(request: &Request) -> Result<T, Error> {
+    Ok(serde_json::from_slice(&request.body)?)
 }
 
 #[derive(Deserialize)]
@@ -188,7 +168,7 @@ struct IpcRequest {
     args: Value,
 }
 
-fn ipc(state: &State, request: &mut Request) -> Result<Reply, Error> {
+fn ipc(state: &State, request: &Request) -> Result<Reply, Error> {
     let call: IpcRequest = read_json(request)?;
     let session = state.session(&call.session)?;
     let (result, events) = {
@@ -212,7 +192,7 @@ struct SeedRequest {
     seed: seed::Seed,
 }
 
-fn seed(state: &State, request: &mut Request) -> Result<Reply, Error> {
+fn seed(state: &State, request: &Request) -> Result<Reply, Error> {
     let call: SeedRequest = read_json(request)?;
     let session = state.session(&call.session)?;
     let _call = session.calls.lock().unwrap_or_else(PoisonError::into_inner);
@@ -253,39 +233,33 @@ fn static_file(state: &State, url_path: &str) -> Reply {
     }
     match std::fs::read(&path) {
         Ok(bytes) => {
-            let mut response = with(
-                Response::from_data(bytes),
-                "Content-Type",
-                content_type(&path),
-            );
-            response = with(response, "Cache-Control", "no-store");
-            response = with(response, "X-Content-Type-Options", "nosniff");
+            let response = Reply::new(200, bytes)
+                .with("Content-Type", content_type(&path))
+                .with("Cache-Control", "no-store")
+                .with("X-Content-Type-Options", "nosniff");
             if content_type(&path).starts_with("text/html") {
-                response = with(response, "Content-Security-Policy", &state.csp);
+                response.with("Content-Security-Policy", &state.csp)
+            } else {
+                response
             }
-            response
         }
         Err(_) => text_reply(404, "not found"),
     }
 }
 
-fn handle(state: &State, mut request: Request) {
-    let url = request.url().to_owned();
-    let path = url.split('?').next().unwrap_or("/").to_owned();
-    let response = match (request.method(), path.as_str()) {
-        (Method::Post, "/ipc") => ipc(state, &mut request),
-        (Method::Post, "/seed") => seed(state, &mut request),
-        (Method::Get, "/health") => Ok(text_reply(200, "ok")),
-        (Method::Get, _) => Ok(static_file(state, &path)),
+fn handle(state: &State, request: &Request) -> Reply {
+    let path = request.target.split('?').next().unwrap_or("/");
+    let response = match (request.method.as_str(), path) {
+        ("POST", "/ipc") => ipc(state, request),
+        ("POST", "/seed") => seed(state, request),
+        ("GET" | "HEAD", "/health") => Ok(text_reply(200, "ok")),
+        ("GET" | "HEAD", _) => Ok(static_file(state, path)),
         _ => Ok(text_reply(405, "method not allowed")),
     };
-    let response = response.unwrap_or_else(|error| {
+    response.unwrap_or_else(|error| {
         let error = IpcError::new(IpcErrorKind::Invalid, error.to_string());
         json_reply(400, &json!({ "error": error, "events": [] }))
-    });
-    if let Err(error) = request.respond(response) {
-        eprintln!("dbme-e2e-server: could not reply to {path}: {error}");
-    }
+    })
 }
 
 struct Args {
@@ -332,23 +306,16 @@ fn main() -> Result<(), Error> {
         csp: content_security_policy()?,
         sessions: Mutex::new(HashMap::new()),
     });
-    let server = Arc::new(Server::http(("127.0.0.1", args.port))?);
+    let listener = TcpListener::bind(("127.0.0.1", args.port))?;
     println!(
         "dbme-e2e-server listening on http://127.0.0.1:{}",
         args.port
     );
-    let workers: Vec<_> = (0..WORKERS)
-        .map(|_| {
-            let (server, state) = (Arc::clone(&server), Arc::clone(&state));
-            std::thread::spawn(move || {
-                while let Ok(request) = server.recv() {
-                    handle(&state, request);
-                }
-            })
-        })
-        .collect();
-    for worker in workers {
-        let _ = worker.join();
+    for stream in listener.incoming() {
+        // A connection that failed before it was accepted is the client's to try again.
+        let Ok(stream) = stream else { continue };
+        let state = Arc::clone(&state);
+        std::thread::spawn(move || http::serve(stream, |request| handle(&state, request)));
     }
     Ok(())
 }

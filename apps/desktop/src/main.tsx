@@ -13,8 +13,6 @@ import "./styles.css";
 if (import.meta.env.MODE === "e2e") {
   const { installE2eTransport } = await import("@databaseme/client/e2e");
   installE2eTransport();
-  // Tauri freezes Object.prototype in the app (tauri.conf.json, freezePrototype); so do the tests.
-  Object.freeze(Object.prototype);
 }
 
 const container = document.getElementById("root");

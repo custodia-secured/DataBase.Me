@@ -108,6 +108,13 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
             arg(args, "limit")?,
         )),
         "backlinks" => ok(api::backlinks(s, arg(args, "id")?)),
+        "object_tree" => ok(api::object_tree(s, arg(args, "root")?, arg(args, "limit")?)),
+        "relation_create" => ok(api::relation_create(
+            s,
+            arg(args, "src")?,
+            arg(args, "dst")?,
+        )),
+        "relation_trash" => ok(api::relation_trash(s, arg(args, "id")?)),
         "object_create" => ok(api::object_create(s, arg(args, "object")?)),
         "object_rename" => ok(api::object_rename(s, arg(args, "id")?, arg(args, "title")?)),
         "object_set_prop" => ok(api::object_set_prop(

@@ -40,7 +40,6 @@ tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 tempfile = "3.27"
 thiserror = "2"
 # The e2e test server only (ADR-0018); never in the app.
-tiny_http = "0.12"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 ulid = { version = "3", default-features = false }

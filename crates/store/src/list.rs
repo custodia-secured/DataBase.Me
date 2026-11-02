@@ -6,6 +6,8 @@
 //! summary columns inside the ordered query would compute them for every row the sort sees, not
 //! just the page.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use dbme_core::model::{BlockRow, FieldRow, ObjectRow, RelationRow, is_identifier};
@@ -80,6 +82,36 @@ pub struct ObjectSummary {
     pub child_count: u32,
     /// Its cover: the first original image attached to it, by hash.
     pub cover: Option<ContentHash>,
+}
+
+/// One object of an [`ObjectTree`].
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct TreeNode {
+    /// The object.
+    pub id: Id,
+    /// Its parent. The root keeps its own, which is outside the tree.
+    pub parent_id: Option<Id>,
+    /// Its title.
+    pub title: String,
+    /// Its types, by ID.
+    pub type_ids: Vec<Id>,
+    /// How many live children it has, whether the limit let them in or not.
+    pub child_count: u32,
+    /// How many live relations it has with live objects that aren't in the tree.
+    pub outside_relations: u32,
+}
+
+/// An object and what lies below it, read at once for the mind map (ADR-0019).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct ObjectTree {
+    /// The root, then the live objects below it, depth first and in sort-key order.
+    pub nodes: Vec<TreeNode>,
+    /// The live relations whose two ends are both in `nodes`, by ID.
+    pub relations: Vec<RelationRow>,
+    /// Whether the limit left objects out.
+    pub truncated: bool,
 }
 
 /// A relation to an object, with where it comes from.
@@ -240,6 +272,78 @@ impl Reader<'_> {
             });
         }
         Ok(summaries)
+    }
+
+    /// `root` and up to `limit` objects in all from below it, with the relations among them. The
+    /// walk keeps the deepest objects first in its queue, so it goes depth first, and a limit stops
+    /// it without reading the rest of the tree. A trashed root gives an empty tree.
+    pub fn tree(&self, root: Id, limit: u32) -> Result<ObjectTree> {
+        self.object(root)?;
+        let mut statement = self.conn.prepare_cached(
+            "WITH RECURSIVE walk(id, depth, sort_key) AS ( \
+               SELECT id, 0, sort_key FROM objects WHERE id = ?1 AND deleted_at IS NULL \
+               UNION ALL \
+               SELECT c.id, w.depth + 1, c.sort_key FROM walk w JOIN objects c ON c.parent_id = w.id \
+                WHERE c.deleted_at IS NULL ORDER BY 2 DESC, 3, 1 \
+             ) \
+             SELECT o.id, o.parent_id, o.title, \
+              (SELECT group_concat(type_id, ' ') FROM object_types WHERE object_id = o.id), \
+              (SELECT count(*) FROM objects k WHERE k.parent_id = o.id AND k.deleted_at IS NULL), \
+              (SELECT count(*) FROM relations r JOIN objects x ON x.id = r.dst_id \
+                WHERE r.src_id = o.id AND r.deleted_at IS NULL AND x.deleted_at IS NULL) + \
+              (SELECT count(*) FROM relations r JOIN objects x ON x.id = r.src_id \
+                WHERE r.dst_id = o.id AND r.deleted_at IS NULL AND x.deleted_at IS NULL) \
+             FROM walk CROSS JOIN objects o ON o.id = walk.id LIMIT ?2",
+        )?;
+        let wanted = usize::try_from(limit).unwrap_or(usize::MAX);
+        let mut nodes = Vec::new();
+        let mut rows = statement.query((root.to_string(), i64::from(limit) + 1))?;
+        while let Some(row) = rows.next()? {
+            let mut type_ids = row
+                .get::<_, Option<String>>(3)?
+                .unwrap_or_default()
+                .split_whitespace()
+                .map(Id::parse)
+                .collect::<std::result::Result<Vec<Id>, CoreError>>()?;
+            type_ids.sort_unstable();
+            let children: i64 = row.get(4)?;
+            let touching: i64 = row.get(5)?;
+            nodes.push(TreeNode {
+                id: sql::id(row, 0)?,
+                parent_id: sql::optional_id(row, 1)?,
+                title: row.get(2)?,
+                type_ids,
+                child_count: u32::try_from(children).unwrap_or(u32::MAX),
+                // All of them for now; those inside the tree are taken off below.
+                outside_relations: u32::try_from(touching).unwrap_or(u32::MAX),
+            });
+        }
+        let truncated = nodes.len() > wanted;
+        nodes.truncate(wanted);
+        let places: BTreeMap<Id, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(at, node)| (node.id, at))
+            .collect();
+        let mut relations = Vec::new();
+        // A node no relation touches has none to read, and on most maps that is most of them.
+        for node in nodes.iter().filter(|node| node.outside_relations > 0) {
+            let from = self.relations_from(node.id)?;
+            relations.extend(from.into_iter().filter(|r| places.contains_key(&r.dst_id)));
+        }
+        for relation in &relations {
+            for end in [relation.src_id, relation.dst_id] {
+                if let Some(node) = places.get(&end).and_then(|at| nodes.get_mut(*at)) {
+                    node.outside_relations = node.outside_relations.saturating_sub(1);
+                }
+            }
+        }
+        relations.sort_unstable_by_key(|r| r.id);
+        Ok(ObjectTree {
+            nodes,
+            relations,
+            truncated,
+        })
     }
 
     /// The fields the objects of `source` can show: those of their types and the types those

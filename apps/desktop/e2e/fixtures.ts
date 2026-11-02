@@ -39,6 +39,18 @@ function isWebKitSelectQuirk(violation: Violation, browserName: string): boolean
   );
 }
 
+/**
+ * Playwright's WebKit reports this now and then while React Flow's nodes change. It throws nothing:
+ * it says some ResizeObserver notifications wait for the next frame, and they get there. Edge never
+ * reported it here. Any other error, on any engine, still fails the test (ADR-0018).
+ */
+function isWebKitResizeObserverReport(message: string, browserName: string): boolean {
+  return (
+    browserName === "webkit" &&
+    message === "ResizeObserver loop completed with undelivered notifications."
+  );
+}
+
 /** The part of the editor that TipTap leaves on its element, as `caretToEnd` reads it. */
 interface EditorElement extends HTMLElement {
   editor: {
@@ -247,6 +259,9 @@ export const test = base.extend<Fixtures>({
 
   page: async ({ page, browserName }, use) => {
     await page.addInitScript(() => {
+      // As Tauri does in the app (tauri.conf.json, freezePrototype): before any of the page's code,
+      // so that a dependency that can't load this way fails here too.
+      Object.freeze(Object.prototype);
       window.__dbmeViolations = [];
       document.addEventListener("securitypolicyviolation", (event) => {
         window.__dbmeViolations?.push({
@@ -260,6 +275,7 @@ export const test = base.extend<Fixtures>({
     });
     const problems: string[] = [];
     page.on("pageerror", (error) => {
+      if (isWebKitResizeObserverReport(error.message, browserName)) return;
       problems.push(`uncaught: ${error.message}`);
     });
     page.on("response", (response) => {

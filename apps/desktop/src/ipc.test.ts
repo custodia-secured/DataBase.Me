@@ -13,8 +13,16 @@ import { runLaunchChecks } from "./ipc";
 afterEach(clearMocks);
 
 /** A stand-in for the shell: one vault holding top-level objects, with a one-step undo. */
-function mockShell(options: { failCreate?: IpcError; silent?: boolean } = {}) {
+function mockShell(
+  options: {
+    failCreate?: IpcError;
+    silent?: boolean;
+    treeMissesRelations?: boolean;
+    trashKeepsRelations?: boolean;
+  } = {},
+) {
   const objects: ObjectRow_Serialize[] = [];
+  const relations: { id: string }[] = [];
   let last: Committed_Serialize | null = null;
   let seq = 0;
   const changed = async (committed: Committed_Serialize) => {
@@ -74,6 +82,18 @@ function mockShell(options: { failCreate?: IpcError; silent?: boolean } = {}) {
           await changed(committed);
           return committed;
         }
+        case "relation_create":
+          relations.push({ id: "RELATION" });
+          return "RELATION";
+        case "object_tree":
+          return {
+            nodes: objects,
+            relations: options.treeMissesRelations ? [] : relations,
+            truncated: false,
+          };
+        case "relation_trash":
+          if (!options.trashKeepsRelations) relations.pop();
+          return true;
         default:
           throw new Error(`unexpected command ${command}`);
       }
@@ -99,4 +119,14 @@ describe("launch checks", () => {
     mockShell({ silent: true });
     await expect(runLaunchChecks("Smoke.dbme")).rejects.toThrow(/two vault-changed events/);
   }, 10_000);
+
+  it("fail when the map's read misses a relation", async () => {
+    mockShell({ treeMissesRelations: true });
+    await expect(runLaunchChecks("Smoke.dbme")).rejects.toThrow(/2 nodes and 0 relations/);
+  });
+
+  it("fail when a trashed relation stays on the map", async () => {
+    mockShell({ trashKeepsRelations: true });
+    await expect(runLaunchChecks("Smoke.dbme")).rejects.toThrow(/still on the map/);
+  });
 });

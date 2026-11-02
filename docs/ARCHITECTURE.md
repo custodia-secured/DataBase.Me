@@ -59,7 +59,7 @@ Undo, history, provenance and later sync all come from the op log (ADR-0002).
 | `apps/relay/`                | Self-hostable end-to-end-encrypted sync relay                                    | M13               |
 | `packages/client/`           | Generated bindings, vault queries and the change listener (ADR-0014, ADR-0017)   | M2                |
 | `packages/ui/`               | Design system: tokens, themes, shared components                                 | M0, grows         |
-| `packages/views/`            | Renderer registry and every view, all responsive and touch-ready                 | M2                |
+| `packages/views/`            | Renderer registry and every view, all responsive and touch-ready; `mindmap/` M3  | M2                |
 | `packages/recommender/`      | View and chart recommendation rules                                              | M8                |
 | `packages/sdk/`              | Plugin SDK (Apache-2.0)                                                          | M10               |
 

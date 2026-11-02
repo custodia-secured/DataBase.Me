@@ -54,6 +54,12 @@ export const commands = {
 	objectSearch: (text: string, limit: number) => typedError<ObjectSummary_Serialize[], IpcError>(__TAURI_INVOKE("object_search", { text, limit })),
 	/**  The live relations to an object, with their sources. */
 	backlinks: (id: Id) => typedError<Backlink_Serialize[], IpcError>(__TAURI_INVOKE("backlinks", { id })),
+	/**  `root` and up to `limit` objects in all from below it, with the relations among them. */
+	objectTree: (root: Id, limit: number) => typedError<ObjectTree_Serialize, IpcError>(__TAURI_INVOKE("object_tree", { root, limit })),
+	/**  Relates `src` to `dst`, or returns the relation that already does. */
+	relationCreate: (src: Id, dst: Id) => typedError<Id, IpcError>(__TAURI_INVOKE("relation_create", { src, dst })),
+	/**  Moves a relation to the Trash. Returns `false` if it was already there. */
+	relationTrash: (id: Id) => typedError<boolean, IpcError>(__TAURI_INVOKE("relation_trash", { id })),
 	/**  Creates an object and returns its ID. */
 	objectCreate: (object: NewObject_Deserialize) => typedError<Id, IpcError>(__TAURI_INVOKE("object_create", { object })),
 	/**  Renames an object. Returns `false` if the title was already `title`. */
@@ -501,6 +507,29 @@ export type ObjectSummary_Serialize = {
 	cover: ContentHash | null,
 };
 
+/**  An object and what lies below it, read at once for the mind map (ADR-0019). */
+export type ObjectTree = ObjectTree_Serialize | ObjectTree_Deserialize;
+
+/**  An object and what lies below it, read at once for the mind map (ADR-0019). */
+export type ObjectTree_Deserialize = {
+	/**  The root, then the live objects below it, depth first and in sort-key order. */
+	nodes: TreeNode_Deserialize[],
+	/**  The live relations whose two ends are both in `nodes`, by ID. */
+	relations: RelationRow_Deserialize[],
+	/**  Whether the limit left objects out. */
+	truncated: boolean,
+};
+
+/**  An object and what lies below it, read at once for the mind map (ADR-0019). */
+export type ObjectTree_Serialize = {
+	/**  The root, then the live objects below it, depth first and in sort-key order. */
+	nodes: TreeNode_Serialize[],
+	/**  The live relations whose two ends are both in `nodes`, by ID. */
+	relations: RelationRow_Serialize[],
+	/**  Whether the limit left objects out. */
+	truncated: boolean,
+};
+
 /**  Where to put an item among its siblings. */
 export type Position = 
 /**  Before every sibling. */
@@ -613,6 +642,41 @@ parent: Id | null } |
 { kind: "type"; 
 /**  The type. */
 type_id: Id };
+
+/**  One object of an [`ObjectTree`]. */
+export type TreeNode = TreeNode_Serialize | TreeNode_Deserialize;
+
+/**  One object of an [`ObjectTree`]. */
+export type TreeNode_Deserialize = {
+	/**  The object. */
+	id: Id,
+	/**  Its parent. The root keeps its own, which is outside the tree. */
+	parent_id?: Id | null,
+	/**  Its title. */
+	title: string,
+	/**  Its types, by ID. */
+	type_ids: Id[],
+	/**  How many live children it has, whether the limit let them in or not. */
+	child_count: number,
+	/**  How many live relations it has with live objects that aren't in the tree. */
+	outside_relations: number,
+};
+
+/**  One object of an [`ObjectTree`]. */
+export type TreeNode_Serialize = {
+	/**  The object. */
+	id: Id,
+	/**  Its parent. The root keeps its own, which is outside the tree. */
+	parent_id: Id | null,
+	/**  Its title. */
+	title: string,
+	/**  Its types, by ID. */
+	type_ids: Id[],
+	/**  How many live children it has, whether the limit let them in or not. */
+	child_count: number,
+	/**  How many live relations it has with live objects that aren't in the tree. */
+	outside_relations: number,
+};
 
 /**  An object type, such as Task or Person. Types can extend one parent type. */
 export type TypeRow = TypeRow_Serialize | TypeRow_Deserialize;

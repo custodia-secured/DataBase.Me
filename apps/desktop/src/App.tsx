@@ -294,6 +294,8 @@ function Pane({
               role="tab"
               id={`${base}-tab-${candidate.id}`}
               aria-selected={chosen}
+              aria-label={candidate.label}
+              title={candidate.label}
               aria-controls={`${base}-panel`}
               tabIndex={chosen ? 0 : -1}
               className="pane__tab"

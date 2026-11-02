@@ -107,7 +107,10 @@ test("the view tabs follow the arrow keys", async ({ app, page }) => {
   await expect(tabs.getByRole("tab", { name: "Outline" })).toHaveAttribute("aria-selected", "true");
   await expect(app.pane().getByRole("region", { name: "Outline" })).toBeVisible();
   await page.keyboard.press("End");
-  await expect(tabs.getByRole("tab", { name: "Gallery" })).toHaveAttribute("aria-selected", "true");
+  await expect(tabs.getByRole("tab", { name: "Mind map" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await page.keyboard.press("ArrowRight");
   await expect(tabs.getByRole("tab", { name: "Document" })).toHaveAttribute(
     "aria-selected",

@@ -18,8 +18,8 @@ use serde_json::Value;
 use dbme_core::model::{AttachmentRole, AttachmentRow, BlockRow, FieldRow, ObjectRow, TypeRow};
 use dbme_core::{ContentHash, CoreError, Id};
 use dbme_store::{
-    Backlink, Committed, NewAttachment, NewField, NewObject, ObjectSummary, Position, Sort, Source,
-    StoreError, Txn, Vault, VaultOptions,
+    Backlink, Committed, NewAttachment, NewField, NewObject, NewRelation, ObjectSummary,
+    ObjectTree, Position, Sort, Source, StoreError, Txn, Vault, VaultOptions,
 };
 
 mod blocks;
@@ -403,6 +403,60 @@ pub fn object_add_type(session: &Session, id: Id, type_id: Id) -> Reply<bool> {
 /// Takes a type away from an object. Returns `false` if it did not have it.
 pub fn object_remove_type(session: &Session, id: Id, type_id: Id) -> Reply<bool> {
     session.transact(|txn| txn.remove_type(id, type_id))
+}
+
+// The mind map (ADR-0019).
+
+/// The type of the relations drawn on the mind map.
+pub const RELATED: &str = "related";
+
+/// `root` and up to `limit` objects in all from below it, with the relations among them.
+pub fn object_tree(session: &Session, root: Id, limit: u32) -> Reply<ObjectTree> {
+    session.with(|vault| vault.read().tree(root, limit))
+}
+
+/// Relates `src` to `dst` and returns the relation. If they are already related that way, it
+/// changes nothing and returns the relation there is. An object can't relate to itself.
+pub fn relation_create(session: &Session, src: Id, dst: Id) -> Reply<Id> {
+    session.transact(|txn| {
+        if src == dst {
+            return Err(StoreError::Rule(
+                "an object can't be related to itself".into(),
+            ));
+        }
+        let existing = txn.read().relations_from(src)?.into_iter().find(|r| {
+            r.dst_id == dst
+                && r.rel_type == RELATED
+                && r.field_id.is_none()
+                && r.src_block_id.is_none()
+        });
+        if let Some(relation) = existing {
+            return Ok(relation.id);
+        }
+        txn.create_relation(NewRelation {
+            src_id: src,
+            dst_id: dst,
+            rel_type: RELATED.into(),
+            field_id: None,
+            src_block_id: None,
+            label: None,
+            props: Default::default(),
+        })
+    })
+}
+
+/// Moves a relation to the Trash. Returns `false` if it was already there. A relation that a block
+/// or a field holds belongs to it, and changes only with it.
+pub fn relation_trash(session: &Session, id: Id) -> Reply<bool> {
+    session.transact(|txn| {
+        let relation = txn.read().relation(id)?;
+        if relation.field_id.is_some() || relation.src_block_id.is_some() {
+            return Err(StoreError::Rule(
+                "this relation belongs to a block or a field; change it there".into(),
+            ));
+        }
+        txn.trash_relation(id)
+    })
 }
 
 // Blocks.

@@ -14,7 +14,7 @@ mod common;
 
 use dbme_core::Id;
 use dbme_core::model::Props;
-use dbme_store::{NewBlock, NewObject, NewRelation, Position, StoreError, Txn};
+use dbme_store::{NewBlock, NewObject, NewRelation, Position, Reader, StoreError, Txn};
 use proptest::prelude::*;
 use serde_json::json;
 
@@ -169,6 +169,14 @@ fn edit(txn: &mut Txn<'_>, ids: &[Id], action: &Action) -> Result<Vec<Id>, Store
     Ok(created)
 }
 
+/// The objects from `id` down, by the slow road: one read per parent.
+fn walk(read: &Reader<'_>, id: Id, out: &mut Vec<Id>) {
+    out.push(id);
+    for child in read.children(Some(id)).unwrap() {
+        walk(read, child.id, out);
+    }
+}
+
 proptest! {
     #![proptest_config(ProptestConfig { cases: 48, ..ProptestConfig::default() })]
 
@@ -197,6 +205,27 @@ proptest! {
         }
         let report = t.vault.verify(false).unwrap();
         prop_assert!(report.is_ok(), "{:?}", report.problems);
+
+        // The one-read tree is what walking the children one parent at a time gives.
+        let read = t.vault.read();
+        for top in read.children(None).unwrap() {
+            let mut walked = Vec::new();
+            walk(&read, top.id, &mut walked);
+            let tree = read.tree(top.id, u32::MAX).unwrap();
+            prop_assert_eq!(tree.nodes.iter().map(|n| n.id).collect::<Vec<_>>(), walked.clone());
+            prop_assert!(!tree.truncated);
+            for node in &tree.nodes {
+                prop_assert_eq!(node.child_count as usize, read.children(Some(node.id)).unwrap().len());
+            }
+            let mut related: Vec<Id> = walked
+                .iter()
+                .flat_map(|id| read.relations_from(*id).unwrap())
+                .filter(|r| walked.contains(&r.dst_id))
+                .map(|r| r.id)
+                .collect();
+            related.sort_unstable();
+            prop_assert_eq!(tree.relations.iter().map(|r| r.id).collect::<Vec<_>>(), related);
+        }
 
         let end = snapshot(&t.path);
         let mut undone = 0;

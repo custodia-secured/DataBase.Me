@@ -4,10 +4,18 @@
  * shell picks one per pane. Later milestones and plugins add views here.
  */
 import type { Id } from "@databaseme/client";
-import { DocumentIcon, LayoutGrid, ListTree, Table2, type LucideIcon } from "@databaseme/ui";
+import {
+  DocumentIcon,
+  LayoutGrid,
+  ListTree,
+  Network,
+  Table2,
+  type LucideIcon,
+} from "@databaseme/ui";
 import type { ComponentType } from "react";
 import { DocumentView } from "./document/DocumentView";
 import { GalleryView } from "./gallery/GalleryView";
+import { MindMapView } from "./mindmap/MindMapView";
 import { OutlineView } from "./outline/OutlineView";
 import { TableView } from "./table/TableView";
 
@@ -18,7 +26,7 @@ export interface ViewProps {
   onOpen: (id: Id) => void;
 }
 
-export type ViewId = "document" | "outline" | "table" | "gallery";
+export type ViewId = "document" | "outline" | "table" | "gallery" | "mindmap";
 
 export interface ViewDefinition {
   id: ViewId;
@@ -39,6 +47,7 @@ export const VIEWS: readonly ViewDefinition[] = [
   { id: "outline", label: "Outline", icon: ListTree, component: OutlineView },
   { id: "table", label: "Table", icon: Table2, component: TableView },
   { id: "gallery", label: "Gallery", icon: LayoutGrid, component: GalleryView },
+  { id: "mindmap", label: "Mind map", icon: Network, component: MindMapView },
 ];
 
 export function viewById(id: ViewId): ViewDefinition {

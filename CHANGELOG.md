@@ -30,3 +30,7 @@ All notable changes to DataBase.Me are recorded here. The format follows
   run every view in Edge and WebKit at desktop and phone sizes under the app's CSP, with axe and
   the table-scroll and typing budgets, in a new CI job. FORMAT.md §3.5 is decided; ADR-0016 to
   ADR-0018.
+- M3 mind map: a Mind map view over the hierarchy and relations, laid out automatically. Add,
+  rename, reorder, reparent, trash, fold and relate by mouse, keyboard or touch, with undo, live
+  across views. Far away, a canvas draws the whole map as plain boxes. A new `related` relation
+  type, and the `object_tree`, `relation_create` and `relation_trash` commands; ADR-0019.

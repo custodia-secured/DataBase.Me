@@ -113,3 +113,23 @@ rules, the op log and undo would never run.
   WebView2 ships, at the same version cadence.
 - **A Rust or WebDriver BiDi harness written for this project.** More to own, and still no phone
   or touch emulation.
+
+## Later changes
+
+These notes record what later milestones did under this decision; the decision itself stands.
+
+- **M3 (2026-11-01):** `mindmap-budget.spec.ts` adds the map's budget on a 2,011-node tree: open
+  within 1 s, pan, zoom and drag at the table's pass mark, and an edit on screen within 100 ms
+  (ADR-0019).
+- **M3 (2026-11-01):** the page fixture now freezes `Object.prototype` in an init script, in place
+  of the e2e build's entry point. The entry point's freeze ran after its imports, while Tauri's runs
+  before any of the page's code, so a dependency that can't load under the freeze passed these tests
+  and left the real app blank. Only the launch test caught it.
+- **M3 (2026-11-01):** a second narrow exception joins the `<select>` one. Playwright's WebKit
+  sometimes reports "ResizeObserver loop completed with undelivered notifications" while React Flow's
+  nodes change. It throws nothing, and the notifications arrive a frame later. That exact message is
+  excused on WebKit and nowhere else, and it must be checked again in a real WKWebView at M14.
+- **M3 (2026-11-01):** the server no longer uses `tiny_http`. A race in its thread pool could leave a
+  connection queued behind a kept-alive one, the likely cause of first page loads that hung on CI.
+  `crates/e2e-server/src/http.rs` serves each connection on its own thread, over the standard
+  library. It still listens on 127.0.0.1 only and is never shipped.
