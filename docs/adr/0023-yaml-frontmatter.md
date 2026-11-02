@@ -59,8 +59,10 @@ What the crate does not provide, and `core/files` therefore does **before** `loa
 - **No size limit and no block-nesting limit.** Block nesting past a few hundred levels (900 in a
   debug build) overflows the parsing thread's stack and **aborts the process** (`parser.rs:544-608`,
   one frame per level, no counter). The pre-scan rejects a frontmatter over a size cap and over a
-  nesting cap measured from indentation and `- ` runs (64 levels is generous for any Obsidian file)
-  as `parse_error`, bytes untouched. The fuzz test asserts the pre-scan, not the crate.
+  nesting cap as `parse_error`, bytes untouched. Depth is counted as true block nesting: a stack of
+  open block collections by column, `- ` runs on one line, and flow brackets, with tags, anchors
+  and aliases stripped first; the root mapping is level 1 and 64 levels is generous for any
+  Obsidian file. The fuzz test asserts the pre-scan, not the crate.
 - **Exactly one document** between the fences: a stray `---` or `...` line yields a second document
   (`Null`), which is a `parse_error`; an empty block is an empty envelope (an empty string loads as
   zero documents, `---\n...\n` as `Null`).
@@ -73,9 +75,12 @@ What the crate does not provide, and `core/files` therefore does **before** `loa
   derive, so a field kind's decoding is explicit.
 - The pre-scan is part of the parser's contract: a file the pre-scan rejects never reaches the
   crate, and the release-build stack boundary (which moves) is never load-bearing.
-- A rewritten file keeps the person's key order and unknown keys; only values the app changed
-  change. Obsidian's own re-serialisation after a property edit (block lists, quoting) is the one
-  source of churn left, measured at gate 1h.
+- A rewritten file keeps the person's unknown keys (`extra`, round-tripped through
+  `props_json._frontmatter`) but writes keys in the serializer's canonical order: the envelope, the
+  user fields in schema order, `fields:`, `relations`, `links`, then the unknown keys. An inbound
+  apply never rewrites, so the person's order survives until the app itself changes the object;
+  the fixpoint then makes every later rewrite byte-stable. Obsidian's own re-serialisation after a
+  property edit (block lists, quoting) is the one source of churn left, measured at gate 1h.
 
 ## Alternatives considered
 

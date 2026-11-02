@@ -74,6 +74,17 @@ The handoff brief names TipTap/ProseMirror for the editor.
 - A paste or split that duplicates an ID is fixed in the editor before it reaches the vault. The
   vault refuses a duplicate anyway.
 
+## Later changes
+
+These notes record what later milestones did under this decision; the decision itself stands.
+
+- **M5 (2026-11-02):** a mention run may carry three optional keys, `shown` (a non-empty string),
+  `block` (a block ID) and `embed` (`true`), which the files folder reads from `[[path|shown]]`,
+  `[[path#^block]]` and `![[path]]` and writes back, so a wikilink's alias, block reference and
+  transclusion survive the round trip (M5 Decision 10). `validate_block` checks their shapes; the
+  editor shows the mentioned object's title as before and keeps the keys it does not use, as the
+  rule on unknown keys already requires.
+
 ## Alternatives considered
 
 - **Lexical, Slate or BlockNote.** Lexical and Slate would need the block model built from scratch;

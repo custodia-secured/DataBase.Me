@@ -55,6 +55,8 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 ulid = { version = "3", default-features = false }
+# NFC for file names and path keys in the files folder (FORMAT.md §6.1): pure Rust, MIT OR Apache-2.0.
+unicode-normalization = "0.1"
 
 # Coding standards (handoff §9): no unwrap()/expect() outside tests, documented public APIs, and
 # no unsafe code. CI runs clippy with -D warnings, so every warning here fails the build.

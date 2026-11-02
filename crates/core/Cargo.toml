@@ -18,6 +18,7 @@ serde_json.workspace = true
 specta = { workspace = true, optional = true }
 thiserror.workspace = true
 ulid.workspace = true
+unicode-normalization.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
