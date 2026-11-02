@@ -7,10 +7,10 @@ use std::sync::Arc;
 
 use dbme_core::block::MENTIONS;
 use dbme_core::files::paths::{self, file_stem, is_dot_path, path_key};
-use dbme_core::files::{self, ObjectRows, Schema, TAGGED};
+use dbme_core::files::{self, FileDoc, ObjectRows, Schema, TAGGED};
 use dbme_core::model::{ObjectRow, Sensitivity, TypeRow};
-use dbme_core::{Clock, ContentHash, Id};
-use dbme_store::{MirrorFileState, MirrorState, StoreError, Vault};
+use dbme_core::{Clock, ContentHash, Id, IdGenerator};
+use dbme_store::{MirrorFileState, MirrorState, Reader, StoreError, Vault};
 
 use crate::fs::Fs;
 use crate::resolver::VaultResolver;
@@ -70,9 +70,11 @@ pub struct Outbound {
 
 /// The files folder of one vault, over a file system.
 pub struct Mirror<F: Fs> {
-    fs: F,
-    clock: Arc<dyn Clock>,
-    retries: HashMap<Id, u32>,
+    pub(crate) fs: F,
+    pub(crate) clock: Arc<dyn Clock>,
+    pub(crate) retries: HashMap<Id, u32>,
+    /// For the blocks a person typed without an anchor, and for new objects.
+    pub(crate) ids: IdGenerator,
 }
 
 impl<F: Fs> std::fmt::Debug for Mirror<F> {
@@ -92,6 +94,57 @@ pub fn schema_of(vault: &Vault) -> Result<Schema> {
     Ok(Schema::new(types, fields))
 }
 
+/// The document of an object as the vault holds it now, in normal form. The attachments' media
+/// types are registered on `resolver` first, so their files get extensions.
+pub(crate) fn doc_of(
+    read: &Reader<'_>,
+    row: &ObjectRow,
+    schema: &Schema,
+    resolver: &mut VaultResolver,
+) -> Result<FileDoc> {
+    let type_ids = read.object_type_ids(row.id)?;
+    let mut types: Vec<TypeRow> = Vec::with_capacity(type_ids.len());
+    for type_id in type_ids {
+        types.push(read.type_row(type_id)?);
+    }
+    let type_refs: Vec<&TypeRow> = types.iter().collect();
+    let blocks = read.blocks(row.id)?;
+    let relations: Vec<_> = read
+        .relations_from(row.id)?
+        .into_iter()
+        .filter(|r| r.rel_type != MENTIONS)
+        .collect();
+    let mut tags = Vec::new();
+    for relation in relations.iter().filter(|r| r.rel_type == TAGGED) {
+        if let Ok(tag) = read.object(relation.dst_id) {
+            tags.push(tag.title);
+        }
+    }
+    for attachment in read.attachments(row.id)? {
+        resolver.add_blob(
+            attachment.blob_hash,
+            attachment.mime.as_deref(),
+            attachment.filename.as_deref(),
+        );
+    }
+    Ok(files::from_rows(
+        &ObjectRows {
+            object: row,
+            types: &type_refs,
+            blocks: &blocks,
+            relations: &relations,
+            tags: &tags,
+        },
+        schema,
+        resolver,
+    ))
+}
+
+/// The `seq` of the vault's newest op, or `0`.
+pub(crate) fn latest_seq(vault: &Vault) -> Result<i64> {
+    Ok(vault.read().history(1)?.first().map_or(0, |r| r.seq))
+}
+
 impl<F: Fs> Mirror<F> {
     /// An engine over `fs`, stamping its bookkeeping with `clock`.
     pub fn new(fs: F, clock: Arc<dyn Clock>) -> Self {
@@ -99,6 +152,7 @@ impl<F: Fs> Mirror<F> {
             fs,
             clock,
             retries: HashMap::new(),
+            ids: IdGenerator::new(),
         }
     }
 
@@ -158,7 +212,7 @@ impl<F: Fs> Mirror<F> {
             let depth = depth_of(vault, *id, &mut depth_cache).unwrap_or(0);
             (depth, *id)
         });
-        let latest_seq = vault.read().history(1)?.first().map_or(0, |r| r.seq);
+        let latest_seq = latest_seq(vault)?;
 
         for id in ids {
             let state = vault.mirror_state(id)?;
@@ -382,43 +436,7 @@ impl<F: Fs> Mirror<F> {
         };
         let target = paths::join(&[dir.as_str()], &paths::dedupe(&stem, &taken));
 
-        // Render.
-        let type_ids = read.object_type_ids(row.id)?;
-        let mut types: Vec<TypeRow> = Vec::with_capacity(type_ids.len());
-        for type_id in type_ids {
-            types.push(read.type_row(type_id)?);
-        }
-        let type_refs: Vec<&TypeRow> = types.iter().collect();
-        let blocks = read.blocks(row.id)?;
-        let relations: Vec<_> = read
-            .relations_from(row.id)?
-            .into_iter()
-            .filter(|r| r.rel_type != MENTIONS)
-            .collect();
-        let mut tags = Vec::new();
-        for relation in relations.iter().filter(|r| r.rel_type == TAGGED) {
-            if let Ok(tag) = read.object(relation.dst_id) {
-                tags.push(tag.title);
-            }
-        }
-        for attachment in read.attachments(row.id)? {
-            resolver.add_blob(
-                attachment.blob_hash,
-                attachment.mime.as_deref(),
-                attachment.filename.as_deref(),
-            );
-        }
-        let doc = files::from_rows(
-            &ObjectRows {
-                object: row,
-                types: &type_refs,
-                blocks: &blocks,
-                relations: &relations,
-                tags: &tags,
-            },
-            schema,
-            resolver,
-        );
+        let doc = doc_of(&read, row, schema, resolver)?;
         // The file names its own path in no link, but other files name it: register the final
         // path before rendering anything that could link here (children render after).
         resolver.add(row.id, &target);
