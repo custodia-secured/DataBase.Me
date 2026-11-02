@@ -11,6 +11,7 @@ import {
   useObject,
   usePage,
   useVaultInfo,
+  useViews,
   MANUAL,
   type Id,
 } from "@databaseme/client";
@@ -21,12 +22,22 @@ import {
   IconButton,
   PanelLeft,
   Redo2,
+  Search,
   StatusMessage,
   Undo2,
   useMediaQuery,
   X,
 } from "@databaseme/ui";
-import { actions, onActionError, Sidebar, VIEWS, viewById } from "@databaseme/views";
+import {
+  actions,
+  CommandPalette,
+  onActionError,
+  ResultsView,
+  Sidebar,
+  VIEWS,
+  viewById,
+  type PaletteCommand,
+} from "@databaseme/views";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { notifyReady } from "./ipc";
@@ -97,8 +108,21 @@ export function App() {
 function Shell() {
   const wide = useMediaQuery(WIDE);
   const splitFits = useMediaQuery(SPLIT);
-  const { selected, select, split, setSplit, drawer, setDrawer } = useShell();
+  const {
+    selected,
+    select,
+    split,
+    setSplit,
+    drawer,
+    setDrawer,
+    palette,
+    setPalette,
+    results,
+    showResults,
+    setView,
+  } = useShell();
   const topLevel = usePage({ kind: "children", parent: null }, MANUAL, 0, 1);
+  const savedViews = useViews();
 
   // Open the first page when nothing is open yet.
   const first = topLevel.data?.[0]?.object.id ?? null;
@@ -106,10 +130,60 @@ function Shell() {
     if (selected === null && first !== null) select(first);
   }, [selected, first, select]);
 
-  useGlobalUndo();
+  useGlobalKeys(() => {
+    setPalette(true);
+  });
 
-  const sidebar = <Sidebar selected={selected} onSelect={select} />;
+  const openView = (id: Id) => {
+    showResults({ kind: "view", id });
+  };
+  const sidebar = (
+    <Sidebar
+      selected={selected}
+      onSelect={select}
+      openView={results?.kind === "view" ? results.id : null}
+      onOpenView={openView}
+    />
+  );
   const panes = split && splitFits ? 2 : 1;
+  const paletteCommands: PaletteCommand[] = [
+    ...VIEWS.map((view) => ({
+      id: `view-${view.id}`,
+      label: `Switch to ${view.label}`,
+      run: () => {
+        setView(0, view.id);
+      },
+    })),
+    {
+      id: "new-page",
+      label: "New page",
+      run: () => {
+        void actions.create({ title: "", parent_id: null, position: "last" }).then((id) => {
+          if (id !== undefined) select(id);
+        });
+      },
+    },
+    { id: "undo", label: "Undo", run: () => void actions.undo() },
+    { id: "redo", label: "Redo", run: () => void actions.redo() },
+    ...(splitFits
+      ? [
+          {
+            id: "split",
+            label: split ? "Close the split view" : "Split view",
+            run: () => {
+              setSplit(!split);
+            },
+          },
+        ]
+      : []),
+    ...(savedViews.data ?? []).map((view) => ({
+      id: `open-view-${view.id}`,
+      label: `Open view: ${view.name}`,
+      run: () => {
+        openView(view.id);
+      },
+    })),
+  ];
 
   return (
     <div className="app">
@@ -127,6 +201,13 @@ function Shell() {
         <h1 className="app__brand">DataBase.Me</h1>
         {selected ? <Breadcrumbs id={selected} onOpen={select} /> : null}
         <span className="app__spacer" />
+        <IconButton
+          label="Search"
+          icon={Search}
+          onClick={() => {
+            setPalette(true);
+          }}
+        />
         {splitFits ? (
           <IconButton
             label="Split view"
@@ -161,7 +242,16 @@ function Shell() {
         </Dialog>
       )}
       <main className={`app__main app__main--${String(panes)}`}>
-        {selected === null ? (
+        {results ? (
+          <ResultsView
+            source={results}
+            onOpen={select}
+            onClose={() => {
+              showResults(null);
+            }}
+            onSaved={openView}
+          />
+        ) : selected === null ? (
           <Empty onCreated={select} ready={topLevel.isSuccess} />
         ) : (
           <>
@@ -170,19 +260,38 @@ function Shell() {
           </>
         )}
       </main>
+      <CommandPalette
+        open={palette}
+        onClose={() => {
+          setPalette(false);
+        }}
+        onOpen={select}
+        onShowResults={(query) => {
+          showResults({ kind: "search", query });
+        }}
+        commands={paletteCommands}
+      />
       <Errors />
     </div>
   );
 }
 
-/** Ctrl+Z and Ctrl+Shift+Z (or Ctrl+Y) undo and redo the vault, outside text fields. */
-function useGlobalUndo() {
+/**
+ * Ctrl+K (⌘K) opens the palette anywhere. Ctrl+Z and Ctrl+Shift+Z (or Ctrl+Y) undo and redo the
+ * vault, outside text fields.
+ */
+function useGlobalKeys(openPalette: () => void) {
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key === "k" && !event.shiftKey) {
+        event.preventDefault();
+        openPalette();
+        return;
+      }
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
-      const key = event.key.toLowerCase();
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
         void actions.undo();
@@ -195,7 +304,7 @@ function useGlobalUndo() {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, []);
+  }, [openPalette]);
 }
 
 function HistoryButtons() {

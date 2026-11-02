@@ -52,6 +52,7 @@ import { useQueries } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { actions } from "../actions";
+import { SavedViews } from "../search/SavedViews";
 import { MoveDialog } from "./MoveDialog";
 import { dropZone, expandedBelow, flattenTree, isWithin, type TreeRow } from "./tree";
 
@@ -61,6 +62,9 @@ export interface SidebarProps {
   /** The object shown in the main pane. */
   selected: Id | null;
   onSelect: (id: Id) => void;
+  /** The saved view open on the results surface, if any. */
+  openView?: Id | null;
+  onOpenView?: (id: Id) => void;
 }
 
 interface Drop {
@@ -77,7 +81,7 @@ function pointerY(event: Event | null): number {
   return (event as MouseEvent).clientY;
 }
 
-export function Sidebar({ selected, onSelect }: SidebarProps) {
+export function Sidebar({ selected, onSelect, openView = null, onOpenView }: SidebarProps) {
   const treeId = useId();
   const [expanded, setExpanded] = useState<ReadonlySet<Id>>(new Set());
   const [active, setActive] = useState<Id | null>(selected);
@@ -366,6 +370,7 @@ export function Sidebar({ selected, onSelect }: SidebarProps) {
           ) : null}
         </DragOverlay>
       </DndContext>
+      {onOpenView ? <SavedViews selected={openView} onOpen={onOpenView} /> : null}
       <MoveDialog
         object={moving}
         onClose={() => {

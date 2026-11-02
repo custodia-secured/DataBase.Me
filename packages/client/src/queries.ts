@@ -8,15 +8,19 @@ import { keepPreviousData, useQuery, type QueryClient } from "@tanstack/react-qu
 import type {
   Backlink_Serialize,
   BlockRow_Serialize,
+  FacetBucket,
   FieldRow,
   Id,
   ObjectRow_Serialize,
   ObjectSummary_Serialize,
   ObjectTree_Serialize,
+  Query_Deserialize,
+  SearchHit_Serialize,
   Sort,
   Source,
   TypeRow_Serialize,
   VaultInfo,
+  ViewRow_Serialize,
 } from "./bindings";
 import { commands, unwrap } from "./ipc";
 
@@ -38,6 +42,12 @@ export const keys = {
   backlinks: (id: Id) => [VAULT, "backlinks", id] as const,
   search: (text: string, limit: number) => [VAULT, "search", text, limit] as const,
   tree: (root: Id, limit: number) => [VAULT, "tree", root, limit] as const,
+  fullSearch: (text: string, limit: number) => [VAULT, "full-search", text, limit] as const,
+  query: (query: Query_Deserialize) => [VAULT, "query", query] as const,
+  queryCount: (query: Query_Deserialize) => [VAULT, "query-count", query] as const,
+  facets: (query: Query_Deserialize, field: string) => [VAULT, "facets", query, field] as const,
+  views: () => [VAULT, "views"] as const,
+  view: (id: Id) => [VAULT, "view", id] as const,
 };
 
 /** Blobs never change, so their key is outside {@link VAULT} and no refresh reloads them. */
@@ -146,6 +156,62 @@ export function useSearch(text: string, limit = 20, enabled = true) {
     queryFn: () => unwrap(commands.objectSearch(text, limit)),
     placeholderData: keepPreviousData,
     enabled,
+  });
+}
+
+/** Objects matching `text` anywhere, best first, with snippets (ADR-0020). */
+export function useFullSearch(text: string, limit = 12, enabled = true) {
+  return useQuery<SearchHit_Serialize[]>({
+    queryKey: keys.fullSearch(text, limit),
+    queryFn: () => unwrap(commands.search(text, limit)),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/** The results of a query (ADR-0020), or nothing while there is no query. */
+export function useQueryResults(query: Query_Deserialize | null) {
+  return useQuery<ObjectSummary_Serialize[]>({
+    queryKey: keys.query(query ?? {}),
+    queryFn: () => unwrap(commands.objectsQuery(query ?? {})),
+    placeholderData: keepPreviousData,
+    enabled: query !== null,
+  });
+}
+
+export function useQueryCount(query: Query_Deserialize | null) {
+  return useQuery<number>({
+    queryKey: keys.queryCount(query ?? {}),
+    queryFn: () => unwrap(commands.objectsQueryCount(query ?? {})),
+    placeholderData: keepPreviousData,
+    enabled: query !== null,
+  });
+}
+
+/** The type facet of a query's results. */
+export const TYPE_FACET = "$type";
+
+export function useFacets(query: Query_Deserialize | null, field: string) {
+  return useQuery<FacetBucket[]>({
+    queryKey: keys.facets(query ?? {}, field),
+    queryFn: () => unwrap(commands.facets(query ?? {}, field)),
+    placeholderData: keepPreviousData,
+    enabled: query !== null,
+  });
+}
+
+export function useViews() {
+  return useQuery<ViewRow_Serialize[]>({
+    queryKey: keys.views(),
+    queryFn: () => unwrap(commands.viewsList()),
+  });
+}
+
+export function useView(id: Id | null) {
+  return useQuery<ViewRow_Serialize>({
+    queryKey: keys.view(id ?? ""),
+    queryFn: () => unwrap(commands.viewGet(id ?? "")),
+    enabled: id !== null,
   });
 }
 
