@@ -2,7 +2,7 @@
 
 # DataBase.Me vault format
 
-**Status: draft 2, 2026-10-25. Format version 0.** Nothing here is stable until FORMAT.md v0.1
+**Status: draft 4, 2026-11-02. Format version 0.** Nothing here is stable until FORMAT.md v0.1
 ships with the MVP (M7). Each section says whether it is **Decided** (fixed by an accepted ADR),
 **Draft** (proposed, to be confirmed in the milestone named) or **Open** (not designed yet).
 
@@ -113,6 +113,18 @@ get by applying the op log (§5) in `seq` order to an empty database.
 | `attachments`  | Which object uses which blob, and how                      | `object_id` → `objects`, `blob_hash` → `blobs`, `role` (`original`, `thumbnail`, `transcript`, `ocr_text` or `snapshot`), `filename?`, `mime?`; `(object_id, blob_hash, role)` is the primary key                                                                                                                                  |
 | `ops`          | The append-only operation log (§5)                         | `seq` (`INTEGER PRIMARY KEY`), `op_id` (unique), `group_id`, `undo_of?`, `actor_id`, `device_id`, `ts`, `kind`, `target_id`, `payload_json`, `prev_hash?`, `hash`, `signature?`                                                                                                                                                    |
 
+Migration 2 (M4, ADR-0020) adds one more table the op log produces, and three it does not:
+
+| Table          | Purpose                                                                           | Columns                                                                                                                                                                                     |
+| -------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `views`        | Saved views: a query, a renderer and its settings                                 | `id`, `name`, `renderer` (an identifier), `query_json` (a query in the DSL, ADR-0020), `config_json` (an object), `owner_object_id?` → `objects`, `created_at`, `updated_at`                |
+| `search_dirty` | Derived: objects whose text changed since the index last looked                   | `object_id` (primary key). Emptied by the next search                                                                                                                                       |
+| `search_text`  | Derived: the searchable text of every live object                                 | `doc` (`INTEGER PRIMARY KEY`), `object_id` (unique), `title`, `body` (the summary, then the blocks' plain text in tree order, one line each), `props_text` (string and number field values) |
+| `fts`          | Derived: an FTS5 external-content index over `search_text`, `content_rowid` `doc` | `title`, `body`, `props_text`; tokenizer `unicode61 remove_diacritics 2`                                                                                                                    |
+
+The derived tables are not part of the op log's promise: a reader MAY ignore them, and an app MAY
+rebuild them from `objects` and `blocks` at any time.
+
 Rules the schema does not express, which an app MUST keep:
 
 - An object's parents never loop, and a block's parents never loop or leave its object. A type's
@@ -168,13 +180,11 @@ handoff brief's draft.
 | Table          | Purpose                                                               | Columns                                                                                                                                                                                                                                                  |
 | -------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `provenance`   | Where an object came from                                             | `id`, `object_id`, `source_kind` (`manual`, `import:<importer>`, `clip`, `feed`, `file:external`, `ai:<model>`, `plugin:<id>`), `source_uri`, `import_run_id`, `original_blob`, `extractor`, `extractor_version`, `confidence`, `accepted`, `created_at` |
-| `views`        | Saved views: a query, a renderer and its settings                     | `id`, `name`, `renderer`, `query_json`, `config_json`, `owner_object_id`, `created_at`, `updated_at`                                                                                                                                                     |
 | `canvas_items` | Positions on a canvas view                                            | `view_id`, `item_id`, `object_id`, `x`, `y`, `w`, `h`, `z`, `style_json`                                                                                                                                                                                 |
 | `spaces`       | Top-level spaces and their AI policy                                  | `id`, `name`, `ai_policy` (`none`, `local_only`, `any`), `settings_json`                                                                                                                                                                                 |
 | `ai_audit`     | Every AI call                                                         | `id`, `ts`, `provider`, `model`, `purpose`, `object_ids_json`, `bytes_sent`, `user_initiated`                                                                                                                                                            |
 | `mirror_state` | Files-folder bookkeeping per object                                   | `object_id`, `rel_path` (unique), `last_hash`, `base_text` (last synced Markdown), `synced_seq`, `synced_at`                                                                                                                                             |
 | `conflicts`    | Things the user must resolve                                          | `id`, `object_id`, `kind` (`edit_edit`, `parse_error`, `bulk_change_hold`, `missing_id`, `cloud_conflict_file`), `details_json`, `conflict_copy_id`, `created_at`, `resolved_at`                                                                         |
-| `fts`          | FTS5 full-text index (derived; can be rebuilt)                        | `object_id`, `title`, `body`, `props_text`                                                                                                                                                                                                               |
 | `vec_chunks`   | sqlite-vec embeddings (derived; only with an embedding provider, M11) | `chunk_id`, `embedding`                                                                                                                                                                                                                                  |
 
 ### 3.5 Block content (Decided, ADR-0016)
@@ -243,7 +253,7 @@ verification does this (§5.5). Rows of `ops` are never updated or deleted.
 ### 5.2 Kinds
 
 An op changes exactly one row. Its entity names the table: `type`, `field`, `object`,
-`object_type`, `block`, `relation` or `attachment`. The actions are:
+`object_type`, `block`, `relation`, `attachment` or, from migration 2, `view`. The actions are:
 
 | Action    | Entities             | Payload | Columns it may change                                                                                            |
 | --------- | -------------------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -254,6 +264,7 @@ An op changes exactly one row. Its entity names the table: `type`, `field`, `obj
 | `update`  | `object`             | update  | `title`, `summary`, `captured_at`, `event_start`, `event_end`, `geo_lat`, `geo_lon`, `sensitivity`; field values |
 | `update`  | `block`              | update  | `kind`, `content_json`                                                                                           |
 | `update`  | `relation`           | update  | `label`, `props_json`                                                                                            |
+| `update`  | `view`               | update  | `name`, `renderer`, `query_json`, `config_json`, `owner_object_id`                                               |
 | `move`    | `object`, `block`    | update  | `parent_id` and `sort_key` (objects); `parent_block_id` and `sort_key` (blocks)                                  |
 | `trash`   | `object`, `relation` | update  | `deleted_at`                                                                                                     |
 | `restore` | `object`, `relation` | update  | `deleted_at`                                                                                                     |
@@ -396,3 +407,4 @@ losslessly (M5 tests this).
 | Draft 1 | 2026-10-25 | M1: vault lock and creation (§1), sort keys (§2.1), the tables of migration 1 (§3), field values (§3.3) and the op log (§5) are decided. |
 | Draft 2 | 2026-10-25 | M2: block content and mentions (§3.5) are decided.                                                                                       |
 | Draft 3 | 2026-11-01 | M3: `related` is the `rel_type` of a relation drawn on the mind map; it has no `field_id` or `src_block_id` (§3.1).                      |
+| Draft 4 | 2026-11-02 | M4: migration 2 adds `views` and the derived search tables (§3.1), and the `view` entity (§5.2). Proposed, with ADR-0020.                |
