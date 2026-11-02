@@ -410,6 +410,10 @@ impl<F: Fs> Mirror<F> {
         let file_doc = parsed.doc.clone();
         let mut theirs = parsed.doc;
         let ids_assigned: bool;
+        // Whether the file held something the vault refused (a bad value, an unknown type, a
+        // link to nothing). The inbox has it; the file is then written from the app, or the
+        // refused part would sit in the merge base as a change the app "made" for ever after.
+        let rejected: bool;
         let mut conflicts: Vec<files::Conflict> = Vec::new();
         let object_id = match identity {
             Identity::Existing(id) => {
@@ -433,7 +437,9 @@ impl<F: Fs> Mirror<F> {
                     }
                     let merged = files::merge(&base, &ours, &file, schema, resolver);
                     conflicts = merged.conflicts;
-                    theirs = merged.doc;
+                    let mut doc = merged.doc;
+                    take_link_details(&mut doc, &base, &ours, &file);
+                    theirs = doc;
                 }
                 // A bare object made for this very file a moment ago has nothing of its own: the
                 // file is taken as it is.
@@ -454,7 +460,7 @@ impl<F: Fs> Mirror<F> {
                 let (applied, _) = vault.transact_external(|txn| {
                     apply::apply_doc(txn, id, &placement, &doc, &tags, schema)
                 })?;
-                self.note_invalid(vault, rel_path, Some(id), &applied, report)?;
+                rejected = self.note_invalid(vault, rel_path, Some(id), &applied, report)?;
                 if title.is_some()
                     || moved
                     || from_state.as_ref().is_some_and(|s| s.path_key != key)
@@ -494,7 +500,7 @@ impl<F: Fs> Mirror<F> {
                 let ((id, applied), _) = vault.transact_external(|txn| {
                     apply::create_from_doc(txn, adopt, &stem, parent, &doc, &tags, schema)
                 })?;
-                self.note_invalid(vault, rel_path, Some(id), &applied, report)?;
+                rejected = self.note_invalid(vault, rel_path, Some(id), &applied, report)?;
                 report.created.push(id);
                 id
             }
@@ -534,7 +540,7 @@ impl<F: Fs> Mirror<F> {
         // The row: the file as read is the base of the next merge, unless the file must be
         // written back (an id to add, anchors to add, a conflict the app's version won), in which
         // case the next `pump_out` rewrites it and sets the base.
-        let write_back = missing_id || ids_assigned || !conflicts.is_empty();
+        let write_back = missing_id || ids_assigned || rejected || !conflicts.is_empty();
         if let Some(old) = from_state.as_ref().filter(|s| s.path_key != key) {
             resolver.forget(old.object_id);
             let _ = vault.mirror_state_remove(old.object_id);
@@ -614,7 +620,7 @@ impl<F: Fs> Mirror<F> {
         })?)
     }
 
-    /// Inbox entries for values the file held that do not fit.
+    /// Inbox entries for values the file held that do not fit. Returns whether there were any.
     fn note_invalid(
         &self,
         vault: &mut Vault,
@@ -622,7 +628,7 @@ impl<F: Fs> Mirror<F> {
         object_id: Option<Id>,
         applied: &apply::Applied,
         report: &mut Inbound,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let mut details: Vec<Value> = applied
             .invalid
             .iter()
@@ -641,7 +647,7 @@ impl<F: Fs> Mirror<F> {
                 .map(|t| json!({"target": t.to_string(), "why": "not a live object"})),
         );
         if details.is_empty() {
-            return Ok(());
+            return Ok(false);
         }
         let id = vault.conflict_add(NewConflict {
             object_id,
@@ -651,7 +657,7 @@ impl<F: Fs> Mirror<F> {
             ..NewConflict::default()
         })?;
         report.conflicts.push(id);
-        Ok(())
+        Ok(true)
     }
 
     /// The file's version as a Note next to the object, with the raw bytes attached.
@@ -1038,6 +1044,34 @@ fn stem_of(rel_path: &str) -> String {
         .and_then(|n| n.strip_suffix(".md"))
         .unwrap_or(rel_path)
         .to_owned()
+}
+
+/// The core merge compares `links` as a set of `(id, type, block)`, so a label or props edited in
+/// the file alone would be lost: take the file's label and props for a link the app left as it
+/// was.
+fn take_link_details(merged: &mut FileDoc, base: &FileDoc, ours: &FileDoc, theirs: &FileDoc) {
+    type Key = (Option<Id>, String, Option<Id>);
+    type Details = (Option<String>, dbme_core::model::Props);
+    let key = |l: &files::LinkEntry| -> Key { (l.id, l.rel_type.clone(), l.block) };
+    let find = |doc: &FileDoc, k: &Key| -> Option<Details> {
+        doc.front
+            .links
+            .iter()
+            .find(|l| key(l) == *k)
+            .map(|l| (l.label.clone(), l.props.clone()))
+    };
+    for link in &mut merged.front.links {
+        let k = key(link);
+        let Some(file) = find(theirs, &k) else {
+            continue;
+        };
+        let in_base = find(base, &k);
+        let app_changed = find(ours, &k).is_some_and(|o| Some(&o) != in_base.as_ref());
+        if !app_changed && Some(&file) != in_base.as_ref() {
+            link.label = file.0;
+            link.props = file.1;
+        }
+    }
 }
 
 /// Takes every block's id away, so `assign_ids` gives fresh ones.

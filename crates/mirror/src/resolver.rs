@@ -131,3 +131,117 @@ impl LinkResolver for VaultResolver {
         format!("{}{ext}", blob.hex())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn state(n: u128, rel_path: &str, state: MirrorFileState) -> MirrorState {
+        MirrorState {
+            object_id: Id::from_parts(1, n),
+            rel_path: rel_path.to_owned(),
+            path_key: path_key(rel_path),
+            last_hash: None,
+            base_text: None,
+            synced_seq: None,
+            synced_at: None,
+            file_size: None,
+            file_mtime_ms: None,
+            state,
+        }
+    }
+
+    #[test]
+    fn paths_resolve_exactly_then_by_unique_basename() {
+        let resolver = VaultResolver::new(&[
+            state(1, "Projects/Alpha.md", MirrorFileState::Synced),
+            state(2, "Archive/Alpha.md", MirrorFileState::Pending),
+            state(3, "People/Bravo Two.md", MirrorFileState::Held),
+            state(4, ".dbme/trash/x.md", MirrorFileState::Trashed),
+            state(5, ".dbme/excluded/y.md", MirrorFileState::Excluded),
+        ]);
+        let id = |n: u128| Some(Id::from_parts(1, n));
+        assert_eq!(resolver.resolve("Projects/Alpha"), id(1));
+        assert_eq!(resolver.resolve("projects/alpha.md"), id(1));
+        assert_eq!(resolver.resolve("/Archive/Alpha "), id(2));
+        assert_eq!(
+            resolver.resolve("Alpha"),
+            None,
+            "two files share the basename"
+        );
+        assert_eq!(resolver.resolve("bravo two"), id(3));
+        assert_eq!(resolver.resolve("Nowhere/Bravo Two"), None);
+        assert_eq!(resolver.resolve("x"), None, "trashed files have no path");
+        assert_eq!(
+            resolver.path_of(Id::from_parts(1, 3)).as_deref(),
+            Some("People/Bravo Two")
+        );
+        assert_eq!(resolver.path_of(Id::from_parts(1, 4)), None);
+        assert_eq!(resolver.has_path("people/BRAVO TWO.md"), id(3));
+        assert_eq!(resolver.has_path("People/Nobody.md"), None);
+    }
+
+    #[test]
+    fn add_replaces_and_forget_frees() {
+        let mut resolver = VaultResolver::default();
+        let a = Id::from_parts(1, 1);
+        resolver.add(a, "Old/A.md");
+        resolver.add(a, "Moved/A.md");
+        assert_eq!(resolver.resolve("A"), Some(a), "still unique by basename");
+        assert_eq!(
+            resolver.resolve("Old/A"),
+            None,
+            "the old exact path is gone"
+        );
+        assert_eq!(resolver.path_of(a).as_deref(), Some("Moved/A"));
+        resolver.forget(a);
+        resolver.forget(a);
+        assert_eq!(resolver.resolve("A"), None);
+        assert_eq!(resolver.path_of(a), None);
+    }
+
+    #[test]
+    fn attachments_are_named_by_hash_and_media_type() {
+        let mut resolver = VaultResolver::default();
+        let png = ContentHash::of(b"png");
+        let unknown = ContentHash::of(b"?");
+        let named = ContentHash::of(b"named");
+        resolver.add_blob(png.clone(), Some("image/png; charset=binary"), None);
+        resolver.add_blob(unknown.clone(), Some("application/x-thing"), None);
+        resolver.add_blob(named.clone(), None, Some("Report.Final.DOCX"));
+        assert_eq!(resolver.attachment_name(&png), format!("{}.png", png.hex()));
+        assert_eq!(resolver.attachment_name(&unknown), unknown.hex());
+        assert_eq!(
+            resolver.attachment_name(&named),
+            format!("{}.docx", named.hex())
+        );
+        assert_eq!(
+            resolver.attachment_name(&ContentHash::of(b"never")),
+            ContentHash::of(b"never").hex()
+        );
+
+        for (mime, ext) in [
+            ("image/jpeg", ".jpg"),
+            ("image/gif", ".gif"),
+            ("image/webp", ".webp"),
+            ("image/svg+xml", ".svg"),
+            ("image/heic", ".heic"),
+            ("application/pdf", ".pdf"),
+            ("text/plain", ".txt"),
+            ("text/markdown", ".md"),
+            ("text/csv", ".csv"),
+            ("application/json", ".json"),
+            ("audio/mpeg", ".mp3"),
+            ("audio/mp4", ".m4a"),
+            ("video/mp4", ".mp4"),
+            ("application/zip", ".zip"),
+        ] {
+            assert_eq!(extension_for(Some(mime), None), ext, "{mime}");
+        }
+        assert_eq!(extension_for(None, Some("noext")), "");
+        assert_eq!(extension_for(None, Some("trailing.")), "");
+        assert_eq!(extension_for(None, Some("odd.t@r")), "");
+        assert_eq!(extension_for(None, Some("long.abcdefghij")), "");
+        assert_eq!(extension_for(None, None), "");
+    }
+}

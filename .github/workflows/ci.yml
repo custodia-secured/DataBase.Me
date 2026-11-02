@@ -179,6 +179,11 @@ jobs:
         run: >-
           cargo llvm-cov --locked -p dbme-store --summary-only --fail-under-lines 90
           --ignore-filename-regex 'crates/core/'
+      # The platform watcher is a probe on each OS, not part of the engine's gate (M5 Decision 24).
+      - name: dbme-mirror
+        run: >-
+          cargo llvm-cov --locked -p dbme-mirror --summary-only --fail-under-lines 90
+          --ignore-filename-regex 'crates/(core|store)/|crates/mirror/src/watcher\.rs'
 
   mobile:
     name: Mobile build (${{ matrix.target }})
