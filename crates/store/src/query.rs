@@ -369,6 +369,48 @@ impl Reader<'_> {
         Ok(attachments)
     }
 
+    /// The live objects under `parent` (`None`: the top level) with exactly this title, in order.
+    /// The files folder names objects by path, so a path is resolved one title at a time.
+    pub fn objects_titled(&self, parent: Option<Id>, title: &str) -> Result<Vec<ObjectRow>> {
+        collect(
+            self.conn,
+            concat!(
+                "SELECT ",
+                object_columns!(),
+                " FROM objects WHERE parent_id IS ?1 AND title = ?2 AND deleted_at IS NULL \
+                 ORDER BY sort_key, id"
+            ),
+            params![sql::optional(parent), title],
+            object_row,
+        )
+    }
+
+    /// Up to `limit` ops after `seq`, oldest first: for the export and for the files folder's
+    /// ledger of what it has synced.
+    pub fn ops_after(&self, seq: i64, limit: u32) -> Result<Vec<OpRecord>> {
+        collect(
+            self.conn,
+            concat!(
+                "SELECT ",
+                op_columns!(),
+                " FROM ops WHERE seq > ?1 ORDER BY seq LIMIT ?2"
+            ),
+            params![seq, limit],
+            crate::log::record,
+        )
+    }
+
+    /// The facts recorded about the vault when it was created, by key: `vault_id`,
+    /// `created_at`, `created_by`, `format_version`.
+    pub fn vault_meta(&self) -> Result<Vec<(String, String)>> {
+        collect(
+            self.conn,
+            "SELECT key, value FROM vault_meta ORDER BY key",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+    }
+
     /// The most recent ops, newest first.
     pub fn history(&self, limit: u32) -> Result<Vec<OpRecord>> {
         collect(

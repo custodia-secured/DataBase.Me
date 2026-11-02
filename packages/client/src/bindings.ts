@@ -513,6 +513,16 @@ export type NewObject = NewObject_Serialize | NewObject_Deserialize;
 
 /**  A new object. */
 export type NewObject_Deserialize = {
+	/**
+	 *  An ID the caller brings (a file's `id:`, M5 Decision 13), or `None` for a fresh one. No
+	 *  other object, live or in the Trash, may have it.
+	 */
+	id?: Id | null,
+	/**
+	 *  When the object was created, if known from outside (a file's `created:`); the
+	 *  transaction's time otherwise.
+	 */
+	created_at?: number | null,
 	title?: string,
 	parent_id?: Id | null,
 	position?: Position,
@@ -529,6 +539,16 @@ export type NewObject_Deserialize = {
 
 /**  A new object. */
 export type NewObject_Serialize = {
+	/**
+	 *  An ID the caller brings (a file's `id:`, M5 Decision 13), or `None` for a fresh one. No
+	 *  other object, live or in the Trash, may have it.
+	 */
+	id: Id | null,
+	/**
+	 *  When the object was created, if known from outside (a file's `created:`); the
+	 *  transaction's time otherwise.
+	 */
+	created_at: number | null,
 	title: string,
 	parent_id: Id | null,
 	position: Position,

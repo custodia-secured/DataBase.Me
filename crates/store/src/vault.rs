@@ -44,10 +44,15 @@ pub struct VaultOptions {
 }
 
 pub(crate) struct Context {
-    pub(crate) ids: IdGenerator,
+    /// Shared by the app's and the mirror's contexts, so IDs stay monotonic across both.
+    pub(crate) ids: Arc<IdGenerator>,
     pub(crate) clock: Arc<dyn Clock>,
     pub(crate) identity: Identity,
     pub(crate) blobs: BlobStore,
+    /// Whether transactions under this context mark the objects they change for the files
+    /// folder to write again. The app's context does; the mirror's own commits do not, since an
+    /// inbound apply never writes back (M5 Decision 17).
+    pub(crate) notes_mirror: bool,
 }
 
 /// What a committed transaction, undo or redo did.
@@ -88,6 +93,7 @@ pub struct Vault {
     // Fields drop in order: the database closes before the lock is released.
     conn: Connection,
     ctx: Context,
+    mirror_ctx: Context,
     root: PathBuf,
     vault_id: Id,
     undo: Vec<Step>,
@@ -208,7 +214,7 @@ impl Vault {
         migrate::migrate(&mut conn, dir)?;
         migrate::configure(&conn)?;
         let now = options.clock.now_ms();
-        let ids = IdGenerator::new();
+        let ids = Arc::new(IdGenerator::new());
         let stored: Option<String> = conn
             .query_row(
                 "SELECT value FROM vault_meta WHERE key = 'vault_id'",
@@ -246,10 +252,19 @@ impl Vault {
             clock: options.clock,
             identity: options.identity,
             blobs: BlobStore::new(dir.join(BLOBS_FOLDER)),
+            notes_mirror: true,
+        };
+        let mirror_ctx = Context {
+            ids: Arc::clone(&ctx.ids),
+            clock: Arc::clone(&ctx.clock),
+            identity: ctx.identity.mirror(),
+            blobs: ctx.blobs.clone(),
+            notes_mirror: false,
         };
         Ok(Self {
             conn,
             ctx,
+            mirror_ctx,
             root: dir.to_owned(),
             vault_id,
             undo: Vec::new(),
@@ -320,6 +335,27 @@ impl Vault {
             self.redo.clear();
         }
         Ok((value, committed))
+    }
+
+    /// Runs `change` in one transaction on behalf of the files folder, as a second device would
+    /// (M5 Decisions 1 and 2): its ops record [`Vault::mirror_identity`], it marks nothing for
+    /// the folder to write again, and it is **not** an undo step of this session: the undo and
+    /// redo stacks are left as they were. An app step that changed a block or object this
+    /// transaction then changed again becomes [`StoreError::UndoBlocked`] when undone, and is
+    /// dropped, as [`Vault::undo`] says.
+    pub fn transact_external<T>(
+        &mut self,
+        change: impl FnOnce(&mut Txn<'_>) -> Result<T>,
+    ) -> Result<(T, Option<Committed>)> {
+        let mut txn = Txn::begin(&mut self.conn, &self.mirror_ctx, None)?;
+        let value = change(&mut txn)?;
+        let committed = txn.finish()?;
+        Ok((value, committed))
+    }
+
+    /// The identity the files folder's commits record: the vault's author on a derived device.
+    pub fn mirror_identity(&self) -> Identity {
+        self.mirror_ctx.identity
     }
 
     /// Whether there is a step to undo.
