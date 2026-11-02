@@ -307,11 +307,15 @@ pub(crate) fn mark_dirty<'a>(
     conn: &Connection,
     ids: impl IntoIterator<Item = &'a Id>,
 ) -> Result<()> {
-    let mut statement =
-        conn.prepare_cached("INSERT OR IGNORE INTO mirror_dirty (object_id) VALUES (?1)")?;
-    for id in ids {
-        statement.execute([id.to_string()])?;
+    let ids: Vec<String> = ids.into_iter().map(ToString::to_string).collect();
+    if ids.is_empty() {
+        return Ok(());
     }
+    // One statement for the whole set, as `search::mark_dirty` does.
+    conn.prepare_cached(
+        "INSERT OR IGNORE INTO mirror_dirty (object_id) SELECT value FROM json_each(?1)",
+    )?
+    .execute([sql::to_json(&ids)?])?;
     Ok(())
 }
 

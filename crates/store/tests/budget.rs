@@ -7,9 +7,10 @@
 //! change its own transaction; its cost is dominated by SQLite committing to disk, and it is
 //! printed rather than gated (ADR-0015).
 //!
-//! Run the gate with `cargo test --release -p dbme-store --test budget -- --nocapture`, and the
-//! measurement with `-- --ignored --nocapture`. Run them separately: together they slow each other
-//! down. Debug builds skip the gate.
+//! Run the gate with `cargo test --release -p dbme-store --test budget -- --test-threads=1
+//! --nocapture`, and the measurement with `-- --ignored --nocapture`. Run them separately, and the
+//! gates one at a time: together they slow each other down (the search gate seeds 100,000
+//! objects while the bulk gate runs). Debug builds skip the gate.
 //!
 //! M3 adds the mind map's tree read, and M4 search on 100,000 objects (ADR-0020).
 

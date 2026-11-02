@@ -127,11 +127,16 @@ fn upsert(conn: &Connection, object: &ObjectRow) -> Result<()> {
 
 /// Notes that the text of `ids` may have changed, for the next [`flush`].
 pub(crate) fn mark_dirty(conn: &Connection, ids: &BTreeSet<Id>) -> Result<()> {
-    let mut statement =
-        conn.prepare_cached("INSERT OR IGNORE INTO search_dirty (object_id) VALUES (?1)")?;
-    for id in ids {
-        statement.execute([id.to_string()])?;
+    if ids.is_empty() {
+        return Ok(());
     }
+    // One statement for the whole set: a bulk change marks 10,000 objects in one transaction,
+    // and one execute per id was a measurable share of the M1 budget.
+    let ids: Vec<String> = ids.iter().map(ToString::to_string).collect();
+    conn.prepare_cached(
+        "INSERT OR IGNORE INTO search_dirty (object_id) SELECT value FROM json_each(?1)",
+    )?
+    .execute([crate::sql::to_json(&ids)?])?;
     Ok(())
 }
 
