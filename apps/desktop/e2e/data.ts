@@ -124,6 +124,23 @@ export function bulk(count: number): unknown {
   return { kind: "bulk", count, type_name: "Load item", parent_title: "Big table" };
 }
 
+/** A map too tall to read when fitted, so it opens on its root: three families of 30. */
+export function tallMap(): unknown {
+  const range = (count: number) => Array.from({ length: count }, (_, i) => i + 1);
+  return {
+    kind: "tree",
+    objects: [
+      {
+        title: "Tall",
+        children: ["A", "B", "C"].map((family) => ({
+          title: family,
+          children: range(30).map((n) => ({ title: `${family}${String(n)}` })),
+        })),
+      },
+    ],
+  };
+}
+
 /** The mind map's budget tree: the root, 10 children, 10 below each, 19 below each of those. */
 export function mindMapTree(): unknown {
   const range = (count: number) => Array.from({ length: count }, (_, i) => i + 1);

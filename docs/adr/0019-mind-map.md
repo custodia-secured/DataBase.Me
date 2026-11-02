@@ -60,6 +60,9 @@ stays interactive, and names React Flow and either ELK or dagre.
 
 - The canvas shows no titles, and a screen reader never needs it: the keyboard's node stays mounted,
   and moving to another brings the map back to reading zoom.
+- A node out of view isn't in the page, so what the keyboard reaches comes into view first: a node
+  it moves to, the sibling it lands on after Delete, and a node being named, which can land far down
+  its family. Only panning leaves the keyboard's node out of view.
 - Every edit reads the tree and runs the layout again. That is cheap, and unchanged nodes keep their
   objects, so React Flow redraws only what moved.
 - Up close, the budget depends on how many nodes are on screen, which reading zoom limits.

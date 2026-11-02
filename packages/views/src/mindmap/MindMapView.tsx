@@ -376,6 +376,12 @@ function MindMap({ objectId, onOpen }: ViewProps) {
     [flow, layout],
   );
 
+  // A node being named has to be seen: a new one can land far down its family, off the screen and
+  // so out of the page, and F2 can come from the overview, where a node is too small to read.
+  useLayoutEffect(() => {
+    if (renaming !== null) reveal(renaming);
+  }, [renaming, reveal]);
+
   const setExpanded = useCallback((id: Id, open: boolean) => {
     setCollapsed((before) => {
       if (before.has(id) !== open) return before;
@@ -397,7 +403,10 @@ function MindMap({ objectId, onOpen }: ViewProps) {
 
   const trash = async (node: MapNode) => {
     const next = sibling(layout, node, 1) ?? sibling(layout, node, -1) ?? node.parent;
-    if (next !== null) setActive(next);
+    if (next !== null) {
+      setActive(next);
+      reveal(next);
+    }
     await actions.trash(node.id);
     focusMap();
   };
