@@ -15,11 +15,15 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use dbme_core::model::{AttachmentRole, AttachmentRow, BlockRow, FieldRow, ObjectRow, TypeRow};
+use dbme_core::model::{
+    AttachmentRole, AttachmentRow, BlockRow, FieldRow, ObjectRow, TypeRow, ViewRow,
+};
+use dbme_core::query::Query;
 use dbme_core::{ContentHash, CoreError, Id};
 use dbme_store::{
-    Backlink, Committed, NewAttachment, NewField, NewObject, NewRelation, ObjectSummary,
-    ObjectTree, Position, Sort, Source, StoreError, Txn, Vault, VaultOptions,
+    Backlink, Committed, FacetBucket, NewAttachment, NewField, NewObject, NewRelation, NewView,
+    ObjectSummary, ObjectTree, Position, SearchHit, Sort, Source, StoreError, Txn, Vault,
+    VaultOptions,
 };
 
 mod blocks;
@@ -457,6 +461,65 @@ pub fn relation_trash(session: &Session, id: Id) -> Reply<bool> {
         }
         txn.trash_relation(id)
     })
+}
+
+// Search and query (ADR-0020).
+
+/// Up to `limit` live objects matching `text` anywhere in their title, body or field values, best
+/// match first, each with a snippet. With no words, the most recently changed objects.
+pub fn search(session: &Session, text: &str, limit: u32) -> Reply<Vec<SearchHit>> {
+    session.with(|vault| vault.read().search(text, limit))
+}
+
+/// The results of a query, in its order, from its offset and up to its limit.
+pub fn objects_query(session: &Session, query: &Query) -> Reply<Vec<ObjectSummary>> {
+    session.with(|vault| vault.read().query(query))
+}
+
+/// How many results a query has in all.
+pub fn objects_query_count(session: &Session, query: &Query) -> Reply<u32> {
+    let count = session.with(|vault| vault.read().query_count(query))?;
+    Ok(u32::try_from(count).unwrap_or(u32::MAX))
+}
+
+/// The values of `field` among all of a query's results and how many have each, most common
+/// first. `field` is a field key, or `$type` for the results' types.
+pub fn facets(session: &Session, query: &Query, field: &str) -> Reply<Vec<FacetBucket>> {
+    session.with(|vault| vault.read().facets(query, field))
+}
+
+/// Every saved view, by name.
+pub fn views_list(session: &Session) -> Reply<Vec<ViewRow>> {
+    session.with(|vault| vault.read().views())
+}
+
+/// A saved view.
+pub fn view_get(session: &Session, id: Id) -> Reply<ViewRow> {
+    session.with(|vault| vault.read().view(id))
+}
+
+/// Saves a view and returns its ID.
+pub fn view_save(session: &Session, view: NewView) -> Reply<Id> {
+    session.transact(|txn| txn.create_view(view))
+}
+
+/// Replaces a saved view's name, renderer, query, settings and owner. Returns `false` if nothing
+/// changed.
+pub fn view_update(session: &Session, id: Id, view: NewView) -> Reply<bool> {
+    session.transact(|txn| {
+        txn.update_view(id, |row| {
+            row.name = view.name;
+            row.renderer = view.renderer;
+            row.query_json = view.query;
+            row.config_json = view.config;
+            row.owner_object_id = view.owner_object_id;
+        })
+    })
+}
+
+/// Deletes a saved view. Undo brings it back.
+pub fn view_delete(session: &Session, id: Id) -> Reply<()> {
+    session.transact(|txn| txn.delete_view(id))
 }
 
 // Blocks.

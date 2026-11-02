@@ -8,6 +8,7 @@ import {
   unwrap,
   type Id,
   type NewObject_Deserialize,
+  type NewView_Deserialize,
   type Position,
   type Value,
 } from "@databaseme/client";
@@ -80,5 +81,14 @@ export const actions = {
   },
   unrelate(id: Id) {
     return attempt(() => unwrap(commands.relationTrash(id)));
+  },
+  saveView(view: NewView_Deserialize) {
+    return attempt(() => unwrap(commands.viewSave(view)));
+  },
+  updateView(id: Id, view: NewView_Deserialize) {
+    return attempt(() => unwrap(commands.viewUpdate(id, view)));
+  },
+  deleteView(id: Id) {
+    return attempt(() => unwrap(commands.viewDelete(id)));
   },
 };

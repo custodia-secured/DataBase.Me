@@ -17,10 +17,10 @@ use dbme_core::chain::ChainVerifier;
 use crate::blobs::BlobStore;
 use crate::log::{self, op_columns};
 use crate::query::count;
-use crate::{Result, Vault, migrate, rows, sql};
+use crate::{Result, Vault, migrate, rows, search, sql};
 
 /// The tables ops produce, with the columns that order their rows.
-const TABLES: [(&str, &str); 8] = [
+const TABLES: [(&str, &str); 9] = [
     ("types", "id"),
     ("fields", "id"),
     ("objects", "id"),
@@ -29,6 +29,7 @@ const TABLES: [(&str, &str); 8] = [
     ("relations", "id"),
     ("blobs", "hash"),
     ("attachments", "object_id, blob_hash, role"),
+    ("views", "id"),
 ];
 
 /// What a check found.
@@ -66,6 +67,9 @@ impl Vault {
 }
 
 fn verify(conn: &Connection, blobs: &BlobStore, deep: bool) -> Result<VerifyReport> {
+    // Objects changed since the last search are not yet in the index, by design; a check of the
+    // index starts by bringing it up to date.
+    search::flush(conn)?;
     // One read transaction, so every check sees the same state.
     let snapshot = conn.unchecked_transaction()?;
     let mut report = VerifyReport {
@@ -138,6 +142,8 @@ fn verify(conn: &Connection, blobs: &BlobStore, deep: bool) -> Result<VerifyRepo
         }
     }
 
+    report.problems.extend(search_problems(&snapshot, deep)?);
+
     report.objects = count(&snapshot, "SELECT count(*) FROM objects", [])?;
     let mut statement = snapshot.prepare("SELECT hash, size FROM blobs ORDER BY hash")?;
     let mut rows = statement.query([])?;
@@ -171,6 +177,64 @@ fn verify(conn: &Connection, blobs: &BlobStore, deep: bool) -> Result<VerifyRepo
         }
     }
     Ok(report)
+}
+
+/// Checks the search index against the objects: every live object has a row and nothing else
+/// does, and, in a deep check, every row holds the text the object has now.
+fn search_problems(conn: &Connection, deep: bool) -> Result<Vec<String>> {
+    let mut problems = Vec::new();
+    let mut statement = conn.prepare(
+        "SELECT o.id, st.object_id FROM objects o \
+         LEFT JOIN search_text st ON st.object_id = o.id \
+         WHERE (o.deleted_at IS NULL) != (st.object_id IS NOT NULL)",
+    )?;
+    let mut rows = statement.query([])?;
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let indexed: Option<String> = row.get(1)?;
+        problems.push(match indexed {
+            Some(_) => format!("search: object {id} is in the Trash but still indexed"),
+            None => format!("search: live object {id} is not indexed"),
+        });
+    }
+    let orphans = count(
+        conn,
+        "SELECT count(*) FROM search_text st WHERE NOT EXISTS (SELECT 1 FROM objects o WHERE o.id = st.object_id)",
+        [],
+    )?;
+    if orphans > 0 {
+        problems.push(format!("search: {orphans} indexed objects no longer exist"));
+    }
+    if deep {
+        let mut statement = conn.prepare(concat!(
+            "SELECT ",
+            rows::object_columns!(),
+            ", (SELECT title FROM search_text st WHERE st.object_id = o.id), \
+             (SELECT body FROM search_text st WHERE st.object_id = o.id), \
+             (SELECT props_text FROM search_text st WHERE st.object_id = o.id) \
+             FROM objects o WHERE o.deleted_at IS NULL ORDER BY o.id"
+        ))?;
+        let mut rows = statement.query([])?;
+        while let Some(row) = rows.next()? {
+            let object = rows::object_row(row)?;
+            // An object with no row at all was reported above.
+            let Some(title) = row.get::<_, Option<String>>(15)? else {
+                continue;
+            };
+            let stored = search::SearchText {
+                title,
+                body: row.get::<_, Option<String>>(16)?.unwrap_or_default(),
+                props_text: row.get::<_, Option<String>>(17)?.unwrap_or_default(),
+            };
+            if search::text_of(conn, &object)? != stored {
+                problems.push(format!(
+                    "search: the index holds old text for object {}",
+                    object.id
+                ));
+            }
+        }
+    }
+    Ok(problems)
 }
 
 /// Compares one table of the vault with the same table rebuilt from the op log.

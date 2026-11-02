@@ -1,0 +1,24 @@
+{
+  "about": "results per value of a field, list items counted one by one",
+  "query": {
+    "from": {
+      "types": [],
+      "under": null
+    },
+    "where": [],
+    "search": "garden",
+    "related_to": null,
+    "sort": {
+      "by": "relevance",
+      "field": null,
+      "descending": false
+    },
+    "limit": 50,
+    "offset": 0
+  },
+  "select": "facet_field",
+  "field": "tags",
+  "types": [],
+  "sql": "SELECT j.value, count(*) FROM (SELECT o.id FROM fts CROSS JOIN search_text st ON st.doc = fts.rowid CROSS JOIN objects o ON o.id = st.object_id WHERE fts MATCH ? AND o.deleted_at IS NULL) q JOIN objects p ON p.id = q.id, json_each(CASE WHEN json_type(p.props_json, ?) = 'array' THEN json_extract(p.props_json, ?) ELSE json_array(json_extract(p.props_json, ?)) END) j WHERE j.value IS NOT NULL GROUP BY j.value ORDER BY 2 DESC, 1 LIMIT 50",
+  "params": ["\"garden\"*", "$.tags", "$.tags", "$.tags"]
+}

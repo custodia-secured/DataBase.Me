@@ -17,11 +17,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use dbme_api::{self as api, BlockChange, IpcError, IpcErrorKind, Reply, Session, VaultInfo};
-use dbme_core::model::{AttachmentRow, BlockRow, FieldRow, ObjectRow, TypeRow};
+use dbme_core::model::{AttachmentRow, BlockRow, FieldRow, ObjectRow, TypeRow, ViewRow};
+use dbme_core::query::Query;
 use dbme_core::{ContentHash, Id, SystemClock};
 use dbme_store::{
-    Backlink, Committed, Identity, NewField, NewObject, ObjectSummary, ObjectTree, Position, Sort,
-    Source, VaultOptions,
+    Backlink, Committed, FacetBucket, Identity, NewField, NewObject, NewView, ObjectSummary,
+    ObjectTree, Position, SearchHit, Sort, Source, VaultOptions,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -293,6 +294,80 @@ pub(crate) async fn object_tree(
     api::object_tree(&session, root, limit)
 }
 
+/// Up to `limit` live objects matching `text` anywhere, best match first, each with a snippet.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn search(
+    session: State<'_, Session>,
+    text: String,
+    limit: u32,
+) -> Reply<Vec<SearchHit>> {
+    api::search(&session, &text, limit)
+}
+
+/// The results of a query, in its order, from its offset and up to its limit.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn objects_query(
+    session: State<'_, Session>,
+    query: Query,
+) -> Reply<Vec<ObjectSummary>> {
+    api::objects_query(&session, &query)
+}
+
+/// How many results a query has in all.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn objects_query_count(session: State<'_, Session>, query: Query) -> Reply<u32> {
+    api::objects_query_count(&session, &query)
+}
+
+/// The values of `field` among a query's results and how many have each; `$type` for the types.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn facets(
+    session: State<'_, Session>,
+    query: Query,
+    field: String,
+) -> Reply<Vec<FacetBucket>> {
+    api::facets(&session, &query, &field)
+}
+
+/// Every saved view, by name.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn views_list(session: State<'_, Session>) -> Reply<Vec<ViewRow>> {
+    api::views_list(&session)
+}
+
+/// A saved view.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn view_get(session: State<'_, Session>, id: Id) -> Reply<ViewRow> {
+    api::view_get(&session, id)
+}
+
+/// Saves a view and returns its ID.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn view_save(session: State<'_, Session>, view: NewView) -> Reply<Id> {
+    api::view_save(&session, view)
+}
+
+/// Replaces a saved view's name, renderer, query, settings and owner.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn view_update(session: State<'_, Session>, id: Id, view: NewView) -> Reply<bool> {
+    api::view_update(&session, id, view)
+}
+
+/// Deletes a saved view. Undo brings it back.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn view_delete(session: State<'_, Session>, id: Id) -> Reply<()> {
+    api::view_delete(&session, id)
+}
+
 /// Relates `src` to `dst`, or returns the relation that already does.
 #[tauri::command]
 #[specta::specta]
@@ -463,6 +538,15 @@ pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
             object_search,
             backlinks,
             object_tree,
+            search,
+            objects_query,
+            objects_query_count,
+            facets,
+            views_list,
+            view_get,
+            view_save,
+            view_update,
+            view_delete,
             relation_create,
             relation_trash,
             object_create,
@@ -529,7 +613,7 @@ mod tests {
         let list = &build[build.find("const COMMANDS").unwrap()..];
         let list = &list[..list.find("];").unwrap()];
         let commands: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
-        assert_eq!(commands.len(), 36);
+        assert_eq!(commands.len(), 45);
         let capability = include_str!("../capabilities/default.json");
         let source = include_str!("ipc.rs");
         let registered = &source[source.find("collect_commands![").unwrap()..];

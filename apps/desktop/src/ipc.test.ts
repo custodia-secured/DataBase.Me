@@ -94,6 +94,17 @@ function mockShell(
         case "relation_trash":
           if (!options.trashKeepsRelations) relations.pop();
           return true;
+        case "search": {
+          const { text } = args as { text: string };
+          const words = text.toLowerCase().split(" ");
+          return objects
+            .filter((o) => words.every((w) => o.title.toLowerCase().includes(w)))
+            .map((o) => ({
+              summary: { object: o, type_ids: [], child_count: 0, cover: null },
+              snippet: o.title,
+              rank: -1,
+            }));
+        }
         default:
           throw new Error(`unexpected command ${command}`);
       }

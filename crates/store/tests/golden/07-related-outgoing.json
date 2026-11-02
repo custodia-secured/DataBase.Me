@@ -1,0 +1,28 @@
+{
+  "about": "what the object points to",
+  "query": {
+    "from": {
+      "types": [],
+      "under": null
+    },
+    "where": [],
+    "search": null,
+    "related_to": {
+      "id": "01K9T00000000000000000000R",
+      "rel_type": null,
+      "direction": "outgoing"
+    },
+    "sort": {
+      "by": "manual",
+      "field": null,
+      "descending": false
+    },
+    "limit": 50,
+    "offset": 0
+  },
+  "select": "ids",
+  "field": "",
+  "types": [],
+  "sql": "SELECT o.id FROM objects o WHERE o.deleted_at IS NULL AND EXISTS (SELECT 1 FROM relations r WHERE r.deleted_at IS NULL AND (r.src_id = ? AND r.dst_id = o.id)) ORDER BY o.sort_key, o.id LIMIT ? OFFSET ?",
+  "params": ["01K9T00000000000000000000R", 50, 0]
+}

@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::query::Query;
 use crate::{ContentHash, CoreError, Id, SortKey};
 
 /// Field values of an object, keyed by field key, or extra properties of a relation.
@@ -296,6 +297,23 @@ pub struct AttachmentRow {
     pub blob_size: i64,
 }
 
+/// A saved view: a query, the renderer that shows its results and that renderer's settings
+/// (ADR-0020).
+#[allow(missing_docs, reason = "columns are documented in FORMAT.md §3.1")]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct ViewRow {
+    pub id: Id,
+    pub name: String,
+    pub renderer: String,
+    pub query_json: Query,
+    pub config_json: Value,
+    pub owner_object_id: Option<Id>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 /// A file in the blob store.
 #[allow(missing_docs, reason = "columns are documented in FORMAT.md §3.1")]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -511,6 +529,29 @@ impl AttachmentRow {
     }
 }
 
+impl ViewRow {
+    /// Checks the row against the data model, the query included.
+    pub fn validate(&self) -> Result<(), CoreError> {
+        check(
+            !self.name.trim().is_empty(),
+            "view name",
+            "must not be blank",
+        )?;
+        check_text(&self.name, "view name", 200)?;
+        check(
+            is_identifier(&self.renderer, 64),
+            "view renderer",
+            "must be a lower-case identifier of at most 64 characters",
+        )?;
+        check(
+            self.config_json.is_object(),
+            "view config",
+            "must be a JSON object",
+        )?;
+        self.query_json.validate()
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -518,6 +559,19 @@ pub(crate) mod tests {
 
     pub(crate) fn id(n: u128) -> Id {
         Id::from_parts(1_000, n)
+    }
+
+    pub(crate) fn view(n: u128) -> ViewRow {
+        ViewRow {
+            id: id(n),
+            name: format!("View {n}"),
+            renderer: "list".into(),
+            query_json: Query::default(),
+            config_json: json!({}),
+            owner_object_id: None,
+            created_at: 1,
+            updated_at: 1,
+        }
     }
 
     pub(crate) fn object(n: u128) -> ObjectRow {

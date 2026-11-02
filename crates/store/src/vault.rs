@@ -282,6 +282,16 @@ impl Vault {
         &self.conn
     }
 
+    /// Builds the search index again from the objects and blocks. The index follows every
+    /// transaction on its own; this is for a vault whose index [`Vault::verify`] found wrong. Not
+    /// a change to the vault: no op is written, and nothing is to undo.
+    pub fn rebuild_search_index(&mut self) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        crate::search::rebuild(&tx)?;
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Runs `change` in one transaction. If it returns an error, nothing is saved. Otherwise the
     /// changes commit together as one undo step, and the redo history is cleared. The second
     /// value is `None` if nothing changed.

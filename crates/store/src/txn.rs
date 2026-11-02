@@ -15,15 +15,16 @@ use dbme_core::block::{self, MENTIONS};
 use dbme_core::chain::OpEntry;
 use dbme_core::model::{
     AttachmentRole, AttachmentRow, BlockRow, FieldKind, FieldRow, ObjectRow, ObjectTypeRow, Props,
-    RelationRow, Sensitivity, TypeRow,
+    RelationRow, Sensitivity, TypeRow, ViewRow,
 };
-use dbme_core::op::{Action, Entity, Op, OpKind, Row, RowKey};
+use dbme_core::op::{Action, Entity, Op, OpBody, OpKind, Row, RowKey};
+use dbme_core::query::Query;
 use dbme_core::value::validate_field_value;
 use dbme_core::{ContentHash, Id, IdGenerator, SortKey};
 
 use crate::query::{Reader, Siblings};
 use crate::vault::{Committed, Context};
-use crate::{Result, StoreError, log, rows};
+use crate::{Result, StoreError, log, rows, search};
 
 /// Where to put an item among its siblings.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -136,6 +137,21 @@ pub struct NewRelation {
     pub props: Props,
 }
 
+/// A new saved view (ADR-0020).
+#[allow(missing_docs, reason = "the columns of `views`")]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct NewView {
+    pub name: String,
+    pub renderer: String,
+    pub query: Query,
+    #[serde(default = "empty_object")]
+    pub config: Value,
+    #[serde(default)]
+    pub owner_object_id: Option<Id>,
+}
+
 /// A blob, already in the blob store, to attach to an object.
 #[allow(missing_docs, reason = "the columns of `attachments`")]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -174,6 +190,8 @@ pub struct Txn<'v> {
     first_seq: Option<i64>,
     last_seq: i64,
     changed: BTreeSet<Id>,
+    /// The objects whose text the search index must look at again before this commits.
+    touched: BTreeSet<Id>,
     failed: bool,
 }
 
@@ -197,6 +215,7 @@ impl<'v> Txn<'v> {
             first_seq: None,
             last_seq: 0,
             changed: BTreeSet::new(),
+            touched: BTreeSet::new(),
             failed: false,
         })
     }
@@ -208,6 +227,7 @@ impl<'v> Txn<'v> {
                 "a change in this transaction failed, so none of it was saved",
             ));
         }
+        search::mark_dirty(&self.tx, &self.touched)?;
         self.tx.commit()?;
         Ok(self.first_seq.map(|first_seq| Committed {
             group_id: self.group_id,
@@ -245,13 +265,39 @@ impl<'v> Txn<'v> {
     /// Applies one op and appends it to the log.
     pub(crate) fn apply(&mut self, op: Op) -> Result<()> {
         rows::apply(&self.tx, &op, self.ts)?;
+        self.note_search(&op)?;
         self.log(op)
     }
 
     /// [`Txn::apply`], given `current`: the row `op` targets as this transaction reads it now.
     pub(crate) fn apply_to(&mut self, op: Op, current: Option<&Row>) -> Result<()> {
         rows::apply_to(&self.tx, &op, current, self.ts)?;
+        self.note_search(&op)?;
         self.log(op)
+    }
+
+    /// Notes the object whose searchable text `op` may have changed: the object itself, unless it
+    /// only moved, or the object a block belongs to.
+    fn note_search(&mut self, op: &Op) -> Result<()> {
+        let object = match (op.kind().entity(), op.body()) {
+            (Entity::Object, _) if op.kind().action() == Action::Move => None,
+            (Entity::Object, _) => Some(op.key().target_id()),
+            (
+                Entity::Block,
+                OpBody::Create(Row::Block(block)) | OpBody::Delete(Row::Block(block)),
+            ) => Some(block.object_id),
+            (Entity::Block, OpBody::Update(update)) => {
+                match rows::load(&self.tx, &RowKey::Id(Entity::Block, update.id))? {
+                    Some(Row::Block(block)) => Some(block.object_id),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        if let Some(id) = object {
+            self.touched.insert(id);
+        }
+        Ok(())
     }
 
     /// Appends an applied op to the log.
@@ -986,6 +1032,57 @@ impl<'v> Txn<'v> {
         self.guard(|t| {
             let row = t.read().relation(id)?;
             t.apply(Op::delete(Row::Relation(row)))
+        })
+    }
+
+    // Saved views.
+
+    /// Saves a view. Its owner, if any, must be a live object.
+    pub fn create_view(&mut self, new: NewView) -> Result<Id> {
+        self.guard(|t| {
+            if let Some(owner) = new.owner_object_id {
+                t.live_object(owner)?;
+            }
+            let id = t.new_id()?;
+            t.apply(Op::create(Row::View(ViewRow {
+                id,
+                name: new.name,
+                renderer: new.renderer,
+                query_json: new.query,
+                config_json: new.config,
+                owner_object_id: new.owner_object_id,
+                created_at: t.ts,
+                updated_at: t.ts,
+            })))?;
+            Ok(id)
+        })
+    }
+
+    /// Edits a view's name, renderer, query, settings or owner. Returns `false` if nothing
+    /// changed.
+    pub fn update_view(&mut self, id: Id, edit: impl FnOnce(&mut ViewRow)) -> Result<bool> {
+        self.guard(|t| {
+            let before = t.read().view(id)?;
+            let mut after = before.clone();
+            edit(&mut after);
+            if let Some(owner) = after.owner_object_id
+                && after.owner_object_id != before.owner_object_id
+            {
+                t.live_object(owner)?;
+            }
+            t.update(
+                kind(Entity::View, Action::Update)?,
+                Row::View(before),
+                Row::View(after),
+            )
+        })
+    }
+
+    /// Deletes a saved view. Like every change, this can be undone in the same session.
+    pub fn delete_view(&mut self, id: Id) -> Result<()> {
+        self.guard(|t| {
+            let view = t.read().view(id)?;
+            t.apply(Op::delete(Row::View(view)))
         })
     }
 

@@ -10,25 +10,33 @@
 //! All SQL in DataBase.Me lives in this crate.
 
 mod blobs;
+mod compile;
 mod error;
 mod identity;
 mod list;
 mod log;
 mod migrate;
 mod query;
+mod results;
 mod rows;
+mod search;
 mod sql;
 mod txn;
 mod vault;
 mod verify;
 
 pub use blobs::{BlobStore, StoredBlob};
+pub use compile::{Compiled, Select, compile};
 pub use error::{Result, StoreError};
 pub use identity::{IDENTITY_FILE, Identity};
 pub use list::{Backlink, MAX_PAGE, ObjectSummary, ObjectTree, Sort, SortBy, Source, TreeNode};
 pub use migrate::{APPLICATION_ID, SCHEMA_VERSION};
 pub use query::Reader;
-pub use txn::{NewAttachment, NewBlock, NewField, NewObject, NewRelation, NewType, Position, Txn};
+pub use results::FacetBucket;
+pub use search::{SearchHit, match_expression};
+pub use txn::{
+    NewAttachment, NewBlock, NewField, NewObject, NewRelation, NewType, NewView, Position, Txn,
+};
 pub use vault::{
     BLOBS_FOLDER, Committed, DATABASE_FILE, FORMAT_FILE, LOCK_FILE, VAULT_EXTENSION, Vault,
     VaultOptions,
