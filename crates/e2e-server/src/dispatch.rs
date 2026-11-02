@@ -109,6 +109,23 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
         )),
         "backlinks" => ok(api::backlinks(s, arg(args, "id")?)),
         "object_tree" => ok(api::object_tree(s, arg(args, "root")?, arg(args, "limit")?)),
+        "search" => ok(api::search(
+            s,
+            &arg::<String>(args, "text")?,
+            arg(args, "limit")?,
+        )),
+        "objects_query" => ok(api::objects_query(s, &arg(args, "query")?)),
+        "objects_query_count" => ok(api::objects_query_count(s, &arg(args, "query")?)),
+        "facets" => ok(api::facets(
+            s,
+            &arg(args, "query")?,
+            &arg::<String>(args, "field")?,
+        )),
+        "views_list" => ok(api::views_list(s)),
+        "view_get" => ok(api::view_get(s, arg(args, "id")?)),
+        "view_save" => ok(api::view_save(s, arg(args, "view")?)),
+        "view_update" => ok(api::view_update(s, arg(args, "id")?, arg(args, "view")?)),
+        "view_delete" => ok(api::view_delete(s, arg(args, "id")?)),
         "relation_create" => ok(api::relation_create(
             s,
             arg(args, "src")?,

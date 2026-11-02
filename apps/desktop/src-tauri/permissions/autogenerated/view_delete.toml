@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-view-delete"
+description = "Enables the view_delete command without any pre-configured scope."
+commands.allow = ["view_delete"]
+
+[[permission]]
+identifier = "deny-view-delete"
+description = "Denies the view_delete command without any pre-configured scope."
+commands.deny = ["view_delete"]
