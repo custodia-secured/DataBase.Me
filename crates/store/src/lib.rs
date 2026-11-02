@@ -44,6 +44,6 @@ pub use txn::{
 };
 pub use vault::{
     BLOBS_FOLDER, Committed, DATABASE_FILE, FORMAT_FILE, LOCK_FILE, VAULT_EXTENSION, Vault,
-    VaultOptions,
+    VaultMeta, VaultOptions,
 };
 pub use verify::VerifyReport;
