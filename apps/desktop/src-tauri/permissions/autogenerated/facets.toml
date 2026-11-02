@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-facets"
+description = "Enables the facets command without any pre-configured scope."
+commands.allow = ["facets"]
+
+[[permission]]
+identifier = "deny-facets"
+description = "Denies the facets command without any pre-configured scope."
+commands.deny = ["facets"]

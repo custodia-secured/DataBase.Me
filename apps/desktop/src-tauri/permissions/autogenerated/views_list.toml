@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-views-list"
+description = "Enables the views_list command without any pre-configured scope."
+commands.allow = ["views_list"]
+
+[[permission]]
+identifier = "deny-views-list"
+description = "Denies the views_list command without any pre-configured scope."
+commands.deny = ["views_list"]

@@ -1,0 +1,30 @@
+{
+  "about": "results per type",
+  "query": {
+    "from": {
+      "types": [],
+      "under": "01K9T00000000000000000000H"
+    },
+    "where": [
+      {
+        "field": "status",
+        "op": "eq",
+        "value": "doing"
+      }
+    ],
+    "search": null,
+    "related_to": null,
+    "sort": {
+      "by": "relevance",
+      "field": null,
+      "descending": false
+    },
+    "limit": 50,
+    "offset": 0
+  },
+  "select": "facet_types",
+  "field": "",
+  "types": [],
+  "sql": "SELECT ot.type_id, count(*) FROM (SELECT o.id FROM objects o WHERE o.deleted_at IS NULL AND o.id IN (WITH RECURSIVE below(id) AS (SELECT id FROM objects WHERE parent_id = ? UNION ALL SELECT c.id FROM objects c JOIN below ON c.parent_id = below.id) SELECT id FROM below) AND json_extract(o.props_json, ?) = ?) q JOIN object_types ot ON ot.object_id = q.id GROUP BY ot.type_id ORDER BY 2 DESC, 1 LIMIT 50",
+  "params": ["01K9T00000000000000000000H", "$.status", "doing"]
+}

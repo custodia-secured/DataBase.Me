@@ -28,6 +28,11 @@ async function checkMapCommands(): Promise<void> {
   await unwrap(commands.relationTrash(relation));
   const after = await unwrap(commands.objectTree(root, 10));
   if (after.relations.length !== 0) throw new Error("the trashed relation is still on the map");
+  // Search (ADR-0020): the index has caught up with the objects made just now.
+  const hits = await unwrap(commands.search("map lea", 5));
+  if (hits[0]?.summary.object.id !== leaf) {
+    throw new Error(`search for the new leaf found ${String(hits.length)} other objects`);
+  }
 }
 
 /**

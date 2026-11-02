@@ -1,0 +1,24 @@
+{
+  "about": "search text becomes quoted terms with a prefix on the last, ranked by BM25",
+  "query": {
+    "from": {
+      "types": [],
+      "under": null
+    },
+    "where": [],
+    "search": "mind ma",
+    "related_to": null,
+    "sort": {
+      "by": "relevance",
+      "field": null,
+      "descending": false
+    },
+    "limit": 50,
+    "offset": 0
+  },
+  "select": "ids",
+  "field": "",
+  "types": [],
+  "sql": "SELECT o.id FROM fts CROSS JOIN search_text st ON st.doc = fts.rowid CROSS JOIN objects o ON o.id = st.object_id WHERE fts MATCH ? AND o.deleted_at IS NULL ORDER BY bm25(fts, 10.0, 1.0, 2.0), o.id LIMIT ? OFFSET ?",
+  "params": ["\"mind\" \"ma\"*", 50, 0]
+}

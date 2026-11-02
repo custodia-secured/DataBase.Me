@@ -34,3 +34,10 @@ All notable changes to DataBase.Me are recorded here. The format follows
   rename, reorder, reparent, trash, fold and relate by mouse, keyboard or touch, with undo, live
   across views. Far away, a canvas draws the whole map as plain boxes. A new `related` relation
   type, and the `object_tree`, `relation_create` and `relation_trash` commands; ADR-0019.
+- M4 search and query: full-text search over titles, bodies and field values (SQLite FTS5, kept in
+  step with every change and its undo), ranked, with snippets; the query DSL (`from`, `where`,
+  `search`, `related_to`, `sort`, `limit`), compiled to SQL with golden tests; facets per type and
+  per field value; saved views, written through the op log; the command palette (Ctrl+K) with
+  commands behind `>`; the results surface that narrows a query with facet chips and saves it as a
+  view; a 100,000-object search benchmark in the budget job. Migration 2 adds `views`,
+  `search_dirty`, `search_text` and `fts`. Nine new commands; ADR-0020.

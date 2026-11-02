@@ -1,0 +1,116 @@
+{
+  "about": "one condition per comparison, on fields and on columns",
+  "query": {
+    "from": {
+      "types": [],
+      "under": null
+    },
+    "where": [
+      {
+        "field": "status",
+        "op": "eq",
+        "value": "doing"
+      },
+      {
+        "field": "status",
+        "op": "ne",
+        "value": "done"
+      },
+      {
+        "field": "estimate",
+        "op": "lt",
+        "value": 3
+      },
+      {
+        "field": "estimate",
+        "op": "le",
+        "value": 3.5
+      },
+      {
+        "field": "$created_at",
+        "op": "gt",
+        "value": 1700000000000
+      },
+      {
+        "field": "$updated_at",
+        "op": "ge",
+        "value": 1700000000000
+      },
+      {
+        "field": "$title",
+        "op": "contains",
+        "value": "plan"
+      },
+      {
+        "field": "$summary",
+        "op": "starts_with",
+        "value": "Re"
+      },
+      {
+        "field": "due",
+        "op": "is_empty",
+        "value": null
+      },
+      {
+        "field": "owner",
+        "op": "is_not_empty",
+        "value": null
+      },
+      {
+        "field": "status",
+        "op": "in",
+        "value": ["todo", "doing"]
+      },
+      {
+        "field": "tags",
+        "op": "has",
+        "value": "urgent"
+      },
+      {
+        "field": "done",
+        "op": "eq",
+        "value": true
+      }
+    ],
+    "search": null,
+    "related_to": null,
+    "sort": {
+      "by": "created",
+      "field": null,
+      "descending": false
+    },
+    "limit": 50,
+    "offset": 0
+  },
+  "select": "ids",
+  "field": "",
+  "types": [],
+  "sql": "SELECT o.id FROM objects o WHERE o.deleted_at IS NULL AND json_extract(o.props_json, ?) = ? AND json_extract(o.props_json, ?) IS NOT ? AND json_extract(o.props_json, ?) < ? AND json_extract(o.props_json, ?) <= ? AND o.created_at > ? AND o.updated_at >= ? AND instr(lower(o.title), lower(?)) > 0 AND substr(lower(o.summary), 1, length(?)) = lower(?) AND (json_extract(o.props_json, ?) IS NULL OR json_extract(o.props_json, ?) = '') AND (json_extract(o.props_json, ?) IS NOT NULL AND json_extract(o.props_json, ?) != '') AND json_extract(o.props_json, ?) IN (SELECT value FROM json_each(?)) AND EXISTS (SELECT 1 FROM json_each(json_extract(o.props_json, ?)) WHERE value = ?) AND json_extract(o.props_json, ?) = ? ORDER BY o.created_at, o.id LIMIT ? OFFSET ?",
+  "params": [
+    "$.status",
+    "doing",
+    "$.status",
+    "done",
+    "$.estimate",
+    3,
+    "$.estimate",
+    3.5,
+    1700000000000,
+    1700000000000,
+    "plan",
+    "Re",
+    "Re",
+    "$.due",
+    "$.due",
+    "$.owner",
+    "$.owner",
+    "$.status",
+    "[\"todo\",\"doing\"]",
+    "$.tags",
+    "urgent",
+    "$.done",
+    1,
+    50,
+    0
+  ]
+}

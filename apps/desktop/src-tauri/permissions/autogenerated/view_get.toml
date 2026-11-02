@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-view-get"
+description = "Enables the view_get command without any pre-configured scope."
+commands.allow = ["view_get"]
+
+[[permission]]
+identifier = "deny-view-get"
+description = "Denies the view_get command without any pre-configured scope."
+commands.deny = ["view_get"]

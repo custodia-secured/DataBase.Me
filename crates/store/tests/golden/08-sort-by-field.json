@@ -1,0 +1,24 @@
+{
+  "about": "sorting by a field puts objects without a value last",
+  "query": {
+    "from": {
+      "types": [],
+      "under": null
+    },
+    "where": [],
+    "search": null,
+    "related_to": null,
+    "sort": {
+      "by": "field",
+      "field": "due",
+      "descending": true
+    },
+    "limit": 5,
+    "offset": 0
+  },
+  "select": "ids",
+  "field": "",
+  "types": [],
+  "sql": "SELECT o.id FROM objects o WHERE o.deleted_at IS NULL ORDER BY (json_extract(o.props_json, ?) IS NULL), json_extract(o.props_json, ?) DESC, o.id DESC LIMIT ? OFFSET ?",
+  "params": ["$.due", "$.due", 5, 0]
+}

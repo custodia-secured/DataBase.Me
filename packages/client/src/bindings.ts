@@ -56,6 +56,24 @@ export const commands = {
 	backlinks: (id: Id) => typedError<Backlink_Serialize[], IpcError>(__TAURI_INVOKE("backlinks", { id })),
 	/**  `root` and up to `limit` objects in all from below it, with the relations among them. */
 	objectTree: (root: Id, limit: number) => typedError<ObjectTree_Serialize, IpcError>(__TAURI_INVOKE("object_tree", { root, limit })),
+	/**  Up to `limit` live objects matching `text` anywhere, best match first, each with a snippet. */
+	search: (text: string, limit: number) => typedError<SearchHit_Serialize[], IpcError>(__TAURI_INVOKE("search", { text, limit })),
+	/**  The results of a query, in its order, from its offset and up to its limit. */
+	objectsQuery: (query: Query_Deserialize) => typedError<ObjectSummary_Serialize[], IpcError>(__TAURI_INVOKE("objects_query", { query })),
+	/**  How many results a query has in all. */
+	objectsQueryCount: (query: Query_Deserialize) => typedError<number, IpcError>(__TAURI_INVOKE("objects_query_count", { query })),
+	/**  The values of `field` among a query's results and how many have each; `$type` for the types. */
+	facets: (query: Query_Deserialize, field: string) => typedError<FacetBucket[], IpcError>(__TAURI_INVOKE("facets", { query, field })),
+	/**  Every saved view, by name. */
+	viewsList: () => typedError<ViewRow_Serialize[], IpcError>(__TAURI_INVOKE("views_list")),
+	/**  A saved view. */
+	viewGet: (id: Id) => typedError<ViewRow_Serialize, IpcError>(__TAURI_INVOKE("view_get", { id })),
+	/**  Saves a view and returns its ID. */
+	viewSave: (view: NewView_Deserialize) => typedError<Id, IpcError>(__TAURI_INVOKE("view_save", { view })),
+	/**  Replaces a saved view's name, renderer, query, settings and owner. */
+	viewUpdate: (id: Id, view: NewView_Deserialize) => typedError<boolean, IpcError>(__TAURI_INVOKE("view_update", { id, view })),
+	/**  Deletes a saved view. Undo brings it back. */
+	viewDelete: (id: Id) => typedError<null, IpcError>(__TAURI_INVOKE("view_delete", { id })),
 	/**  Relates `src` to `dst`, or returns the relation that already does. */
 	relationCreate: (src: Id, dst: Id) => typedError<Id, IpcError>(__TAURI_INVOKE("relation_create", { src, dst })),
 	/**  Moves a relation to the Trash. Returns `false` if it was already there. */
@@ -331,8 +349,75 @@ export type Committed_Serialize = {
 	changed: Id[],
 };
 
+/**  How a condition compares a value. */
+export type Compare = 
+/**  Equal to the value. */
+"eq" | 
+/**  Not equal to the value, or absent. */
+"ne" | 
+/**  Less than the value. Absent values never match. */
+"lt" | 
+/**  At most the value. */
+"le" | 
+/**  Greater than the value. */
+"gt" | 
+/**  At least the value. */
+"ge" | 
+/**  Text that contains the value, ignoring case. */
+"contains" | 
+/**  Text that starts with the value, ignoring case. */
+"starts_with" | 
+/**  Absent, or empty text. Takes no value. */
+"is_empty" | 
+/**  Present and not empty text. Takes no value. */
+"is_not_empty" | 
+/**  Equal to one of the values in a list. */
+"in" | 
+/**  A list (such as a multi-select field) that holds the value. */
+"has";
+
+/**  One thing that must hold for every result. */
+export type Condition = Condition_Serialize | Condition_Deserialize;
+
+/**  One thing that must hold for every result. */
+export type Condition_Deserialize = {
+	/**  A built-in column ([`COLUMNS`]) or a field key. */
+	field: string,
+	/**  How to compare. */
+	op: Compare,
+	/**  What to compare with; `null` for comparisons that take no value. */
+	value?: Value,
+};
+
+/**  One thing that must hold for every result. */
+export type Condition_Serialize = {
+	/**  A built-in column ([`COLUMNS`]) or a field key. */
+	field: string,
+	/**  How to compare. */
+	op: Compare,
+	/**  What to compare with; `null` for comparisons that take no value. */
+	value: Value,
+};
+
 /**  A hash with its algorithm, for example `blake3:af13…` (64 hex digits). */
 export type ContentHash = string;
+
+/**  Which end of a relation the results are. */
+export type Direction = 
+/**  Results are related to the object in either direction. */
+"either" | 
+/**  Results are what the object's relations point to. */
+"outgoing" | 
+/**  Results are what points to the object. */
+"incoming";
+
+/**  One value among a query's results, and how many of them have it. */
+export type FacetBucket = {
+	/**  The value: a type ID for the type facet, otherwise a field value. */
+	value: Value,
+	/**  How many results have it. */
+	count: number,
+};
 
 /**  The kinds a field can have (FORMAT.md §3.3). */
 export type FieldKind = "text" | "rich_text" | "number" | "currency" | "boolean" | "date" | "datetime" | "duration" | "select" | "multi_select" | "relation" | "url" | "email" | "phone" | "geo" | "file" | "rating" | "formula" | "rollup" | "json";
@@ -347,6 +432,25 @@ export type FieldRow = {
 	options_json: Value,
 	required: boolean,
 	sort_order: number,
+};
+
+/**  Where a query looks. */
+export type From = From_Serialize | From_Deserialize;
+
+/**  Where a query looks. */
+export type From_Deserialize = {
+	/**  Objects of any of these types, or of types that extend them. Empty: every type and none. */
+	types?: Id[],
+	/**  Objects anywhere below this one in the hierarchy, not counting itself. */
+	under?: Id | null,
+};
+
+/**  Where a query looks. */
+export type From_Serialize = {
+	/**  Objects of any of these types, or of types that extend them. Empty: every type and none. */
+	types: Id[],
+	/**  Objects anywhere below this one in the hierarchy, not counting itself. */
+	under: Id | null,
 };
 
 /**  A ULID. Sorts by creation time; safe in file names and block anchors. */
@@ -437,6 +541,27 @@ export type NewObject_Serialize = {
 	geo_lat: number | null,
 	geo_lon: number | null,
 	sensitivity: Sensitivity,
+};
+
+/**  A new saved view (ADR-0020). */
+export type NewView = NewView_Serialize | NewView_Deserialize;
+
+/**  A new saved view (ADR-0020). */
+export type NewView_Deserialize = {
+	name: string,
+	renderer: string,
+	query: Query_Deserialize,
+	config?: Value,
+	owner_object_id?: Id | null,
+};
+
+/**  A new saved view (ADR-0020). */
+export type NewView_Serialize = {
+	name: string,
+	renderer: string,
+	query: Query_Serialize,
+	config: Value,
+	owner_object_id: Id | null,
 };
 
 /**  An object: the unit of everything in a vault. */
@@ -541,6 +666,68 @@ export type Position =
 /**  Just after this sibling. */
 ({ after: Id }) & { before?: never };
 
+/**  A query over the live objects of a vault. */
+export type Query = Query_Serialize | Query_Deserialize;
+
+/**  A query over the live objects of a vault. */
+export type Query_Deserialize = {
+	/**  Where to look. */
+	from?: From_Deserialize,
+	/**  What must hold, all of it. */
+	where?: Condition_Deserialize[],
+	/**  Text the object must match in its title, body or field values. */
+	search?: string | null,
+	/**  An object the results must be related to. */
+	related_to?: RelatedTo_Deserialize | null,
+	/**  The order. */
+	sort?: Sort_Deserialize,
+	/**  How many results at most, up to [`MAX_LIMIT`]. */
+	limit?: number,
+	/**  How many results to skip. */
+	offset?: number,
+};
+
+/**  A query over the live objects of a vault. */
+export type Query_Serialize = {
+	/**  Where to look. */
+	from: From_Serialize,
+	/**  What must hold, all of it. */
+	where: Condition_Serialize[],
+	/**  Text the object must match in its title, body or field values. */
+	search: string | null,
+	/**  An object the results must be related to. */
+	related_to: RelatedTo_Serialize | null,
+	/**  The order. */
+	sort: Sort_Serialize,
+	/**  How many results at most, up to [`MAX_LIMIT`]. */
+	limit: number,
+	/**  How many results to skip. */
+	offset: number,
+};
+
+/**  Results must have a live relation with this object. */
+export type RelatedTo = RelatedTo_Serialize | RelatedTo_Deserialize;
+
+/**  Results must have a live relation with this object. */
+export type RelatedTo_Deserialize = {
+	/**  The object. */
+	id: Id,
+	/**  Only relations of this type; `None` for any. */
+	rel_type?: string | null,
+	/**  Which end the results are. */
+	direction?: Direction,
+};
+
+/**  Results must have a live relation with this object. */
+export type RelatedTo_Serialize = {
+	/**  The object. */
+	id: Id,
+	/**  Only relations of this type; `None` for any. */
+	rel_type: string | null,
+	/**  Which end the results are. */
+	direction: Direction,
+};
+
 /**  A typed, directed link between two objects. */
 export type RelationRow = RelationRow_Serialize | RelationRow_Deserialize;
 
@@ -572,6 +759,35 @@ export type RelationRow_Serialize = {
 	deleted_at: number | null,
 };
 
+/**  One result of a search. */
+export type SearchHit = SearchHit_Serialize | SearchHit_Deserialize;
+
+/**  One result of a search. */
+export type SearchHit_Deserialize = {
+	/**  The object. */
+	summary: ObjectSummary_Deserialize,
+	/**
+	 *  A piece of the text around the match, with the matching words in `[` and `]`. Empty when
+	 *  the search had no words.
+	 */
+	snippet: string,
+	/**  How well it matched: lower is better, as FTS5's BM25 reports it. Zero without words. */
+	rank: number | null,
+};
+
+/**  One result of a search. */
+export type SearchHit_Serialize = {
+	/**  The object. */
+	summary: ObjectSummary_Serialize,
+	/**
+	 *  A piece of the text around the match, with the matching words in `[` and `]`. Empty when
+	 *  the search had no words.
+	 */
+	snippet: string,
+	/**  How well it matched: lower is better, as FTS5's BM25 reports it. Zero without words. */
+	rank: number | null,
+};
+
 /**  How carefully an object must be handled, for example by AI features (M11). */
 export type Sensitivity = 
 /**  No special handling. */
@@ -584,7 +800,7 @@ export type Sort = Sort_Serialize | Sort_Deserialize;
 
 /**  What a list is ordered by. */
 export type SortBy = 
-/**  The order people gave the children (sort keys), or creation order for a type. */
+/**  The order people gave the children (sort keys), or creation order otherwise. */
 "manual" | 
 /**  The title, ignoring case. */
 "title" | 
@@ -593,7 +809,12 @@ export type SortBy =
 /**  When the object last changed. */
 "updated" | 
 /**  The value of a field. Objects without a value come last. */
-"field";
+"field" | 
+/**
+ *  How well the object matches the search text; without search text, most recently changed
+ *  first.
+ */
+"relevance";
 
 /**  An order key. Siblings sort by key, then by ID when keys are equal. */
 export type SortKey = string;
@@ -730,6 +951,42 @@ export type VaultInfo = {
 	can_undo: boolean,
 	/**  Whether there is a step to redo. */
 	can_redo: boolean,
+};
+
+/**
+ *  A saved view: a query, the renderer that shows its results and that renderer's settings
+ *  (ADR-0020).
+ */
+export type ViewRow = ViewRow_Serialize | ViewRow_Deserialize;
+
+/**
+ *  A saved view: a query, the renderer that shows its results and that renderer's settings
+ *  (ADR-0020).
+ */
+export type ViewRow_Deserialize = {
+	id: Id,
+	name: string,
+	renderer: string,
+	query_json: Query_Deserialize,
+	config_json: Value,
+	owner_object_id?: Id | null,
+	created_at: number,
+	updated_at: number,
+};
+
+/**
+ *  A saved view: a query, the renderer that shows its results and that renderer's settings
+ *  (ADR-0020).
+ */
+export type ViewRow_Serialize = {
+	id: Id,
+	name: string,
+	renderer: string,
+	query_json: Query_Serialize,
+	config_json: Value,
+	owner_object_id: Id | null,
+	created_at: number,
+	updated_at: number,
 };
 
 /* Tauri Specta runtime */

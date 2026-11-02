@@ -858,6 +858,227 @@ li.ProseMirror-selectednode::after {
   gap: var(--dbme-space-2);
 }
 
+/* --- Search (ADR-0020) --------------------------------------------------------------------- */
+
+.dbme-dialog--palette {
+  width: min(40rem, calc(100vw - 2rem));
+  max-width: none;
+}
+
+.dbme-palette {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+}
+
+.dbme-palette__input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 1rem;
+}
+
+.dbme-palette__list {
+  max-height: min(24rem, 50vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.dbme-palette__option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--dbme-space-1) var(--dbme-space-2);
+  border-radius: var(--dbme-radius);
+  cursor: pointer;
+}
+
+.dbme-palette__option:hover {
+  background: var(--dbme-color-hover);
+}
+
+.dbme-palette__option.is-active {
+  background: var(--dbme-color-selected);
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-palette__label {
+  font-weight: 600;
+}
+
+.dbme-snippet {
+  overflow: hidden;
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dbme-snippet mark {
+  background: transparent;
+  color: var(--dbme-color-fg);
+  font-weight: 600;
+}
+
+.dbme-palette__hint {
+  margin: 0;
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.75rem;
+}
+
+.dbme-results {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--dbme-space-3);
+  min-height: 0;
+  padding: var(--dbme-space-3);
+  overflow: auto;
+}
+
+.dbme-results__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-2);
+  align-items: center;
+}
+
+.dbme-results__title {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.dbme-results__count {
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.875rem;
+}
+
+.dbme-results__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-1);
+  margin-inline-start: auto;
+}
+
+.dbme-results__name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-2);
+  align-items: center;
+}
+
+.dbme-results__facets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-1);
+}
+
+.dbme-chip {
+  display: inline-flex;
+  gap: var(--dbme-space-1);
+  align-items: center;
+  padding: 2px var(--dbme-space-2);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: 999px;
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.dbme-chip:hover {
+  background: var(--dbme-color-hover);
+}
+
+.dbme-chip[aria-pressed="true"] {
+  border-color: var(--dbme-color-accent);
+  background: var(--dbme-color-selected);
+  font-weight: 600;
+}
+
+.dbme-results__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dbme-results__row {
+  display: flex;
+  gap: var(--dbme-space-2);
+  align-items: center;
+  width: 100%;
+  padding: var(--dbme-space-2);
+  border: 0;
+  border-radius: var(--dbme-radius);
+  background: transparent;
+  color: var(--dbme-color-fg);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.dbme-results__row:hover {
+  background: var(--dbme-color-hover);
+}
+
+.dbme-results__icon {
+  flex: 0 0 auto;
+  color: var(--dbme-color-fg-muted);
+}
+
+.dbme-results__row-title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dbme-results__row-type {
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.8125rem;
+}
+
+.dbme-views {
+  flex: 0 0 auto;
+  padding: var(--dbme-space-2);
+  border-top: 1px solid var(--dbme-color-border);
+}
+
+.dbme-views__list {
+  margin: var(--dbme-space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dbme-views__item {
+  display: flex;
+  gap: var(--dbme-space-1);
+  align-items: center;
+  width: 100%;
+  min-height: 2rem;
+  padding: 0 var(--dbme-space-2);
+  border: 0;
+  border-radius: var(--dbme-radius);
+  background: transparent;
+  color: var(--dbme-color-fg);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.dbme-views__item:hover {
+  background: var(--dbme-color-hover);
+}
+
+.dbme-views__item.is-selected {
+  background: var(--dbme-color-selected);
+  font-weight: 600;
+}
+
 /* The mind map (ADR-0019). Nodes have a fixed size, so the layout needs no measuring pass. */
 .dbme-map {
   display: flex;
