@@ -15,7 +15,14 @@ use crate::{Result, StoreError};
 pub const APPLICATION_ID: i32 = 0x4442_4D45;
 
 /// The migrations, oldest first. Migration `n` (counting from 1) brings `user_version` to `n`.
-const MIGRATIONS: &[&str] = &[include_str!("migrations/0001_core.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("migrations/0001_core.sql"),
+    include_str!("migrations/0002_search.sql"),
+];
+
+/// The migration that adds the search index. A vault that reaches it with objects already in it
+/// gets its index built from them, in the migration's own transaction.
+const SEARCH_MIGRATION: u32 = 2;
 
 /// The schema version this build writes: the number of the last migration.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -64,6 +71,9 @@ pub(crate) fn migrate(conn: &mut Connection, path: &Path) -> Result<()> {
     for (number, sql) in (1..).zip(MIGRATIONS).skip(version as usize) {
         let tx = conn.transaction()?;
         tx.execute_batch(sql)?;
+        if number == SEARCH_MIGRATION {
+            crate::search::rebuild(&tx)?;
+        }
         tx.pragma_update(None, "user_version", number)?;
         tx.commit()?;
     }

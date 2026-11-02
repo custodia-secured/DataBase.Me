@@ -23,7 +23,7 @@ use serde_json::{Map, Value};
 
 use crate::model::{
     AttachmentRole, AttachmentRow, BlockRow, FieldRow, ObjectRow, ObjectTypeRow, RelationRow,
-    TypeRow,
+    TypeRow, ViewRow,
 };
 use crate::{ContentHash, CoreError, Id};
 
@@ -38,11 +38,12 @@ pub enum Entity {
     Block,
     Relation,
     Attachment,
+    View,
 }
 
 impl Entity {
     /// Every entity.
-    pub const ALL: [Entity; 7] = [
+    pub const ALL: [Entity; 8] = [
         Self::Type,
         Self::Field,
         Self::Object,
@@ -50,6 +51,7 @@ impl Entity {
         Self::Block,
         Self::Relation,
         Self::Attachment,
+        Self::View,
     ];
 
     /// The name used in op kinds.
@@ -62,6 +64,7 @@ impl Entity {
             Self::Block => "block",
             Self::Relation => "relation",
             Self::Attachment => "attachment",
+            Self::View => "view",
         }
     }
 
@@ -71,7 +74,7 @@ impl Entity {
 
     /// Whether the table has an `updated_at` column, which every update sets to the op's time.
     pub fn has_updated_at(self) -> bool {
-        matches!(self, Self::Type | Self::Object | Self::Block)
+        matches!(self, Self::Type | Self::Object | Self::Block | Self::View)
     }
 }
 
@@ -206,6 +209,13 @@ impl OpKind {
             (Entity::Block, Action::Move) => &["parent_block_id", "sort_key"],
             (Entity::Block, Action::Update) => &["kind", "content_json"],
             (Entity::Relation, Action::Update) => &["label", "props_json"],
+            (Entity::View, Action::Update) => &[
+                "name",
+                "renderer",
+                "query_json",
+                "config_json",
+                "owner_object_id",
+            ],
             (_, Action::Trash | Action::Restore) => &["deleted_at"],
             _ => &[],
         }
@@ -290,6 +300,7 @@ pub enum Row {
     Block(BlockRow),
     Relation(RelationRow),
     Attachment(AttachmentRow),
+    View(ViewRow),
 }
 
 fn to_map<T: Serialize>(row: &T) -> Result<Map<String, Value>, CoreError> {
@@ -313,6 +324,7 @@ impl Row {
             Self::Block(_) => Entity::Block,
             Self::Relation(_) => Entity::Relation,
             Self::Attachment(_) => Entity::Attachment,
+            Self::View(_) => Entity::View,
         }
     }
 
@@ -324,6 +336,7 @@ impl Row {
             Self::Object(r) => RowKey::Id(Entity::Object, r.id),
             Self::Block(r) => RowKey::Id(Entity::Block, r.id),
             Self::Relation(r) => RowKey::Id(Entity::Relation, r.id),
+            Self::View(r) => RowKey::Id(Entity::View, r.id),
             Self::ObjectType(r) => RowKey::ObjectType {
                 object_id: r.object_id,
                 type_id: r.type_id,
@@ -346,6 +359,7 @@ impl Row {
             Self::Block(r) => r.validate(),
             Self::Relation(r) => r.validate(),
             Self::Attachment(r) => r.validate(),
+            Self::View(r) => r.validate(),
         }
     }
 
@@ -359,6 +373,7 @@ impl Row {
             Self::Block(r) => serde_json::to_string(r),
             Self::Relation(r) => serde_json::to_string(r),
             Self::Attachment(r) => serde_json::to_string(r),
+            Self::View(r) => serde_json::to_string(r),
         }?)
     }
 
@@ -376,6 +391,7 @@ impl Row {
             Entity::Block => Self::Block(serde_json::from_value(value)?),
             Entity::Relation => Self::Relation(serde_json::from_value(value)?),
             Entity::Attachment => Self::Attachment(serde_json::from_value(value)?),
+            Entity::View => Self::View(serde_json::from_value(value)?),
         })
     }
 
@@ -388,6 +404,7 @@ impl Row {
             Self::Block(r) => to_map(r),
             Self::Relation(r) => to_map(r),
             Self::Attachment(r) => to_map(r),
+            Self::View(r) => to_map(r),
         }
     }
 
@@ -399,6 +416,7 @@ impl Row {
                 Self::Type(r) => r.updated_at = 0,
                 Self::Object(r) => r.updated_at = 0,
                 Self::Block(r) => r.updated_at = 0,
+                Self::View(r) => r.updated_at = 0,
                 _ => {}
             }
             row
@@ -807,7 +825,7 @@ impl Op {
 mod tests {
     use super::*;
     use crate::SortKey;
-    use crate::model::tests::{field, id, object, type_row};
+    use crate::model::tests::{field, id, object, type_row, view};
     use crate::model::{FieldKind, Sensitivity};
     use serde_json::json;
 
@@ -847,6 +865,9 @@ mod tests {
             "relation.delete",
             "attachment.create",
             "attachment.delete",
+            "view.create",
+            "view.update",
+            "view.delete",
         ];
         for text in all {
             let k = kind(text);
@@ -866,6 +887,8 @@ mod tests {
             "attachment.move",
             "type.trash",
             "field.move",
+            "view.trash",
+            "view.move",
             ".create",
         ] {
             assert!(
@@ -1111,6 +1134,7 @@ mod tests {
                 blob_size: 1,
                 mime: None,
             })),
+            Op::create(Row::View(view(7))),
             Op::update(kind("object.move"), update).unwrap(),
         ];
         for op in ops {
@@ -1283,5 +1307,46 @@ mod tests {
         let mut sensitive = object(1);
         sensitive.sensitivity = Sensitivity::Sensitive;
         assert!(!Row::Object(sensitive).same_ignoring_updated_at(&obj(1)));
+    }
+
+    #[test]
+    fn views_update_like_the_other_rows_with_updated_at() {
+        let before = view(7);
+        let mut after = view(7);
+        after.name = "Open tasks".into();
+        after.query_json.search = Some("tasks".into());
+        after.updated_at = 9;
+        let op = Op::between(
+            kind("view.update"),
+            &Row::View(before.clone()),
+            &Row::View(after),
+        )
+        .unwrap()
+        .unwrap();
+        let OpBody::Update(update) = op.body() else {
+            panic!()
+        };
+        assert_eq!(
+            update.set.keys().collect::<Vec<_>>(),
+            ["name", "query_json"]
+        );
+        let Some(Row::View(applied)) = op.apply(Some(&Row::View(before.clone())), 9).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(applied.updated_at, 9);
+        let mut touched = view(7);
+        touched.updated_at = 50;
+        assert!(Row::View(touched).same_ignoring_updated_at(&Row::View(before)));
+
+        let mut blank = view(8);
+        blank.name = "  ".into();
+        assert!(matches!(
+            Op::create(Row::View(blank)).apply(None, 1),
+            Err(CoreError::Invalid { .. })
+        ));
+        let mut bad_query = view(9);
+        bad_query.query_json.limit = 0;
+        assert!(Op::create(Row::View(bad_query)).apply(None, 1).is_err());
     }
 }

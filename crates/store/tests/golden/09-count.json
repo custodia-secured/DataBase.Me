@@ -1,0 +1,24 @@
+{
+  "about": "a count ignores the order and the page",
+  "query": {
+    "from": {
+      "types": ["01K9T0000000000000000000T1"],
+      "under": null
+    },
+    "where": [],
+    "search": "\"mind map\" tool",
+    "related_to": null,
+    "sort": {
+      "by": "relevance",
+      "field": null,
+      "descending": false
+    },
+    "limit": 3,
+    "offset": 9
+  },
+  "select": "count",
+  "field": "",
+  "types": [],
+  "sql": "SELECT count(*) FROM (SELECT o.id FROM fts CROSS JOIN search_text st ON st.doc = fts.rowid CROSS JOIN objects o ON o.id = st.object_id WHERE fts MATCH ? AND o.deleted_at IS NULL AND EXISTS (SELECT 1 FROM object_types ot WHERE ot.object_id = o.id AND ot.type_id IN (SELECT value FROM json_each(?))))",
+  "params": ["\"mind map\" \"tool\"*", "[\"01K9T0000000000000000000T1\"]"]
+}

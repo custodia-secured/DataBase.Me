@@ -13,6 +13,7 @@ pub mod hash;
 pub mod id;
 pub mod model;
 pub mod op;
+pub mod query;
 pub mod seed;
 pub mod sort_key;
 pub mod value;

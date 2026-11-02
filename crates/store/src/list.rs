@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use dbme_core::model::{BlockRow, FieldRow, ObjectRow, RelationRow, is_identifier};
+use dbme_core::model::{BlockRow, FieldRow, ObjectRow, RelationRow};
 use dbme_core::{ContentHash, CoreError, Id};
 
 use crate::query::{Reader, count};
@@ -38,37 +38,7 @@ pub enum Source {
     },
 }
 
-/// What a list is ordered by.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "specta", derive(specta::Type))]
-pub enum SortBy {
-    /// The order people gave the children (sort keys), or creation order for a type.
-    #[default]
-    Manual,
-    /// The title, ignoring case.
-    Title,
-    /// When the object was created.
-    Created,
-    /// When the object last changed.
-    Updated,
-    /// The value of a field. Objects without a value come last.
-    Field,
-}
-
-/// The order of a list. Ties are broken by ID, in the same direction.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "specta", derive(specta::Type))]
-pub struct Sort {
-    /// What to order by.
-    pub by: SortBy,
-    /// The field's key, when `by` is [`SortBy::Field`].
-    #[serde(default)]
-    pub field: Option<String>,
-    /// Largest first.
-    #[serde(default)]
-    pub descending: bool,
-}
+pub use dbme_core::query::{Sort, SortBy};
 
 /// An object with what a list shows beside it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -132,23 +102,20 @@ fn first_id(row: &rusqlite::Row<'_>) -> rusqlite::Result<Id> {
 
 /// The `ORDER BY` terms of `sort` over objects `o`. A field key is bound as `?4`.
 fn order_by(source: Source, sort: &Sort) -> Result<String> {
-    let direction = if sort.descending { " DESC" } else { "" };
+    sort.validate()?;
+    let mut direction = if sort.descending { " DESC" } else { "" };
     let terms = match (sort.by, source) {
         (SortBy::Manual, Source::Children { .. }) => vec!["o.sort_key"],
         (SortBy::Manual, Source::Type { .. }) => vec![],
         (SortBy::Title, _) => vec!["o.title COLLATE NOCASE"],
         (SortBy::Created, _) => vec!["o.created_at"],
         (SortBy::Updated, _) => vec!["o.updated_at"],
-        (SortBy::Field, _) => {
-            if !sort
-                .field
-                .as_deref()
-                .is_some_and(|key| is_identifier(key, 64))
-            {
-                return Err(CoreError::invalid("sort", "sorting by a field needs its key").into());
-            }
-            vec!["o.props_json ->> ?4"]
+        // A page has no search text to rank by, so the best is the most recent.
+        (SortBy::Relevance, _) => {
+            direction = if sort.descending { "" } else { " DESC" };
+            vec!["o.updated_at"]
         }
+        (SortBy::Field, _) => vec!["o.props_json ->> ?4"],
     };
     let mut clause = String::new();
     if sort.by == SortBy::Field {
@@ -166,7 +133,7 @@ fn order_by(source: Source, sort: &Sort) -> Result<String> {
 
 impl Reader<'_> {
     /// `type_id` and every type that extends it, directly or not.
-    fn type_and_subtypes(&self, type_id: Id) -> Result<Vec<Id>> {
+    pub(crate) fn type_and_subtypes(&self, type_id: Id) -> Result<Vec<Id>> {
         self.type_row(type_id)?;
         let mut statement = self.conn.prepare_cached(
             "WITH RECURSIVE sub(id) AS (SELECT ?1 UNION SELECT t.id FROM types t JOIN sub ON t.extends = sub.id) \
@@ -461,6 +428,10 @@ mod tests {
         assert_eq!(
             order_by(of_type, &sort(SortBy::Field, true)).unwrap(),
             "(o.props_json ->> ?4) IS NULL, o.props_json ->> ?4 DESC, o.id DESC"
+        );
+        assert_eq!(
+            order_by(of_type, &sort(SortBy::Relevance, false)).unwrap(),
+            "o.updated_at DESC, o.id DESC"
         );
         let unnamed = Sort {
             by: SortBy::Field,

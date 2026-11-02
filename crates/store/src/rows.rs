@@ -8,7 +8,7 @@ use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use dbme_core::model::{
     AttachmentRole, AttachmentRow, BlockRow, FieldKind, FieldRow, ObjectRow, ObjectTypeRow,
-    RelationRow, Sensitivity, TypeRow,
+    RelationRow, Sensitivity, TypeRow, ViewRow,
 };
 use dbme_core::op::{Entity, Op, Row, RowKey};
 use dbme_core::{CoreError, Id};
@@ -43,6 +43,11 @@ macro_rules! relation_columns {
         "id, src_id, dst_id, rel_type, field_id, src_block_id, label, props_json, created_at, deleted_at"
     };
 }
+macro_rules! view_columns {
+    () => {
+        "id, name, renderer, query_json, config_json, owner_object_id, created_at, updated_at"
+    };
+}
 // The blob's size comes from a subquery rather than a join. Every attachment has its blob (a
 // foreign key), so both give the same rows; a lookup that finds no attachment, the usual case,
 // took a fifth of the time (ADR-0015).
@@ -53,7 +58,8 @@ macro_rules! attachment_select {
     };
 }
 pub(crate) use {
-    attachment_select, block_columns, field_columns, object_columns, relation_columns, type_columns,
+    attachment_select, block_columns, field_columns, object_columns, relation_columns,
+    type_columns, view_columns,
 };
 
 pub(crate) fn type_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TypeRow> {
@@ -132,6 +138,19 @@ pub(crate) fn relation_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<RelationRo
     })
 }
 
+pub(crate) fn view_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<ViewRow> {
+    Ok(ViewRow {
+        id: sql::id(r, 0)?,
+        name: r.get(1)?,
+        renderer: r.get(2)?,
+        query_json: sql::json(r, 3)?,
+        config_json: sql::json(r, 4)?,
+        owner_object_id: sql::optional_id(r, 5)?,
+        created_at: r.get(6)?,
+        updated_at: r.get(7)?,
+    })
+}
+
 pub(crate) fn attachment_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<AttachmentRow> {
     Ok(AttachmentRow {
         object_id: sql::id(r, 0)?,
@@ -201,6 +220,13 @@ pub(crate) fn load(conn: &Connection, key: &RowKey) -> Result<Option<Row>> {
             relation_row,
         )?
         .map(Row::Relation),
+        RowKey::Id(Entity::View, id) => by_id(
+            conn,
+            concat!("SELECT ", view_columns!(), " FROM views WHERE id = ?1"),
+            *id,
+            view_row,
+        )?
+        .map(Row::View),
         RowKey::Id(entity @ (Entity::ObjectType | Entity::Attachment), _) => {
             return Err(not_keyed_by_id(*entity));
         }
@@ -313,6 +339,16 @@ fn values(row: &Row) -> Result<Vec<Value>> {
             r.filename.clone().into(),
             r.mime.clone().into(),
         ],
+        Row::View(r) => vec![
+            id(r.id),
+            r.name.clone().into(),
+            r.renderer.clone().into(),
+            to_json(&r.query_json)?.into(),
+            to_json(&r.config_json)?.into(),
+            optional_id(r.owner_object_id),
+            r.created_at.into(),
+            r.updated_at.into(),
+        ],
     })
 }
 
@@ -360,6 +396,11 @@ fn insert(conn: &Connection, row: &Row) -> Result<()> {
         Entity::Attachment => {
             "INSERT INTO attachments (object_id, blob_hash, role, filename, mime) VALUES (?1, ?2, ?3, ?4, ?5)"
         }
+        Entity::View => concat!(
+            "INSERT INTO views (",
+            view_columns!(),
+            ") VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
+        ),
     };
     let changed = conn
         .prepare_cached(sql)?
@@ -377,6 +418,7 @@ fn update(conn: &Connection, before: &Row, after: &Row) -> Result<()> {
         Row::Object(_) => ("objects", object_columns!()),
         Row::Block(_) => ("blocks", block_columns!()),
         Row::Relation(_) => ("relations", relation_columns!()),
+        Row::View(_) => ("views", view_columns!()),
         Row::ObjectType(_) | Row::Attachment(_) => return Err(not_keyed_by_id(after.entity())),
     };
     let new = values(after)?;
@@ -411,6 +453,7 @@ fn delete(conn: &Connection, key: &RowKey) -> Result<()> {
                 Entity::Object => "DELETE FROM objects WHERE id = ?1",
                 Entity::Block => "DELETE FROM blocks WHERE id = ?1",
                 Entity::Relation => "DELETE FROM relations WHERE id = ?1",
+                Entity::View => "DELETE FROM views WHERE id = ?1",
                 Entity::ObjectType | Entity::Attachment => return Err(not_keyed_by_id(*entity)),
             };
             conn.prepare_cached(sql)?.execute([id.to_string()])?

@@ -1,0 +1,29 @@
+{
+  "about": "types already expanded to their subtypes, and a place in the hierarchy",
+  "query": {
+    "from": {
+      "types": ["01K9T0000000000000000000T1"],
+      "under": "01K9T00000000000000000000H"
+    },
+    "where": [],
+    "search": null,
+    "related_to": null,
+    "sort": {
+      "by": "title",
+      "field": null,
+      "descending": true
+    },
+    "limit": 20,
+    "offset": 40
+  },
+  "select": "ids",
+  "field": "",
+  "types": ["01K9T0000000000000000000T1", "01K9T0000000000000000000T2"],
+  "sql": "SELECT o.id FROM objects o WHERE o.deleted_at IS NULL AND o.id IN (SELECT object_id FROM object_types WHERE type_id IN (SELECT value FROM json_each(?))) AND o.id IN (WITH RECURSIVE below(id) AS (SELECT id FROM objects WHERE parent_id = ? UNION ALL SELECT c.id FROM objects c JOIN below ON c.parent_id = below.id) SELECT id FROM below) ORDER BY o.title COLLATE NOCASE DESC, o.id DESC LIMIT ? OFFSET ?",
+  "params": [
+    "[\"01K9T0000000000000000000T1\",\"01K9T0000000000000000000T2\"]",
+    "01K9T00000000000000000000H",
+    20,
+    40
+  ]
+}
