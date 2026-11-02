@@ -12,9 +12,28 @@ async function until(condition: () => boolean, what: string, timeoutMs = 5000): 
 }
 
 /**
+ * The mind map's commands, each of which the capability file has to grant (ADR-0010): read a tree
+ * with a relation in it, then send the relation to the Trash.
+ */
+async function checkMapCommands(): Promise<void> {
+  const root = await unwrap(commands.objectCreate({ title: "Map root" }));
+  const leaf = await unwrap(commands.objectCreate({ title: "Map leaf", parent_id: root }));
+  const relation = await unwrap(commands.relationCreate(root, leaf));
+  const tree = await unwrap(commands.objectTree(root, 10));
+  if (tree.nodes.length !== 2 || tree.relations[0]?.id !== relation) {
+    throw new Error(
+      `the map's read found ${String(tree.nodes.length)} nodes and ${String(tree.relations.length)} relations`,
+    );
+  }
+  await unwrap(commands.relationTrash(relation));
+  const after = await unwrap(commands.objectTree(root, 10));
+  if (after.relations.length !== 0) throw new Error("the trashed relation is still on the map");
+}
+
+/**
  * The smoke test's launch checks (ADR-0008), run over real IPC: create a vault at `vaultPath`,
- * create an object, undo it, and receive a `vault-changed` event for each change. Throws on the
- * first failure.
+ * create an object, undo it, receive a `vault-changed` event for each change, and use the mind
+ * map's commands. Throws on the first failure.
  */
 export async function runLaunchChecks(vaultPath: string): Promise<void> {
   const changes: Committed_Serialize[] = [];
@@ -43,6 +62,8 @@ export async function runLaunchChecks(vaultPath: string): Promise<void> {
     if (undo?.undo_of !== create.group_id) {
       throw new Error("the undo event does not name the create");
     }
+
+    await checkMapCommands();
   } finally {
     unlisten();
   }
