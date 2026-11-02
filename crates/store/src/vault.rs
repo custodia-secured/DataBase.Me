@@ -174,6 +174,9 @@ impl Vault {
                 }
                 Ok(())
             })?;
+            // The built-in types are where a vault starts: not a step to undo (the stack is
+            // fresh on open anyway) and not a change the files folder has to catch up with.
+            vault.mirror_meta_set(crate::mirror::FULL_REWRITE_NEEDED, None)?;
             Ok(())
         })
     }

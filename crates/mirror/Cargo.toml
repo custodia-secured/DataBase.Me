@@ -12,6 +12,9 @@ dbme-core.workspace = true
 dbme-store.workspace = true
 notify.workspace = true
 notify-debouncer-full.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
