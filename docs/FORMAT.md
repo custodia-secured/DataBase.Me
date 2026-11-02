@@ -430,9 +430,10 @@ exported as read-only JSON.
 
 - `export/schema/types.json`: every type with its fields.
 - `export/views/<view-id>.json`: one file per saved view.
-- `export/data/<Type>.csv`: one CSV per type, one row per object: `id`, `title`, `parent_id`,
-  `created_at`, `updated_at`, then the type's fields in `sort_order`. Multi-valued fields are JSON
-  arrays in a single cell.
+- `export/data/<Type>.csv`: one CSV per type, one row per live (not trashed) object of the type:
+  `id`, `title`, `parent_id`, `created_at`, `updated_at`, then the type's fields in `sort_order`,
+  inherited fields included. Multi-valued fields are JSON arrays in a single cell. RFC 4180
+  quoting, LF line ends.
 
 These files are export-only: a reader for other tools, not a copy of the vault. The **full export**
 adds what makes it one:

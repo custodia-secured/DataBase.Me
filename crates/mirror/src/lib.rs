@@ -10,6 +10,7 @@
 //! in-memory [`MemFs`] and the real [`StdFs`] only has to be a faithful file system.
 
 mod apply;
+mod check;
 mod engine;
 mod error;
 mod fs;
@@ -17,6 +18,7 @@ mod inbound;
 mod resolver;
 mod watcher;
 
+pub use check::{Drift, MirrorCheckReport, check};
 pub use engine::{FileEvent, MAX_RETRIES, Mirror, Outbound, Watcher, schema_of};
 pub use error::{MirrorError, Result};
 pub use fs::{Entry, Fs, MemFs, Stat, StdFs};

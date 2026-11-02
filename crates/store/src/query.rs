@@ -17,6 +17,7 @@ use crate::rows::{
     object_columns, object_row, relation_columns, relation_row, type_columns, type_row,
 };
 use crate::sql::{self, to_json};
+use crate::vault::VaultMeta;
 use crate::{Position, Result, StoreError};
 
 /// Read access to a vault.
@@ -408,6 +409,42 @@ impl Reader<'_> {
             "SELECT key, value FROM vault_meta ORDER BY key",
             [],
             |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+    }
+
+    /// The facts of [`Reader::vault_meta`] as a [`VaultMeta`]: what an export writes to
+    /// `vault_meta.json` (FORMAT.md §7).
+    pub fn vault_meta_record(&self) -> Result<VaultMeta> {
+        let mut map = serde_json::Map::new();
+        for (key, value) in self.vault_meta()? {
+            let typed = match key.as_str() {
+                "created_at" | "format_version" => value
+                    .parse::<i64>()
+                    .map(serde_json::Value::from)
+                    .map_err(|_| {
+                        StoreError::Rule(format!("vault_meta.{key} is not a number: {value}"))
+                    })?,
+                _ => serde_json::Value::String(value),
+            };
+            map.insert(key, typed);
+        }
+        serde_json::from_value(serde_json::Value::Object(map))
+            .map_err(|e| StoreError::Rule(format!("vault_meta is incomplete: {e}")))
+    }
+
+    /// The live (not trashed) objects that have `type_id` as one of their types, by ID. Objects of
+    /// a type that extends it are not included.
+    pub fn objects_of_type(&self, type_id: Id) -> Result<Vec<ObjectRow>> {
+        collect(
+            self.conn,
+            concat!(
+                "SELECT ",
+                object_columns!(),
+                " FROM objects WHERE deleted_at IS NULL AND id IN \
+                 (SELECT object_id FROM object_types WHERE type_id = ?1) ORDER BY id"
+            ),
+            [type_id.to_string()],
+            object_row,
         )
     }
 

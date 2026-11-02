@@ -6,6 +6,7 @@ members = [
   "crates/cli",
   "crates/core",
   "crates/e2e-server",
+  "crates/export",
   "crates/mirror",
   "crates/store",
 ]
@@ -20,6 +21,7 @@ publish = false
 [workspace.dependencies]
 dbme-api = { path = "crates/api" }
 dbme-core = { path = "crates/core" }
+dbme-export = { path = "crates/export" }
 dbme-mirror = { path = "crates/mirror" }
 dbme-store = { path = "crates/store" }
 
