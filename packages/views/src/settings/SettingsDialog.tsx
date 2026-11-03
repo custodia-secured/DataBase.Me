@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Settings and Help (M7, ADR-0027): the vault and how to open or make another, the files folder
- * (its own dialog), the mode, the theme, update checks, "Set up again", and Help: the version,
+ * Settings and Help (M7, ADR-0027): the vault and how to open or make another, the export into
+ * a folder (FORMAT.md §7; the reader files, or the full export a copy can be rebuilt from), the
+ * files folder (its own dialog), the mode, the theme, update checks, "Set up again", and Help: the version,
  * where the docs and the issue tracker are as text to copy (the app opens no browser and makes
  * no request), and the diagnostic report.
  */
@@ -11,6 +12,7 @@ import {
   unwrap,
   useSettings,
   useVaultInfo,
+  type ExportReport_Serialize,
   type Mode,
   type Theme,
 } from "@databaseme/client";
@@ -54,6 +56,9 @@ export function SettingsDialog({
   const vault = useVaultInfo();
   const [otherVault, setOtherVault] = useState("");
   const [newFolder, setNewFolder] = useState("");
+  const [exportFolder, setExportFolder] = useState("");
+  const [fullExport, setFullExport] = useState(true);
+  const [exported, setExported] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -86,6 +91,11 @@ export function SettingsDialog({
 
   const data = settings.data;
   const defaultPath = vault.data?.path ?? null;
+
+  /** What an export wrote, as one line (FORMAT.md §7: the reader files, and the rest if full). */
+  const describeExport = (report: ExportReport_Serialize, full: boolean) =>
+    `Exported: ${String(report.types)} types, ${String(report.views)} views, ${String(report.objects)} rows` +
+    (full ? `, ${String(report.ops ?? 0)} ops, ${String(report.blobs ?? 0)} files.` : ".");
 
   const folderField = (
     id: string,
@@ -190,6 +200,39 @@ export function SettingsDialog({
             });
           },
         })}
+        {folderField(
+          `${base}-export`,
+          "Export this vault to a folder (new or empty)",
+          exportFolder,
+          setExportFolder,
+          {
+            label: "Export",
+            run: () => {
+              attempt(async () => {
+                const report = await unwrap(commands.exportRun(exportFolder.trim(), fullExport));
+                setExported(describeExport(report, fullExport));
+              });
+            },
+          },
+        )}
+        <label className="dbme-settings__choice">
+          <input
+            type="checkbox"
+            checked={fullExport}
+            onChange={(event) => {
+              setFullExport(event.target.checked);
+            }}
+          />
+          <span>
+            Full export
+            <span className="dbme-muted">
+              {" "}
+              (the change log and the files too, so a copy can be rebuilt; without it, the JSON and
+              CSV files only)
+            </span>
+          </span>
+        </label>
+        {exported !== null ? <StatusMessage>{exported}</StatusMessage> : null}
         <div className="dbme-settings__row">
           <Button
             onClick={() => {
