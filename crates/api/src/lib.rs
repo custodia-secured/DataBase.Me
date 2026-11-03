@@ -331,6 +331,18 @@ fn invalid(message: impl Into<String>) -> IpcError {
 
 /// Creates a vault at `path` (a folder named `<name>.dbme`) and opens it.
 pub fn vault_create(session: &Session, path: &str, options: VaultOptions) -> Reply<VaultInfo> {
+    // A folder typed into onboarding may not exist yet (M7); the vault's parents are made first.
+    if let Some(parent) = Path::new(path)
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            IpcError::new(
+                IpcErrorKind::Storage,
+                format!("cannot create {}: {e}", parent.display()),
+            )
+        })?;
+    }
     replace(session, || Vault::create(Path::new(path), options))
 }
 

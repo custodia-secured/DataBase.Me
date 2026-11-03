@@ -62,6 +62,9 @@ pub struct AppInfo {
     pub format_version: u32,
     /// In smoke-test mode, where the launch test should create its vault.
     pub smoke_vault: Option<String>,
+    /// Where `vault_open_default` keeps the default vault, for onboarding to show (M7); `None`
+    /// when the app's data folder cannot be found.
+    pub default_vault: Option<String>,
 }
 
 /// The session of the main window: its vault, its files folder, and the `vault-changed` and
@@ -118,7 +121,7 @@ fn options(app: &AppHandle, startup: &Startup) -> Reply<VaultOptions> {
 /// Product, release and format versions, and smoke-test settings.
 #[tauri::command]
 #[specta::specta]
-pub(crate) fn app_info(startup: State<'_, Startup>) -> AppInfo {
+pub(crate) fn app_info(app: AppHandle, startup: State<'_, Startup>) -> AppInfo {
     AppInfo {
         product: dbme_core::PRODUCT_NAME.to_owned(),
         version: dbme_core::VERSION.to_owned(),
@@ -127,6 +130,9 @@ pub(crate) fn app_info(startup: State<'_, Startup>) -> AppInfo {
             .smoke_dir
             .as_ref()
             .map(|dir| dir.join("Smoke.dbme").display().to_string()),
+        default_vault: app_dir(&app, &startup, false)
+            .ok()
+            .map(|dir| dir.join("vaults").join(DEFAULT_VAULT).display().to_string()),
     }
 }
 

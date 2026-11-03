@@ -37,6 +37,16 @@ describe("App shell", () => {
             return null;
           case "vault_open_default":
             return { id: "VAULT", path: "Main.dbme", can_undo: false, can_redo: false };
+          case "settings_get":
+          case "settings_set":
+            return {
+              version: 1,
+              mode: "organizer",
+              theme: "system",
+              update_checks: false,
+              last_vault: "Main.dbme",
+              onboarded: true,
+            };
           case "objects_page":
             return [];
           case "objects_count":

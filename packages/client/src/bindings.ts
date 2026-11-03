@@ -159,6 +159,11 @@ export type AppInfo_Deserialize = {
 	format_version: number,
 	/**  In smoke-test mode, where the launch test should create its vault. */
 	smoke_vault?: string | null,
+	/**
+	 *  Where `vault_open_default` keeps the default vault, for onboarding to show (M7); `None`
+	 *  when the app's data folder cannot be found.
+	 */
+	default_vault?: string | null,
 };
 
 /**  About the running app. */
@@ -171,6 +176,11 @@ export type AppInfo_Serialize = {
 	format_version: number,
 	/**  In smoke-test mode, where the launch test should create its vault. */
 	smoke_vault: string | null,
+	/**
+	 *  Where `vault_open_default` keeps the default vault, for onboarding to show (M7); `None`
+	 *  when the app's data folder cannot be found.
+	 */
+	default_vault: string | null,
 };
 
 /**  A file to attach, by its bytes or by the source file it is. */
@@ -1121,7 +1131,11 @@ export type MirrorSync_Serialize = {
  *  fields and the Table view; Organizer shows everything. Researcher and Data/Power come with
  *  later milestones.
  */
-export type Mode = "simple" | "organizer";
+export type Mode = 
+/**  A plain notes app: pages, search, the mind map, the gallery, the files folder, import. */
+"simple" | 
+/**  Everything of M1 to M6: types, fields, the Table view, tags. */
+"organizer";
 
 /**  A new field of a type. */
 export type NewField = NewField_Serialize | NewField_Deserialize;
@@ -1570,19 +1584,29 @@ export type SettingsPatch = SettingsPatch_Serialize | SettingsPatch_Deserialize;
 
 /**  What a change sets: every key is optional, and only the keys given change. */
 export type SettingsPatch_Deserialize = {
+	/**  A new mode. */
 	mode?: Mode | null,
+	/**  A new theme. */
 	theme?: Theme | null,
+	/**  Whether update checks are wanted. */
 	update_checks?: boolean | null,
+	/**  The vault to open next time. */
 	last_vault?: string | null,
+	/**  Whether onboarding ran to its end. */
 	onboarded?: boolean | null,
 };
 
 /**  What a change sets: every key is optional, and only the keys given change. */
 export type SettingsPatch_Serialize = {
+	/**  A new mode. */
 	mode: Mode | null,
+	/**  A new theme. */
 	theme: Theme | null,
+	/**  Whether update checks are wanted. */
 	update_checks: boolean | null,
+	/**  The vault to open next time. */
 	last_vault: string | null,
+	/**  Whether onboarding ran to its end. */
 	onboarded: boolean | null,
 };
 
@@ -1590,7 +1614,9 @@ export type SettingsPatch_Serialize = {
 export type Settings_Deserialize = {
 	/**  The file's version, [`SETTINGS_VERSION`] when this app wrote it. */
 	version?: number,
+	/**  Which preset of features is shown. */
 	mode?: Mode,
+	/**  The colours. */
 	theme?: Theme,
 	/**
 	 *  Whether the person agreed to update checks. Off by default (brief §2.2); 0.1 has no
@@ -1608,7 +1634,9 @@ export type Settings_Deserialize = {
 export type Settings_Serialize = {
 	/**  The file's version, [`SETTINGS_VERSION`] when this app wrote it. */
 	version: number,
+	/**  Which preset of features is shown. */
 	mode: Mode,
+	/**  The colours. */
 	theme: Theme,
 	/**
 	 *  Whether the person agreed to update checks. Off by default (brief §2.2); 0.1 has no
@@ -1726,7 +1754,13 @@ parent: Id | null } |
 type_id: Id };
 
 /**  The colours: the OS's choice, or light or dark regardless. */
-export type Theme = "system" | "light" | "dark";
+export type Theme = 
+/**  Whatever the OS asks for. */
+"system" | 
+/**  Light colours regardless of the OS. */
+"light" | 
+/**  Dark colours regardless of the OS. */
+"dark";
 
 /**  One object of an [`ObjectTree`]. */
 export type TreeNode = TreeNode_Serialize | TreeNode_Deserialize;

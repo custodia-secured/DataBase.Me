@@ -123,6 +123,9 @@ pub fn run(started: Instant) -> Result<(), Box<dyn std::error::Error>> {
     };
     let builder = ipc::builder();
     tauri::Builder::default()
+        // The native folder picker for onboarding and Settings (M7 gate 1a); the capability
+        // grants only `dialog:allow-open`.
+        .plugin(tauri_plugin_dialog::init())
         .manage(startup)
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {

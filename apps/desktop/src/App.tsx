@@ -16,8 +16,10 @@ import {
   useVaultInfo,
   useViews,
   MANUAL,
+  SETTINGS_KEY,
   setSettings,
   type Id,
+  type VaultInfo,
 } from "@databaseme/client";
 import {
   applyTheme,
@@ -42,6 +44,7 @@ import {
   FilesDialog,
   HoldBanner,
   ImportDialog,
+  Onboarding,
   onActionError,
   reportError,
   ResultsView,
@@ -53,6 +56,8 @@ import {
   type PaletteCommand,
 } from "@databaseme/views";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { isTauri } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { notifyReady } from "./ipc";
 import { useShell } from "./store";
@@ -89,15 +94,35 @@ export function App() {
     };
   }, [client]);
 
-  // The shell keeps one default vault (ADR-0017); vault choice arrives with Settings.
+  // What to show first (M7): the vault already open; else onboarding, until it has run once;
+  // else the last vault, or the default one (ADR-0017).
   const vault = useQuery({
     queryKey: ["bootstrap"],
-    queryFn: async () =>
-      (await unwrap(commands.vaultInfo())) ?? (await unwrap(commands.vaultOpenDefault())),
+    queryFn: async (): Promise<Bootstrap> => {
+      const open = await unwrap(commands.vaultInfo());
+      const settings = await unwrap(commands.settingsGet());
+      client.setQueryData(SETTINGS_KEY, settings);
+      if (open) return { vault: open, defaultVault: null };
+      if (!settings.onboarded) {
+        const info = await commands.appInfo();
+        return { vault: null, defaultVault: info.default_vault };
+      }
+      let last: VaultInfo | null = null;
+      if (settings.last_vault !== null) {
+        last = await unwrap(commands.vaultOpen(settings.last_vault)).catch(() => null);
+      }
+      const opened = last ?? (await unwrap(commands.vaultOpenDefault()));
+      if (opened.path !== settings.last_vault) {
+        await setSettings(client, { last_vault: opened.path });
+      }
+      return { vault: opened, defaultVault: null };
+    },
     enabled: reported,
     staleTime: Infinity,
     retry: false,
   });
+  const setupAgain = useShell((state) => state.setupAgain);
+  const setSetupAgain = useShell((state) => state.setSetupAgain);
 
   if (vault.isError) {
     return (
@@ -118,7 +143,32 @@ export function App() {
       </main>
     );
   }
+  if (vault.data.vault === null || setupAgain) {
+    return (
+      <Onboarding
+        vaultPath={vault.data.vault?.path ?? null}
+        defaultVault={vault.data.defaultVault}
+        pickFolder={isTauri() ? pickFolder : undefined}
+        onDone={() => {
+          setSetupAgain(false);
+          void client.invalidateQueries({ queryKey: ["bootstrap"] });
+        }}
+      />
+    );
+  }
   return <Shell />;
+}
+
+/** What the first query settles: the vault to show, or none and onboarding's default path. */
+interface Bootstrap {
+  vault: VaultInfo | null;
+  defaultVault: string | null;
+}
+
+/** The OS's folder picker, through the dialog plugin (M7 gate 1a); `null` when cancelled. */
+async function pickFolder(): Promise<string | null> {
+  const picked = await open({ directory: true, multiple: false });
+  return typeof picked === "string" ? picked : null;
 }
 
 function Shell() {
@@ -138,6 +188,7 @@ function Shell() {
     setFiles,
     importing,
     setImporting,
+    setSetupAgain,
     results,
     showResults,
     setView,
@@ -238,6 +289,13 @@ function Shell() {
       label: "Mode: Organizer",
       run: () => {
         chooseMode("organizer");
+      },
+    },
+    {
+      id: "setup-again",
+      label: "Set up again",
+      run: () => {
+        setSetupAgain(true);
       },
     },
     { id: "undo", label: "Undo", run: () => void actions.undo() },

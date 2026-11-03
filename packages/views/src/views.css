@@ -1527,3 +1527,81 @@ li.ProseMirror-selectednode::after {
   gap: var(--dbme-space-1);
   font-size: 0.8125rem;
 }
+
+/* --- Onboarding (M7) ---------------------------------------------------------------------- */
+
+.dbme-onboarding {
+  box-sizing: border-box;
+  max-width: 40rem;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: var(--dbme-space-6) var(--dbme-space-4) var(--dbme-space-8);
+}
+
+.dbme-onboarding h1 {
+  margin: 0 0 var(--dbme-space-1);
+  font-size: 1.75rem;
+  color: var(--dbme-color-accent);
+}
+
+.dbme-onboarding__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-3);
+  margin: var(--dbme-space-4) 0;
+}
+
+.dbme-onboarding__body p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.dbme-onboarding code {
+  overflow-wrap: anywhere;
+}
+
+.dbme-onboarding__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+  margin: 0;
+  padding: var(--dbme-space-3);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-onboarding__choices legend {
+  padding: 0 var(--dbme-space-1);
+  font-weight: 600;
+}
+
+.dbme-onboarding__choice {
+  display: flex;
+  gap: var(--dbme-space-2);
+  align-items: baseline;
+  min-height: var(--dbme-target);
+  cursor: pointer;
+}
+
+.dbme-onboarding__folder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-1);
+}
+
+.dbme-onboarding__folder-row {
+  display: flex;
+  gap: var(--dbme-space-2);
+}
+
+.dbme-onboarding__folder-row .dbme-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dbme-onboarding__controls {
+  display: flex;
+  gap: var(--dbme-space-2);
+  justify-content: flex-end;
+  margin-top: var(--dbme-space-4);
+}

@@ -87,6 +87,7 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
             "version": dbme_core::VERSION,
             "format_version": dbme_core::FORMAT_VERSION,
             "smoke_vault": null,
+            "default_vault": session.default_vault().display().to_string(),
         })),
         "app_ready" => Ok(Value::Null),
         "vault_create" => {

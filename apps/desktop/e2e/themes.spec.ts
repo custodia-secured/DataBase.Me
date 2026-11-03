@@ -37,11 +37,11 @@ test("the theme follows the setting, the OS under system, and survives a reload"
   page,
 }) => {
   await expect(page.locator("html")).not.toHaveAttribute("data-theme", /./);
-  expect(await background(page)).toBe(LIGHT_BG);
+  await expect.poll(() => background(page)).toBe(LIGHT_BG);
 
   await runCommand(app, "Theme: dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  expect(await background(page)).toBe(DARK_BG);
+  await expect.poll(() => background(page)).toBe(DARK_BG);
   const settings = await app.ipc<{ theme: string }>("settings_get");
   expect(settings.theme).toBe("dark");
 
@@ -49,18 +49,18 @@ test("the theme follows the setting, the OS under system, and survives a reload"
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await app.open();
-  expect(await background(page)).toBe(DARK_BG);
+  await expect.poll(() => background(page)).toBe(DARK_BG);
 
   // Light wins over a dark OS; system follows it.
   await page.emulateMedia({ colorScheme: "dark" });
   await runCommand(app, "Theme: light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  expect(await background(page)).toBe(LIGHT_BG);
+  await expect.poll(() => background(page)).toBe(LIGHT_BG);
   await runCommand(app, "Theme: follow the system");
   await expect(page.locator("html")).not.toHaveAttribute("data-theme", /./);
-  expect(await background(page)).toBe(DARK_BG);
+  await expect.poll(() => background(page)).toBe(DARK_BG);
   await page.emulateMedia({ colorScheme: "light" });
-  expect(await background(page)).toBe(LIGHT_BG);
+  await expect.poll(() => background(page)).toBe(LIGHT_BG);
 });
 
 test("the dark palette passes axe on the Document and Table views", async ({ app, page }) => {

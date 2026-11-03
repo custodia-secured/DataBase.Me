@@ -80,9 +80,17 @@ export class App {
    * were written with everything shown, so the session is put in Organizer mode first (M7); a
    * test of Simple mode asks for it.
    */
-  async open(options: { mode?: "simple" | "organizer" } = {}): Promise<void> {
-    await this.ipc("settings_set", { patch: { mode: options.mode ?? "organizer" } });
+  async open(options: { mode?: "simple" | "organizer"; onboarding?: boolean } = {}): Promise<void> {
+    await this.ipc("settings_set", {
+      patch: { mode: options.mode ?? "organizer", onboarded: options.onboarding !== true },
+    });
     await this.page.goto(`/?session=${this.session}`);
+    if (options.onboarding === true) {
+      await expect(
+        this.page.getByRole("heading", { name: "Welcome to DataBase.Me" }),
+      ).toBeVisible();
+      return;
+    }
     await expect(
       this.page
         .getByRole("tablist", { name: "Views" })

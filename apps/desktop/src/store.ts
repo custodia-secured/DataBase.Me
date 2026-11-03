@@ -24,6 +24,8 @@ export interface ShellState {
    * was dropped on the window, or none when opened from the header or the palette).
    */
   importing: string[] | null;
+  /** Whether onboarding was asked for again from Settings or the palette (M7). */
+  setupAgain: boolean;
   select: (id: Id | null) => void;
   setView: (pane: 0 | 1, view: ViewId) => void;
   setSplit: (split: boolean) => void;
@@ -31,6 +33,7 @@ export interface ShellState {
   setPalette: (open: boolean) => void;
   setFiles: (open: boolean) => void;
   setImporting: (paths: string[] | null) => void;
+  setSetupAgain: (again: boolean) => void;
   showResults: (results: ResultsSource | null) => void;
 }
 
@@ -43,6 +46,7 @@ export const useShell = create<ShellState>()((set) => ({
   files: false,
   results: null,
   importing: null,
+  setupAgain: false,
   select: (id) => {
     set({ selected: id, drawer: false, results: null });
   },
@@ -67,6 +71,9 @@ export const useShell = create<ShellState>()((set) => ({
   },
   setImporting: (paths) => {
     set({ importing: paths });
+  },
+  setSetupAgain: (again) => {
+    set({ setupAgain: again });
   },
   showResults: (results) => {
     set({ results, drawer: false });
