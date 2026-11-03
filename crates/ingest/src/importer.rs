@@ -51,6 +51,8 @@ impl Importers {
             importers: vec![
                 Box::new(crate::tables::Csv),
                 Box::new(crate::tables::Xlsx),
+                Box::new(crate::documents::Pdf::default()),
+                Box::new(crate::images::Image),
                 Box::new(crate::generic::Generic),
             ],
         }
@@ -134,6 +136,15 @@ pub struct ExtractedObject {
     /// Objects under this one (a folder's files, a workbook's sheets).
     #[serde(default)]
     pub children: Vec<ExtractedObject>,
+    /// When the thing was captured (a photo taken), milliseconds since the epoch.
+    #[serde(default)]
+    pub captured_at: Option<i64>,
+    /// Where, when the source says: latitude.
+    #[serde(default)]
+    pub geo_lat: Option<f64>,
+    /// And longitude.
+    #[serde(default)]
+    pub geo_lon: Option<f64>,
     /// Where it came from, for the provenance row.
     pub provenance: ProvenanceDraft,
 }
@@ -270,6 +281,9 @@ impl ExtractedObject {
             blocks: Vec::new(),
             attachments: Vec::new(),
             children: Vec::new(),
+            captured_at: None,
+            geo_lat: None,
+            geo_lon: None,
             provenance,
         }
     }
@@ -370,7 +384,7 @@ mod tests {
         root.children.push(child);
         assert_eq!(root.count(), 3);
         let registry = Importers::default();
-        assert_eq!(registry.ids(), ["csv", "xlsx", "file"]);
+        assert_eq!(registry.ids(), ["csv", "xlsx", "pdf", "image", "file"]);
         let sniffed = Sniffed::from_parts(Path::new("x.bin"), 0, b"");
         assert_eq!(registry.choose(&sniffed).id(), "file");
     }

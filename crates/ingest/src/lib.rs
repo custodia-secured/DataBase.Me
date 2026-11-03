@@ -13,7 +13,9 @@
 //! is pure Rust and reads nothing but its source.
 
 pub mod apply;
+pub mod documents;
 pub mod generic;
+pub mod images;
 pub mod importer;
 pub mod plan;
 pub mod sniff;

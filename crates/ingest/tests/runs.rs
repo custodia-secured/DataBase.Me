@@ -42,7 +42,8 @@ fn file(dir: &Path, name: &str, bytes: &[u8]) -> PathBuf {
     path
 }
 
-const PNG: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\x01\0\0\0\x01\x08\0\0\0\0";
+/// A WAV header: `infer` says audio/x-wav, so the generic importer makes a Media.
+const WAV: &[u8] = b"RIFF\x24\0\0\0WAVEfmt \x10\0\0\0\x01\0\x01\0";
 
 fn ops(vault: &Vault) -> u64 {
     vault.verify(false).unwrap().ops
@@ -53,7 +54,7 @@ fn a_plan_writes_nothing_and_an_apply_lands_under_a_receipt_as_one_undo_step() {
     let dir = tempfile::tempdir().unwrap();
     let (mut vault, clock) = vault(dir.path());
     let a = file(dir.path(), "notes.txt", b"plain text");
-    let b = file(dir.path(), "pixel.png", PNG);
+    let b = file(dir.path(), "beep.wav", WAV);
     let before = ops(&vault);
 
     let plan = plan(
@@ -120,7 +121,7 @@ fn a_plan_writes_nothing_and_an_apply_lands_under_a_receipt_as_one_undo_step() {
     for (id, (title, type_name)) in run
         .created
         .iter()
-        .zip([("notes", "Document"), ("pixel", "Media")])
+        .zip([("notes", "Document"), ("beep", "Media")])
     {
         let object = read.object(*id).unwrap();
         assert_eq!(
@@ -411,7 +412,10 @@ fn a_large_run_is_split_into_transactions_of_ten_thousand_objects() {
     let two = file(dir.path(), "two.many", b"5999");
     let bad = file(dir.path(), "bad.many", b"not a number");
     let importers = Importers::v0().with_first(Box::new(Many));
-    assert_eq!(importers.ids(), ["many", "csv", "xlsx", "file"]);
+    assert_eq!(
+        importers.ids(),
+        ["many", "csv", "xlsx", "pdf", "image", "file"]
+    );
     let plan = plan(
         &vault,
         &[one, two, bad.clone()],

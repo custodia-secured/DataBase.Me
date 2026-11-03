@@ -290,6 +290,9 @@ fn write_object(
         parent_id: Some(parent),
         type_ids: vec![type_id],
         props: object.props.clone(),
+        captured_at: object.captured_at,
+        geo_lat: object.geo_lat,
+        geo_lon: object.geo_lon,
         ..NewObject::default()
     })?;
     for block in &object.blocks {
