@@ -7,11 +7,11 @@ const IMPORTERS: Readonly<Record<string, string>> = {
   csv: "CSV",
   xlsx: "Excel",
   pdf: "PDF",
-  image: "a picture",
-  file: "a file",
+  image: "picture",
+  file: "file",
 };
 
-/** The importer's name for people, from its id. */
+/** The importer's name for people, from its id: a noun that fits "the CSV importer". */
 export function importerLabel(id: string): string {
   return IMPORTERS[id] ?? id;
 }

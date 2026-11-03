@@ -100,8 +100,8 @@ function Body({ paths, parent, onClose, onOpen }: Omit<ImportDialogProps, "open"
     <>
       <p className="dbme-import__intro">
         Brings files into the vault as pages: Markdown and Obsidian folders, CSV and Excel tables,
-        PDFs, pictures, and any other file as an attachment. Preview first; nothing is written
-        until you import.
+        PDFs, pictures, and any other file as an attachment. Preview first; nothing is written until
+        you import.
       </p>
       <label className="dbme-import__paths" htmlFor={`${baseId}-paths`}>
         <span>Files or folders to import, one per line</span>
@@ -203,12 +203,12 @@ function Plan({ plan, baseId }: { plan: ImportPlan_Serialize; baseId: string }) 
               <strong>{sourceName(entry.source.path)}</strong>
               <span className="dbme-muted">
                 {" "}
-                as {importerLabel(entry.importer)}: {becomes(entry)}
+                ({importerLabel(entry.importer)}): {becomes(entry)}
               </span>
               {entry.extract.types.length > 0 ? (
                 <span className="dbme-import__types">
-                  {" "}
-                  Type {entry.extract.types.map((type) => type.name).join(", ")}
+                  {" · type "}
+                  {entry.extract.types.map((type) => type.name).join(", ")}
                 </span>
               ) : null}
               {entry.extract.warnings.length > 0 ? (

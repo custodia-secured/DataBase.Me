@@ -62,9 +62,9 @@ test("previews, imports a table and a file, opens the receipt and shows provenan
   const sources = dialog.getByRole("list", { name: "Sources" });
   await expect(sources.getByRole("listitem")).toHaveCount(2);
   await expect(sources).toContainText("people.csv");
-  await expect(sources).toContainText("as CSV: 2 rows of type people, under a Dataset");
+  await expect(sources).toContainText("people.csv (CSV): 2 rows of type people, under a Dataset");
   await expect(sources).toContainText("notes.txt");
-  await expect(sources).toContainText("as a file: a Document");
+  await expect(sources).toContainText("notes.txt (file): a Document");
   await expect(dialog.getByRole("status")).toHaveText("4 objects from 2 sources.");
   await expectAccessible(app.page, ".dbme-import");
 
@@ -91,7 +91,9 @@ test("previews, imports a table and a file, opens the receipt and shows provenan
   await app.openPage(receipt, "notes");
   await closeDrawer(app);
   const document = app.pane().getByRole("article", { name: "notes" });
-  await expect(document.getByText(/^Imported from notes\.txt on .+ by the a file importer$/)).toBeVisible();
+  await expect(
+    document.getByText(/^Imported from notes\.txt on .+ by the file importer$/),
+  ).toBeVisible();
   const files = document.getByRole("list", { name: "Attachments" });
   await expect(files.getByRole("listitem")).toHaveCount(1);
   await expect(files).toContainText("notes.txt");

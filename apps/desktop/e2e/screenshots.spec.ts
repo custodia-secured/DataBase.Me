@@ -18,10 +18,13 @@ function folderOf(session: string): string {
   return path.join(ROOT, "target/e2e-data", session, "vaults/Main.dbme/files");
 }
 
-async function shot(app: App, name: string) {
+async function shot(app: App, milestone: string, name: string) {
   const size = app.page.viewportSize()?.width === 360 ? "phone" : "desktop";
   mkdirSync(OUT, { recursive: true });
-  await app.page.screenshot({ path: path.join(OUT, `m5-${size}-${name}.png`), fullPage: false });
+  await app.page.screenshot({
+    path: path.join(OUT, `${milestone}-${size}-${name}.png`),
+    fullPage: false,
+  });
 }
 
 async function openFiles(app: App) {
@@ -45,11 +48,11 @@ test.beforeEach(async ({ seed, app }) => {
 
 test("the files folder: off, on and synced, a conflict, and a hold", async ({ app, session }) => {
   const dialog = await openFiles(app);
-  await shot(app, "files-off");
+  await shot(app, "m5", "files-off");
   await app.press(dialog.getByRole("button", { name: "Turn on" }));
   await syncNow(app, dialog);
   await expect(dialog.getByRole("status").first()).toHaveText(/^On: \d+ synced\.$/);
-  await shot(app, "files-on");
+  await shot(app, "m5", "files-on");
 
   // An unreadable file in the inbox.
   const folder = folderOf(session);
@@ -58,7 +61,7 @@ test("the files folder: off, on and synced, a conflict, and a hold", async ({ ap
   await expect(dialog.getByRole("list", { name: "Conflicts" }).getByRole("listitem")).toHaveCount(
     1,
   );
-  await shot(app, "files-inbox");
+  await shot(app, "m5", "files-inbox");
   rmSync(path.join(folder, "Broken.md"));
 
   // Many files removed at once: the hold and its banner.
@@ -67,10 +70,40 @@ test("the files folder: off, on and synced, a conflict, and a hold", async ({ ap
   for (let n = 0; n < 50; n++) rmSync(path.join(folder, `Note ${String(n)}.md`));
   await syncNow(app, dialog);
   await expect(dialog.getByText("Many files changed at once")).toBeVisible();
-  await shot(app, "files-hold");
+  await shot(app, "m5", "files-hold");
   await app.press(dialog.getByRole("button", { name: "Close" }));
   const close = app.page.getByRole("button", { name: "Close pages" });
   if (await close.isVisible()) await app.press(close);
   await expect(app.page.getByRole("region", { name: "Files folder hold" })).toBeVisible();
-  await shot(app, "hold-banner");
+  await shot(app, "m5", "hold-banner");
+});
+
+test("importing: the plan, the receipt, and where a page came from", async ({ app, session }) => {
+  const drop = path.join(ROOT, "target/e2e-data", session, "drop");
+  mkdirSync(drop, { recursive: true });
+  const csv = path.join(drop, "people.csv");
+  const note = path.join(drop, "notes.txt");
+  writeFileSync(csv, "name,age,joined\nAda,36,2021-03-04\nLin,41,2019-11-30\n");
+  writeFileSync(note, "A plain text file.\n");
+
+  await app.press(app.page.getByRole("button", { name: "Import", exact: true }));
+  const dialog = app.page.getByRole("dialog", { name: "Import" });
+  await expect(dialog).toBeVisible();
+  await dialog
+    .getByRole("textbox", { name: "Files or folders to import, one per line" })
+    .fill(`${csv}\n${note}\n`);
+  await app.press(dialog.getByRole("button", { name: "Preview" }));
+  await expect(dialog.getByRole("status")).toHaveText("4 objects from 2 sources.");
+  await shot(app, "m6", "import-plan");
+  await app.press(dialog.getByRole("button", { name: "Import 4 objects" }));
+  await expect(dialog.getByRole("status")).toHaveText("Imported 4 objects.");
+  await shot(app, "m6", "import-receipt");
+  await app.press(dialog.getByRole("button", { name: "Open the receipt" }));
+  await expect(dialog).toBeHidden();
+  const receipt = (await app.currentCrumb().textContent()) ?? "";
+  await app.openPage(receipt, "notes");
+  const close = app.page.getByRole("button", { name: "Close pages" });
+  if (await close.isVisible()) await app.press(close);
+  await expect(app.pane().getByText(/^Imported from notes\.txt/)).toBeVisible();
+  await shot(app, "m6", "origin");
 });
