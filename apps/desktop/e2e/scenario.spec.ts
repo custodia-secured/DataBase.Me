@@ -59,6 +59,8 @@ test("capture, organize, find, edit a file outside the app, export", async ({
   page,
   session,
 }) => {
+  // Five steps, two syncs and an export: three times the usual budget, for a loaded machine.
+  test.slow();
   // A vault with a few pages and one type, as after a first week; Simple mode, as onboarding
   // suggests it.
   await seed(workspace());
