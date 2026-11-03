@@ -66,16 +66,43 @@ jobs:
         with:
           key: ${{ matrix.name }}
 
-      - name: Say whether the installers will be signed
+      # Tauri signs when its signing variables are set, and an empty one counts as set (gate 1e:
+      # macOS failed in codesign with an empty identity), so they are exported only when the
+      # secrets exist.
+      - name: Say whether the installers will be signed, and set the signing variables if so
         shell: bash
         env:
           HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
           HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           case "${{ runner.os }}" in
-            Windows) [ "$HAS_WINDOWS_CERT" = "true" ] && echo "Windows: signing with the Authenticode certificate" || echo "Windows: no certificate secret; the installer is unsigned" ;;
-            macOS)   [ "$HAS_APPLE_CERT" = "true" ] && echo "macOS: signing with the Developer ID and notarizing" || echo "macOS: no certificate secret; the app is unsigned and not notarized" ;;
-            *)       echo "Linux: artifacts are not signed in 0.1" ;;
+            Windows)
+              if [ "$HAS_WINDOWS_CERT" = "true" ]; then
+                echo "Windows: signing with the Authenticode certificate"
+                echo "TAURI_WINDOWS_SIGNTOOL_CERTIFICATE=$WINDOWS_CERTIFICATE" >> "$GITHUB_ENV"
+                echo "TAURI_WINDOWS_SIGNTOOL_CERTIFICATE_PASSWORD=$WINDOWS_CERTIFICATE_PASSWORD" >> "$GITHUB_ENV"
+              else
+                echo "Windows: no certificate secret; the installer is unsigned"
+              fi ;;
+            macOS)
+              if [ "$HAS_APPLE_CERT" = "true" ]; then
+                echo "macOS: signing with the Developer ID and notarizing"
+                {
+                  echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY"
+                  echo "APPLE_ID=$APPLE_ID"
+                  echo "APPLE_PASSWORD=$APPLE_PASSWORD"
+                  echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+                } >> "$GITHUB_ENV"
+              else
+                echo "macOS: no certificate secret; the app is unsigned and not notarized"
+              fi ;;
+            *) echo "Linux: artifacts are not signed in 0.1" ;;
           esac
 
       - name: Import the Apple certificate
@@ -95,15 +122,7 @@ jobs:
 
       - name: Build the installers
         shell: bash
-        env:
-          # Tauri signs and notarizes on macOS when these are set, and signs on Windows when the
-          # certificate is given; absent, it builds unsigned.
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          TAURI_WINDOWS_SIGNTOOL_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          TAURI_WINDOWS_SIGNTOOL_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        # Signed when the step above exported the signing variables; unsigned otherwise.
         run: pnpm --filter @databaseme/desktop tauri build ${{ matrix.args }}
 
       - name: Collect the artifacts and their checksums
