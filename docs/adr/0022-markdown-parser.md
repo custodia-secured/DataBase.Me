@@ -98,3 +98,16 @@ written down here once the opening is recorded, not Obsidian's.
 - **A parser of our own.** The format is a subset, but the subset still includes lists, quotes,
   fences, tables and inline marks, and the fuzzing requirement (brief §8) is far cheaper to meet on
   a parser that already has a fuzz corpus.
+
+## Later changes
+
+These notes record what the build found under this decision; the decision itself stands.
+
+- **M5 (2026-11-02):** gate 1h's opening settled the open shapes: a quote's identifier goes on its
+  own line, as for headings and fences; the serializer writes every anchor that way and the
+  fixtures were corrected to it. The link resolver's rule for a bare name shared by two files is
+  ours (`obsidian.rs`), as this record expected. Links inside a table stay text with the table,
+  which the format stores verbatim; a picture Obsidian named by path is not an app attachment (those
+  are named by hash) until M6 imports foreign files, so its embed stays text and Obsidian still
+  shows it. The parser is fuzzed in two layers: `files_fuzz.rs` (proptest, every run) and the
+  `fuzz/` cargo-fuzz crate, nightly (`.github/workflows/fuzz.yml`).

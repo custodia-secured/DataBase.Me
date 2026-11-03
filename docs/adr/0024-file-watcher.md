@@ -95,3 +95,20 @@ the same crate.
   weight.
 - **`notify-debouncer-mini`.** Debounces but does not stitch renames, which rename-equals-rename
   (ADR-0006 line 30) needs.
+
+## Later changes
+
+These notes record what the build found under this decision; the decision itself stands.
+
+- **M5 (2026-11-02):** the rules above are implemented in `NotifyWatcher` (`watcher.rs`), which
+  turns debounced events into the engine's `FileEvent`s and is excluded from the coverage gate
+  since `rescan()` covers its absence (M5 Decision 24). The tests named in Consequences landed
+  under other names: `echo.rs` as said; the guard, moves and trash in `inbound.rs` and `zone.rs`
+  on the in-memory file system; the event-pattern probes in `gate_watcher.rs` and `watcher.rs`.
+  The probes assert what Windows reports and are `ignore`d elsewhere; CI's `watcher-probes` job
+  runs them on Ubuntu, Windows and macOS with `--include-ignored` and `continue-on-error`, and
+  uploads what they print as the record for the other two legs, to be read into this note at the
+  close-out. The engine does not depend on the atomic-replace pair being `Remove` then `Create`:
+  a batch is reduced to a set first, so any order of the same events reads the same. The budget
+  with the real watcher, release, on the reference machine: a file edit reaches the app in 360 to
+  370 ms with 10,000 pages, 300 ms of it the debounce.

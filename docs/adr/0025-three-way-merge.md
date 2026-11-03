@@ -70,3 +70,14 @@ Three rules follow, and they belong to `merge.rs`, not to the crate:
   frontmatter re-serialisation would conflict constantly, and a conflict anywhere would lose the
   whole file's merge.
 - **Last writer wins.** Loses content; the acceptance criterion is zero loss.
+
+## Later changes
+
+These notes record what the build found under this decision; the decision itself stands.
+
+- **M5 (2026-11-02):** `merge.rs` normalises as rule 1 says and aligns `created` and `updated`
+  across the three documents before merging, since the two are informational on the way in and
+  would otherwise count as a conflict on every rewrite. The 10,000-case run (gate 1f) made 10,828
+  conflicts in 229,030 steps, every one of them a deliberate edit of the same paragraph on both
+  sides, so it says nothing about how often real editing would conflict inside one paragraph; the
+  word-level fallback stays an alternative, to be judged on use, not on this run.

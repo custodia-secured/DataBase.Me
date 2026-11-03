@@ -41,3 +41,18 @@ All notable changes to DataBase.Me are recorded here. The format follows
   commands behind `>`; the results surface that narrows a query with facet chips and saves it as a
   view; a 100,000-object search benchmark in the budget job. Migration 2 adds `views`,
   `search_dirty`, `search_text` and `fts`. Nine new commands; ADR-0020.
+- M5 two-way files folder and export: every object as a Markdown file with YAML frontmatter and
+  block anchors in a folder that opens as an Obsidian vault (`files/` inside the vault, or a folder
+  of your choosing); edits made there in any tool come back as ordinary changes, merged block by
+  block against the last synced text, with a Conflicts inbox for a true conflict, an unreadable
+  file, a bad value, a duplicate id, a cloud drive's conflicting copy, and a hold when many files
+  change at once; renames and moves follow; deleted files go to the Trash; other files dropped in
+  become objects with the file attached; a vault can be rebuilt from the folder alone. A Files
+  dialog with Turn on, Sync now and Turn off, a status line, a hold banner and the inbox. JSON and
+  CSV export, and a full export (`ops.jsonl`, `vault_meta.json`, `blobs/`) that imports to the
+  same vault, hash for hash. The CLI gains `export`, `import` and `mirror-check`. Migration 3 adds
+  `mirror_state`, `mirror_dirty`, `mirror_meta` and `conflicts`. Eight new commands and a
+  `mirror-changed` event. New crates `dbme-mirror` and `dbme-export`; the file format in
+  `dbme-core`. CI gains the 10,000-interleavings property, the files-folder budgets, the watcher
+  probes on three systems, nightly fuzzing of the parser, and the export crate in the coverage
+  gate. FORMAT.md §3.1 (migration 3), §6 and §7; ADR-0021 to ADR-0025.

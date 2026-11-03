@@ -77,3 +77,10 @@ These notes record what later milestones did under this decision; the decision i
   can use them (ADR-0017). The commands themselves moved into the `dbme-api` crate; the shell's
   Tauri commands wrap them one line each, and the end-to-end test server calls the same functions
   (ADR-0018).
+- **M5 (2026-11-02):** eight commands for the files folder and the export (`mirror_status`,
+  `mirror_enable`, `mirror_disable`, `mirror_sync_now`, `conflicts_list`, `conflict_resolve`,
+  `mirror_hold_decide`, `export_run`), 53 in all, and a second event, `mirror-changed`, carrying
+  the folder's status (on or off, the folder, counts per state, the open hold, the rewrite flag),
+  which the UI's Files dialog, badge and hold banner follow. An inbound batch from the folder is one
+  `vault-changed` built from the op log's `seq` range and the batch's object ids, since the engine
+  commits several transactions (ADR-0021).
