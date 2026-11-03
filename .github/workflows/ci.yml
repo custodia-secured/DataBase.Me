@@ -163,6 +163,28 @@ jobs:
       - name: Launch the app and wait for its UI (Linux, virtual display)
         if: runner.os == 'Linux'
         run: xvfb-run -a node scripts/smoke-launch.mjs target/release/dbme-desktop
+
+      # M7 gate 1b, advisory until Task 8 gates it: the same launch under strace, then every
+      # socket the app and the webview touched, with any address outside the machine a failure.
+      - name: Install strace
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y --no-install-recommends strace
+      - name: Launch the app under strace and list its network calls
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        env:
+          DBME_SMOKE_WRAP: strace -f -o target/network-trace.txt -e trace=network
+        run: |
+          xvfb-run -a node scripts/smoke-launch.mjs target/release/dbme-desktop
+          node scripts/network-probe.mjs target/network-trace.txt
+      - name: Keep the network trace
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: network-trace
+          path: target/network-trace.txt
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Launch the app and wait for its UI
         if: runner.os != 'Linux'
         run: node scripts/smoke-launch.mjs target/release/dbme-desktop

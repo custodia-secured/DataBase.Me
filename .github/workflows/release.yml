@@ -1,0 +1,145 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# The release build (M7, ADR-0029): installers for Windows, macOS and Linux from one tag, their
+# SHA-256 sums, and a draft GitHub Release holding them. Signing runs only when the secrets exist
+# (Authenticode for Windows, Developer ID and notarization for macOS) and is skipped with a
+# notice otherwise; Linux artifacts are not signed in 0.1. A manual run builds and uploads the
+# artifacts without making a release (M7 gate 1e).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    name: Bundle (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            args: ""
+          - name: macos-arm64
+            os: macos-latest
+            args: --target aarch64-apple-darwin
+          - name: macos-x64
+            os: macos-latest
+            args: --target x86_64-apple-darwin
+          - name: linux-x64
+            os: ubuntu-22.04
+            args: ""
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Linux system libraries (WebKitGTK 4.1)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install
+          rustup show active-toolchain
+      - name: Add the Intel macOS target
+        if: matrix.name == 'macos-x64'
+        run: rustup target add x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.name }}
+
+      - name: Say whether the installers will be signed
+        shell: bash
+        env:
+          HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
+          HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
+        run: |
+          case "${{ runner.os }}" in
+            Windows) [ "$HAS_WINDOWS_CERT" = "true" ] && echo "Windows: signing with the Authenticode certificate" || echo "Windows: no certificate secret; the installer is unsigned" ;;
+            macOS)   [ "$HAS_APPLE_CERT" = "true" ] && echo "macOS: signing with the Developer ID and notarizing" || echo "macOS: no certificate secret; the app is unsigned and not notarized" ;;
+            *)       echo "Linux: artifacts are not signed in 0.1" ;;
+          esac
+
+      - name: Import the Apple certificate
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
+        env:
+          HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN=$RUNNER_TEMP/release.keychain-db
+          security create-keychain -p "" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "" "$KEYCHAIN"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN"
+
+      - name: Build the installers
+        shell: bash
+        env:
+          # Tauri signs and notarizes on macOS when these are set, and signs on Windows when the
+          # certificate is given; absent, it builds unsigned.
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_WINDOWS_SIGNTOOL_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          TAURI_WINDOWS_SIGNTOOL_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: pnpm --filter @databaseme/desktop tauri build ${{ matrix.args }}
+
+      - name: Collect the artifacts and their checksums
+        shell: bash
+        run: |
+          mkdir -p dist-release
+          find target -path '*/release/bundle/*' -type f \
+            \( -name '*.msi' -o -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) \
+            -exec cp {} dist-release/ \;
+          cd dist-release
+          ls -l
+          if command -v sha256sum >/dev/null; then sha256sum * > SHA256SUMS-${{ matrix.name }}.txt; else shasum -a 256 * > SHA256SUMS-${{ matrix.name }}.txt; fi
+          cat SHA256SUMS-${{ matrix.name }}.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.name }}
+          path: dist-release/*
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Draft the GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      - name: The release notes are this version's CHANGELOG section
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '/^## \[/{p = index($0, "[" v "]") > 0} p' CHANGELOG.md > notes.md
+          test -s notes.md || echo "See CHANGELOG.md." > notes.md
+          cat installers/SHA256SUMS-*.txt > installers/SHA256SUMS.txt
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" installers/* --draft --title "DataBase.Me $GITHUB_REF_NAME" --notes-file notes.md

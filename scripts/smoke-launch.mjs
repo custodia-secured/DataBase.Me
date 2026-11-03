@@ -24,8 +24,13 @@ if (!existsSync(binary)) {
 }
 const timeoutMs = Number(timeoutArg) * 1000;
 
+// DBME_SMOKE_WRAP, when set, is a command the app is launched through (M7: `strace -f -o
+// trace.txt -e trace=network` for the zero-network test), split on spaces.
+const wrap = (process.env.DBME_SMOKE_WRAP ?? "").split(" ").filter(Boolean);
+const [command, ...prefixArgs] = wrap.length > 0 ? [...wrap, binary] : [binary];
+
 const started = Date.now();
-const child = spawn(binary, [], {
+const child = spawn(command, prefixArgs, {
   env: { ...process.env, DBME_SMOKE_TEST: "1" },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -54,6 +59,7 @@ child.on("exit", (code, signal) => {
     console.log(
       `  startup to first render: ${ready[1]} ms (wall clock incl. exit: ${Date.now() - started} ms)`,
     );
+    for (const note of stdout.matchAll(/DBME_SMOKE_NOTE (.*)/g)) console.log(`  note: ${note[1]}`);
     return;
   }
   const failed = /DBME_SMOKE_FAILED (.*)/.exec(stdout);

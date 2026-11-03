@@ -139,8 +139,9 @@ pub(crate) fn app_ready(
     startup: State<'_, Startup>,
     session: State<'_, Arc<Session>>,
     error: Option<String>,
+    notes: Vec<String>,
 ) {
-    crate::ready(&app, &startup, error, || session.close());
+    crate::ready(&app, &startup, error, &notes, || session.close());
 }
 
 /// Creates a vault at `path` (a folder named `<name>.dbme`) and opens it.

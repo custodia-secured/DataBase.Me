@@ -89,16 +89,38 @@ export function notifyReady(): Promise<void> {
   return ready;
 }
 
+/**
+ * What the webview's clipboard does under the app's CSP, for the record (M7 gate 1c): writes a
+ * line and reads it back. The outcome is a note, never a failure: the diagnostic report falls
+ * back to a text box the person copies from when the API is not there.
+ */
+async function clipboardProbe(): Promise<string> {
+  const text = `dbme clipboard probe ${String(Date.now())}`;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (failure: unknown) {
+    return `clipboard: write failed (${failure instanceof Error ? failure.message : String(failure)})`;
+  }
+  try {
+    const back = await navigator.clipboard.readText();
+    return back === text ? "clipboard: write and read ok" : "clipboard: write ok, read differs";
+  } catch (failure: unknown) {
+    return `clipboard: write ok, read failed (${failure instanceof Error ? failure.message : String(failure)})`;
+  }
+}
+
 async function reportReady(): Promise<void> {
   if (!isTauri()) return;
   const info = await commands.appInfo();
   let error: string | null = null;
+  const notes: string[] = [];
   if (info.smoke_vault !== null) {
     try {
       await runLaunchChecks(info.smoke_vault);
     } catch (failure: unknown) {
       error = failure instanceof Error ? failure.message : String(failure);
     }
+    notes.push(await clipboardProbe());
   }
-  await commands.appReady(error);
+  await commands.appReady(error, notes);
 }

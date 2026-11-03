@@ -14,7 +14,7 @@ export const commands = {
 	 *  Called by the UI after its first render, with `error` set if its launch checks failed. Logs how
 	 *  long startup took and, in smoke-test mode, closes the vault and exits.
 	 */
-	appReady: (error: string | null) => __TAURI_INVOKE<void>("app_ready", { error }),
+	appReady: (error: string | null, notes: string[]) => __TAURI_INVOKE<void>("app_ready", { error, notes }),
 	/**  Creates a vault at `path` (a folder named `<name>.dbme`) and opens it. */
 	vaultCreate: (path: string) => typedError<VaultInfo, IpcError>(__TAURI_INVOKE("vault_create", { path })),
 	/**  Opens the vault at `path`. */
