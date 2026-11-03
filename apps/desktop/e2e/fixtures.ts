@@ -53,6 +53,17 @@ function isWebKitResizeObserverReport(message: string, browserName: string): boo
   );
 }
 
+/**
+ * Playwright's WebKit reports a request to the e2e server that the page cancelled by leaving (a
+ * reload in a test) as an error on the page, with this message, under load now and then. The
+ * rejection reaches the query that asked and is handled there like any failed read; nothing of
+ * the app sees it. Only a test whose page navigated again is allowed the report; on one page it
+ * is a request to explain (ADR-0018).
+ */
+function isWebKitCancelledRequestReport(message: string, browserName: string): boolean {
+  return browserName === "webkit" && message.endsWith("/ipc due to access control checks.");
+}
+
 /** The part of the editor that TipTap leaves on its element, as `caretToEnd` reads it. */
 interface EditorElement extends HTMLElement {
   editor: {
@@ -272,7 +283,7 @@ export const test = base.extend<Fixtures>({
     });
   },
 
-  page: async ({ page, browserName }, use) => {
+  page: async ({ page, browserName, baseURL }, use) => {
     await page.addInitScript(() => {
       // As Tauri does in the app (tauri.conf.json, freezePrototype): before any of the page's code,
       // so that a dependency that can't load this way fails here too.
@@ -289,9 +300,23 @@ export const test = base.extend<Fixtures>({
       });
     });
     const problems: string[] = [];
+    let navigations = 0;
+    page.on("framenavigated", (frame) => {
+      if (frame === page.mainFrame() && frame.url() !== "about:blank") navigations += 1;
+    });
     page.on("pageerror", (error) => {
       if (isWebKitResizeObserverReport(error.message, browserName)) return;
       problems.push(`uncaught: ${error.message}`);
+    });
+    // Zero network requests (M7, ADR-0028): the page may ask the e2e server, which stands in for
+    // the app's bridge, and nothing else. A `fetch` or an asset from anywhere else fails the test
+    // the day it is written. `data:` and `blob:` are the page's own bytes, not requests.
+    const origin = new URL(baseURL ?? "http://127.0.0.1").origin;
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (/^(https?|wss?):$/.test(url.protocol) && url.origin !== origin) {
+        problems.push(`request outside the e2e server: ${request.method()} ${request.url()}`);
+      }
     });
     page.on("response", (response) => {
       // The server answers failed commands with 200 and an error; a 4xx or 5xx is a fault. The
@@ -320,7 +345,10 @@ export const test = base.extend<Fixtures>({
       violations.filter((violation) => !isWebKitSelectQuirk(violation, browserName)),
       "Content-Security-Policy violations",
     ).toEqual([]);
-    expect(problems, "errors in the page").toEqual([]);
+    const errors = problems.filter(
+      (problem) => !(navigations > 1 && isWebKitCancelledRequestReport(problem, browserName)),
+    );
+    expect(errors, "errors in the page").toEqual([]);
   },
 
   app: async ({ page, session, isMobile }, use) => {

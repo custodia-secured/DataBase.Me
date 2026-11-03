@@ -164,14 +164,14 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a node scripts/smoke-launch.mjs target/release/dbme-desktop
 
-      # M7 gate 1b, advisory until Task 8 gates it: the same launch under strace, then every
-      # socket the app and the webview touched, with any address outside the machine a failure.
+      # The zero-network gate (M7, ADR-0028): the same launch under strace, then every socket the
+      # app and the webview touched, with any address outside the machine a failure. Windows and
+      # macOS are checked by hand per release (docs/user-guide/privacy.md).
       - name: Install strace
         if: runner.os == 'Linux'
         run: sudo apt-get install -y --no-install-recommends strace
-      - name: Launch the app under strace and list its network calls
+      - name: Zero network requests on first launch with default settings
         if: runner.os == 'Linux'
-        continue-on-error: true
         env:
           DBME_SMOKE_WRAP: strace -f -o target/network-trace.txt -e trace=network
         run: |
