@@ -19,12 +19,18 @@ export interface ShellState {
   files: boolean;
   /** What the results surface shows in place of the panes, if anything. */
   results: ResultsSource | null;
+  /**
+   * The Import dialog (M6): closed when null, else open with these paths to start from (what
+   * was dropped on the window, or none when opened from the header or the palette).
+   */
+  importing: string[] | null;
   select: (id: Id | null) => void;
   setView: (pane: 0 | 1, view: ViewId) => void;
   setSplit: (split: boolean) => void;
   setDrawer: (open: boolean) => void;
   setPalette: (open: boolean) => void;
   setFiles: (open: boolean) => void;
+  setImporting: (paths: string[] | null) => void;
   showResults: (results: ResultsSource | null) => void;
 }
 
@@ -36,6 +42,7 @@ export const useShell = create<ShellState>()((set) => ({
   palette: false,
   files: false,
   results: null,
+  importing: null,
   select: (id) => {
     set({ selected: id, drawer: false, results: null });
   },
@@ -57,6 +64,9 @@ export const useShell = create<ShellState>()((set) => ({
   },
   setFiles: (open) => {
     set({ files: open });
+  },
+  setImporting: (paths) => {
+    set({ importing: paths });
   },
   showResults: (results) => {
     set({ results, drawer: false });

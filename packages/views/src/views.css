@@ -1419,3 +1419,111 @@ li.ProseMirror-selectednode::after {
 .dbme-files__footer {
   justify-content: flex-end;
 }
+
+/* --- Import (ADR-0026) ------------------------------------------------------------------- */
+
+.dbme-import .dbme-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-3);
+  max-width: 40rem;
+}
+
+.dbme-import__intro,
+.dbme-import__totals {
+  margin: 0;
+}
+
+.dbme-import__paths {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-1);
+}
+
+.dbme-import__textarea {
+  min-height: 5rem;
+  padding: var(--dbme-space-2);
+  font-family: var(--dbme-font-mono, monospace);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.dbme-import__under {
+  display: flex;
+  gap: var(--dbme-space-2);
+  align-items: baseline;
+}
+
+.dbme-import__plan h3,
+.dbme-import__receipt h3 {
+  margin: 0 0 var(--dbme-space-2);
+  font-size: 1rem;
+}
+
+.dbme-import__sources,
+.dbme-import__left-out,
+.dbme-import__warnings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-1);
+  margin: var(--dbme-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dbme-import__source {
+  padding: var(--dbme-space-2) var(--dbme-space-3);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  overflow-wrap: anywhere;
+}
+
+.dbme-import__left-out li {
+  overflow-wrap: anywhere;
+}
+
+.dbme-import__warnings {
+  margin-top: var(--dbme-space-1);
+  padding-left: var(--dbme-space-4);
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.875rem;
+  list-style: disc;
+}
+
+.dbme-import__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-2);
+}
+
+.dbme-import__footer {
+  justify-content: flex-end;
+}
+
+/* The Document view's origin line and attachments (M6). */
+
+.dbme-origin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-1);
+}
+
+.dbme-origin__line {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.dbme-origin__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dbme-origin__files .dbme-chip {
+  gap: var(--dbme-space-1);
+  font-size: 0.8125rem;
+}
