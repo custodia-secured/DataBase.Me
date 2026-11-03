@@ -43,6 +43,7 @@ import {
 import {
   actions,
   CommandPalette,
+  diagnosticReport,
   FilesDialog,
   HoldBanner,
   ImportDialog,
@@ -216,6 +217,9 @@ function Shell() {
     queryFn: () => commands.appInfo(),
     staleTime: Infinity,
   });
+  const aboutInfo = about.data
+    ? { version: about.data.version, formatVersion: about.data.format_version }
+    : null;
 
   // Files dropped on the window open the Import dialog with their paths (M6 Decision 9).
   useEffect(() => {
@@ -515,11 +519,8 @@ function Shell() {
         onClose={() => {
           setSettingsOpen(false);
         }}
-        about={
-          about.data
-            ? { version: about.data.version, formatVersion: about.data.format_version }
-            : null
-        }
+        about={aboutInfo}
+        report={() => diagnosticReport(client, aboutInfo)}
         links={LINKS}
         onOpenFiles={() => {
           setFiles(true);

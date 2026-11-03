@@ -136,6 +136,8 @@ export const commands = {
 	settingsGet: () => typedError<Settings_Serialize, IpcError>(__TAURI_INVOKE("settings_get")),
 	/**  Changes the settings `patch` names and returns them all as they are now. */
 	settingsSet: (patch: SettingsPatch_Deserialize) => typedError<Settings_Serialize, IpcError>(__TAURI_INVOKE("settings_set", { patch })),
+	/**  The machine's part of the diagnostic report. */
+	appDiagnostics: () => typedError<Diagnostics_Serialize, IpcError>(__TAURI_INVOKE("app_diagnostics")),
 };
 
 /** Events */
@@ -564,6 +566,42 @@ export type Conflict_Serialize = {
 
 /**  A hash with its algorithm, for example `blake3:af13…` (64 hex digits). */
 export type ContentHash = string;
+
+/**
+ *  What the diagnostic report says about this machine (M7): the OS and architecture, the
+ *  webview and its version, and the vault's counts. No path, no title, no content.
+ */
+export type Diagnostics = Diagnostics_Serialize | Diagnostics_Deserialize;
+
+/**
+ *  What the diagnostic report says about this machine (M7): the OS and architecture, the
+ *  webview and its version, and the vault's counts. No path, no title, no content.
+ */
+export type Diagnostics_Deserialize = {
+	/**  `std::env::consts::OS`. */
+	os: string,
+	/**  `std::env::consts::ARCH`. */
+	arch: string,
+	/**  The webview and its version, as Tauri reports it. */
+	webview: string,
+	/**  The open vault's counts, or `None`. */
+	counts?: VaultCounts | null,
+};
+
+/**
+ *  What the diagnostic report says about this machine (M7): the OS and architecture, the
+ *  webview and its version, and the vault's counts. No path, no title, no content.
+ */
+export type Diagnostics_Serialize = {
+	/**  `std::env::consts::OS`. */
+	os: string,
+	/**  `std::env::consts::ARCH`. */
+	arch: string,
+	/**  The webview and its version, as Tauri reports it. */
+	webview: string,
+	/**  The open vault's counts, or `None`. */
+	counts: VaultCounts | null,
+};
 
 /**  Which end of a relation the results are. */
 export type Direction = 
@@ -1858,6 +1896,16 @@ export type VaultChanged_Deserialize = Committed_Deserialize;
  *  folder commits a batch of outside changes.
  */
 export type VaultChanged_Serialize = Committed_Serialize;
+
+/**  What the diagnostic report says about the vault (M7): numbers, never content. */
+export type VaultCounts = {
+	/**  Objects, the Trash included. */
+	objects: number,
+	/**  Blobs in the store. */
+	blobs: number,
+	/**  The schema version the vault is at. */
+	schema_version: number,
+};
 
 /**  About the open vault. */
 export type VaultInfo = {

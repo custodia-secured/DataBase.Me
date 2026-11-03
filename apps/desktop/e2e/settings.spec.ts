@@ -43,6 +43,21 @@ test("the mode, the theme and update checks change from the dialog", async ({ ap
     dialog.getByText(/github\.com\/custodia-secured\/DataBase\.Me\/issues/),
   ).toBeVisible();
 
+  // The diagnostic report reaches the clipboard, or is shown to copy where the clipboard is not
+  // given to the page; either way it names the versions and never the vault's path.
+  await app.ipc("object_get", { id: "01ARZ3NDEKTSV4RRFFQ69G5FAV" }).catch(() => undefined);
+  await app.press(dialog.getByRole("button", { name: "Copy diagnostic report" }));
+  const copied = dialog.getByRole("button", { name: "Diagnostic report copied" });
+  const shown = dialog.getByRole("textbox", { name: /copy this by hand/ });
+  await expect(copied.or(shown)).toBeVisible();
+  if (await shown.isVisible()) {
+    const text = await shown.inputValue();
+    expect(text).toContain("DataBase.Me diagnostic report");
+    expect(text).toMatch(/app: \d+\.\d+\.\d+, vault format \d+/);
+    expect(text).toMatch(/vault: \d+ objects, \d+ blobs, schema \d+/);
+    expect(text).not.toContain("e2e-data");
+  }
+
   await app.press(dialog.getByRole("button", { name: "Close" }));
   await expect(dialog).toBeHidden();
   // Simple mode shows in the pane at once.

@@ -64,6 +64,7 @@
     "allow-import-apply",
     "allow-provenance-list",
     "allow-settings-get",
-    "allow-settings-set"
+    "allow-settings-set",
+    "allow-app-diagnostics"
   ]
 }

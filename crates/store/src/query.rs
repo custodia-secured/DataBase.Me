@@ -512,6 +512,11 @@ impl Reader<'_> {
         count(self.conn, "SELECT count(*) FROM objects", [])
     }
 
+    /// How many blobs the vault holds (the diagnostic report, M7).
+    pub fn blob_count(&self) -> Result<u64> {
+        count(self.conn, "SELECT count(*) FROM blobs", [])
+    }
+
     /// A sort key that puts an item at `position` among `siblings`. `moving` is the item being
     /// moved, if any, which does not count as its own sibling.
     pub(crate) fn sort_key_at(

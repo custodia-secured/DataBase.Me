@@ -232,6 +232,14 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
         "provenance_list" => ok(api::provenance_list(s, arg(args, "objectId")?)),
         "settings_get" => ok(api::settings_get(s)),
         "settings_set" => ok(api::settings_set(s, arg(args, "patch")?)),
+        "app_diagnostics" => ok(api::vault_counts(s).map(|counts| {
+            json!({
+                "os": std::env::consts::OS,
+                "arch": std::env::consts::ARCH,
+                "webview": "e2e server",
+                "counts": counts,
+            })
+        })),
         _ => Err(invalid(format!("unknown command {cmd:?}"))),
     }
 }

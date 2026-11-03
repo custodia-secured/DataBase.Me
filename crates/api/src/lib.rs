@@ -351,6 +351,32 @@ pub fn vault_open(session: &Session, path: &str, options: VaultOptions) -> Reply
     replace(session, || Vault::open(Path::new(path), options))
 }
 
+/// What the diagnostic report says about the vault (M7): numbers, never content.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct VaultCounts {
+    /// Objects, the Trash included.
+    pub objects: u64,
+    /// Blobs in the store.
+    pub blobs: u64,
+    /// The schema version the vault is at.
+    pub schema_version: u32,
+}
+
+/// The open vault's counts, or `None` when no vault is open.
+pub fn vault_counts(session: &Session) -> Reply<Option<VaultCounts>> {
+    let guard = session.lock();
+    let Some(vault) = guard.as_ref() else {
+        return Ok(None);
+    };
+    let read = vault.read();
+    Ok(Some(VaultCounts {
+        objects: read.object_count()?,
+        blobs: read.blob_count()?,
+        schema_version: dbme_store::SCHEMA_VERSION,
+    }))
+}
+
 /// Closes the open vault, if any.
 pub fn vault_close(session: &Session) -> Reply<()> {
     session.close();
