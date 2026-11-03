@@ -29,8 +29,8 @@ One tab stop; the arrows move inside it.
 | Enter, Space     | Open the page                                |
 | Alt+Up, Alt+Down | Move the page up or down among its siblings  |
 
-The **New page** button and the **⋯** actions button (New page inside, Move to…) sit above the
-list. In the Move dialog, type to find the new parent, Tab to the choices, Enter to choose.
+The **New page** button and the **⋯** actions button (New page inside, Move up, Move down, Move
+to…, Move to Trash) sit above the list. In the Move dialog, type to find the new parent, Tab to the choices, Enter to choose.
 
 ## The Document view
 
@@ -60,7 +60,8 @@ One tab stop; the arrows move between nodes. Left goes to the parent, Right to t
 (or unfolds), Up and Down among siblings; Alt+Up and Alt+Down reorder. Tab adds a child and Enter
 a sibling, as mind-map tools do; F2 renames; Delete sends a node to the Trash; Space folds and
 unfolds; Ctrl+Enter opens the node's page. Shift+Tab always leaves the map. A relation drawn
-between nodes is chosen with Tab and removed with Delete.
+between nodes is chosen by clicking it and removed with Delete; it is not on the keyboard's path
+in 0.1.
 
 ## The Table view
 

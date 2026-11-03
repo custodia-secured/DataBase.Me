@@ -29,8 +29,8 @@ The pages land under the open page when you tick **Put them under**, or under a 
 ## Import, and undo
 
 **Import _n_ objects** writes them. The receipt says what was written and offers **Open the
-receipt**, a page that lists the sources and what came of each, and **Undo**, which removes the
-import whole: one undo step per ten thousand pages, so a large import is a few steps, not one per
+receipt**, a page that lists the sources and what came of each, and **Undo the import**, which
+removes the import whole: one undo step per ten thousand pages, so a large import is a few steps, not one per
 page.
 
 ## Where a page came from
@@ -42,12 +42,13 @@ exports, mirrors to the files folder and is undone with the page.
 ## Hostile files
 
 Files from outside are treated as untrusted. A malformed PDF, a picture that claims an absurd
-size, a spreadsheet with formulas or a sheet named like a path, an archive inside an archive: each
-is contained, reported in the preview, and never runs anything. The parsers are fuzzed nightly in
-the project's CI.
+size, a spreadsheet with formulas or a sheet named like a path: each is contained, reported in the
+preview, and never runs anything. An archive (zip, tar) is not opened at all; it is attached as a
+file like any other. The parsers are fuzzed nightly in the project's CI.
 
 ## From the command line
 
-The `dbme` tool imports without the app: `dbme import <source>… --into <vault>`, with `--dry-run`
-for the preview. It also imports an export folder, which rebuilds a vault from a full export
+The `dbme` tool imports without the app: `dbme import <source>… <vault>`, with `--dry-run` for the
+preview and `--into <page id>` to put the pages under an existing page. With a vault folder that
+does not exist yet, it imports an export folder, which rebuilds a vault from a full export
 ([the vault](the-vault.md)).

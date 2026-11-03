@@ -38,7 +38,7 @@ or the `.msi` for Windows, `DataBase.Me_<version>_aarch64.dmg` (Apple Silicon) o
 (Intel) for macOS, and the `.AppImage`, `.deb` or `.rpm` for Linux. Every release carries a
 `SHA256SUMS.txt` to check a download against. The
 [getting started](docs/user-guide/getting-started.md) page walks through the first launch, and
-says what each system warns about an installer that is not yet signed and how to proceed.
+says what each system warns about the unsigned 0.1 installer and how to proceed.
 
 The app makes no network request: there is nothing to sign up for, and nothing phones home. The
 [privacy](docs/user-guide/privacy.md) page says how that is tested on every change, and how to

@@ -15,9 +15,9 @@ files with a `SHA256SUMS.txt`; the version is in every file name.
 | Debian, Ubuntu       | `DataBase.Me_<version>_amd64.deb`                            |
 | Fedora, openSUSE     | `DataBase.Me-<version>-1.x86_64.rpm`                         |
 
-**What the system may warn.** Release 0.1 is not code-signed unless the project has bought the
-certificates by the time it is tagged; the release notes say which. An unsigned installer is not
-less safe for being unsigned, but the operating systems treat it as unknown:
+**What the system may warn.** Release 0.1 is not code-signed: the project ships it unsigned and
+publishes checksums instead. An unsigned installer is not less safe for being unsigned, but the
+operating systems treat it as unknown:
 
 - _Windows_ shows a SmartScreen page, "Windows protected your PC". Press **More info**, then
   **Run anyway**.
@@ -59,8 +59,8 @@ The app opens on a short setup:
 **Finish** opens the vault. Nothing in setup, and nothing after it, touches the network: see
 [privacy](privacy.md).
 
-Setup can be run again from Settings (**Set up again**). With a vault open, it keeps the vault
-and skips that step.
+Setup can be run again from Settings (**Set up again**). With a vault open, it keeps the vault:
+that step shows where the vault is instead of asking.
 
 ## Where things are
 

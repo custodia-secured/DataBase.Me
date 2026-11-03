@@ -388,31 +388,40 @@ impl Reader<'_> {
     }
 
     /// Where an object came from: its provenance rows, oldest first (ADR-0026).
+    ///
+    /// Sorted here, not by SQL: `delete_object` asks this for every object it deletes for good,
+    /// and the usual answer is no rows. With an `ORDER BY` the statement cost 10.5 µs a call
+    /// against 2.2 µs without, the same as the loop's other reads, which made deleting 10,000
+    /// objects a third slower than before M6 (2026-11-03, the M1 budget on CI).
     pub fn provenance_of(&self, object_id: Id) -> Result<Vec<ProvenanceRow>> {
-        collect(
+        let mut rows = collect(
             self.conn,
             concat!(
                 "SELECT ",
                 provenance_columns!(),
-                " FROM provenance WHERE object_id = ?1 ORDER BY created_at, id"
+                " FROM provenance WHERE object_id = ?1"
             ),
             [object_id.to_string()],
             provenance_row,
-        )
+        )?;
+        rows.sort_unstable_by_key(|row| (row.created_at, row.id));
+        Ok(rows)
     }
 
     /// Every provenance row an import run wrote, oldest first: the run's receipt (ADR-0026).
     pub fn provenance_of_run(&self, import_run_id: Id) -> Result<Vec<ProvenanceRow>> {
-        collect(
+        let mut rows = collect(
             self.conn,
             concat!(
                 "SELECT ",
                 provenance_columns!(),
-                " FROM provenance WHERE import_run_id = ?1 ORDER BY created_at, id"
+                " FROM provenance WHERE import_run_id = ?1"
             ),
             [import_run_id.to_string()],
             provenance_row,
-        )
+        )?;
+        rows.sort_unstable_by_key(|row| (row.created_at, row.id));
+        Ok(rows)
     }
 
     /// The live objects under `parent` (`None`: the top level) with exactly this title, in order.

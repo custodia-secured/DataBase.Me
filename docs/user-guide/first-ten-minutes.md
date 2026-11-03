@@ -31,9 +31,10 @@ Open the palette and run `> Mode: Organizer`. The page now shows a **types** lin
 Choose a type from **Add a type**; a type brings its fields with it, and each field is a button
 under the types line that edits in place. Pick a value.
 
-To put the page somewhere, press the **⋯** button above the pages list (the actions for the open
-page) and choose **Move to…**. Type the name of the page it should live under and choose it. The
-breadcrumbs at the top change at once.
+To put the page somewhere, it needs somewhere to go: press **New page** above the pages list and
+name it **Inbox**. Open today's page again, press the **⋯** button above the list (the actions for
+the open page) and choose **Move to…**. Type `Inbox` and choose it. The breadcrumbs at the top
+change at once.
 
 Switching back to Simple hides the types and fields again. It changes what is shown, never what is
 stored: a vault made in Organizer opens the same in Simple.
@@ -70,7 +71,7 @@ default, it adds the change log (`ops.jsonl`), the vault's facts (`vault_meta.js
 attached file under `blobs/`; from those, the command-line tool rebuilds the vault to the byte:
 
 ```sh
-dbme import <the export folder> --into <a new vault folder>
+dbme import <the export folder> <a new vault folder>
 ```
 
 The status line under the button says what was written. The format of every file is documented
