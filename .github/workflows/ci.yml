@@ -274,10 +274,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-    # The probes assert what Windows reports (gate 1e); on the other two systems the printed
-    # event lists are the record ADR-0024 cites. The job never blocks a merge: the engine does
-    # not depend on the watcher (`rescan` derives the same events), and a runner's file-system
-    # timing is not ours.
+    # The probes assert what Windows reports (gate 1e) and, on the other two systems, print
+    # whether each shape matched; the printed event lists are the record ADR-0024 cites. The
+    # engine's own watcher test asserts on all three. The job is advisory: the engine does not
+    # depend on the watcher (`rescan` derives the same events), and a runner's file-system timing
+    # is not ours.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v5
@@ -288,7 +289,7 @@ jobs:
         run: |
           mkdir -p target/watcher-probes
           cargo test --locked -p dbme-mirror --test gate_watcher --test watcher -- \
-            --include-ignored --test-threads=1 --nocapture 2>&1 \
+            --test-threads=1 --nocapture 2>&1 \
             | tee "target/watcher-probes/${{ matrix.os }}.txt"
       - name: Keep the record
         if: always()
