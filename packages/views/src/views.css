@@ -1291,3 +1291,131 @@ li.ProseMirror-selectednode::after {
 .dbme-map__relation .react-flow__edge-textbg {
   fill: var(--dbme-color-bg);
 }
+
+/* --- Files folder (ADR-0021) ---------------------------------------------------------------- */
+
+.dbme-files .dbme-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-3);
+  max-width: 36rem;
+}
+
+.dbme-files__intro,
+.dbme-files__path,
+.dbme-files__progress,
+.dbme-conflict__help,
+.dbme-conflict__detail {
+  margin: 0;
+}
+
+.dbme-files__path code,
+.dbme-conflict__head code {
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+}
+
+.dbme-files__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--dbme-space-2);
+}
+
+.dbme-files__progress progress {
+  flex: 0 0 6rem;
+}
+
+.dbme-files__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--dbme-space-2);
+}
+
+.dbme-files__folder {
+  display: flex;
+  flex: 1 1 14rem;
+  flex-direction: column;
+  gap: var(--dbme-space-1);
+  font-size: 0.875rem;
+}
+
+.dbme-files__inbox h3 {
+  margin: 0 0 var(--dbme-space-2);
+  font-size: 1rem;
+}
+
+.dbme-conflicts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dbme-conflict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-1);
+  padding: var(--dbme-space-2) var(--dbme-space-3);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-conflict__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-1) var(--dbme-space-2);
+  align-items: baseline;
+}
+
+.dbme-conflict__help,
+.dbme-conflict__detail {
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.875rem;
+}
+
+.dbme-conflict__actions,
+.dbme-hold__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-2);
+}
+
+.dbme-hold {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbme-space-2) var(--dbme-space-3);
+  padding: var(--dbme-space-2) var(--dbme-space-3);
+  border-bottom: 1px solid var(--dbme-color-border);
+  background: var(--dbme-color-surface);
+}
+
+.dbme-hold__text {
+  flex: 1 1 16rem;
+  margin: 0;
+}
+
+.dbme-files-badge {
+  position: relative;
+}
+
+.dbme-files-badge__count {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 1rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--dbme-color-danger);
+  color: var(--dbme-color-bg);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  text-align: center;
+}
+
+.dbme-files__footer {
+  justify-content: flex-end;
+}

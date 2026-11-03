@@ -9,9 +9,9 @@
  * its own echo while the user types.
  */
 import type { QueryClient } from "@tanstack/react-query";
-import type { Committed_Serialize } from "./bindings";
+import type { Committed_Serialize, MirrorStatus } from "./bindings";
 import { events } from "./ipc";
-import { VAULT } from "./queries";
+import { keys, VAULT } from "./queries";
 
 type Listener = (committed: Committed_Serialize) => void;
 const listeners = new Set<Listener>();
@@ -22,12 +22,26 @@ export function onVaultChanged(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
-/** Refreshes `client`'s vault queries after every change. Returns a function that stops it. */
+/**
+ * Refreshes `client`'s vault queries after every change, and keeps the files folder's status
+ * current from the shell's `mirror-changed` events (ADR-0021): the status is set straight from
+ * the event, and the Conflicts inbox is read again. Returns a function that stops both.
+ */
 export async function startLiveRefresh(client: QueryClient): Promise<() => void> {
-  const unlisten = await events.vaultChanged.listen((event) => {
-    const committed = event.payload;
-    for (const listener of listeners) listener(committed);
-    void client.invalidateQueries({ queryKey: [VAULT] });
-  });
-  return unlisten;
+  const [unlistenVault, unlistenMirror] = await Promise.all([
+    events.vaultChanged.listen((event) => {
+      const committed = event.payload;
+      for (const listener of listeners) listener(committed);
+      void client.invalidateQueries({ queryKey: [VAULT] });
+    }),
+    events.mirrorChanged.listen((event) => {
+      const status: MirrorStatus = event.payload;
+      client.setQueryData(keys.mirror(), status);
+      void client.invalidateQueries({ queryKey: [VAULT, "conflicts"] });
+    }),
+  ]);
+  return () => {
+    unlistenVault();
+    unlistenMirror();
+  };
 }

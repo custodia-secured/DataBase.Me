@@ -15,6 +15,8 @@ export interface ShellState {
   split: boolean;
   drawer: boolean;
   palette: boolean;
+  /** Whether the files folder dialog (settings, status and the Conflicts inbox) is open. */
+  files: boolean;
   /** What the results surface shows in place of the panes, if anything. */
   results: ResultsSource | null;
   select: (id: Id | null) => void;
@@ -22,6 +24,7 @@ export interface ShellState {
   setSplit: (split: boolean) => void;
   setDrawer: (open: boolean) => void;
   setPalette: (open: boolean) => void;
+  setFiles: (open: boolean) => void;
   showResults: (results: ResultsSource | null) => void;
 }
 
@@ -31,6 +34,7 @@ export const useShell = create<ShellState>()((set) => ({
   split: false,
   drawer: false,
   palette: false,
+  files: false,
   results: null,
   select: (id) => {
     set({ selected: id, drawer: false, results: null });
@@ -50,6 +54,9 @@ export const useShell = create<ShellState>()((set) => ({
   },
   setPalette: (open) => {
     set({ palette: open });
+  },
+  setFiles: (open) => {
+    set({ files: open });
   },
   showResults: (results) => {
     set({ results, drawer: false });

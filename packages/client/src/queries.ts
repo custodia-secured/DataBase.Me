@@ -8,9 +8,11 @@ import { keepPreviousData, useQuery, type QueryClient } from "@tanstack/react-qu
 import type {
   Backlink_Serialize,
   BlockRow_Serialize,
+  Conflict_Serialize,
   FacetBucket,
   FieldRow,
   Id,
+  MirrorStatus,
   ObjectRow_Serialize,
   ObjectSummary_Serialize,
   ObjectTree_Serialize,
@@ -48,6 +50,8 @@ export const keys = {
   facets: (query: Query_Deserialize, field: string) => [VAULT, "facets", query, field] as const,
   views: () => [VAULT, "views"] as const,
   view: (id: Id) => [VAULT, "view", id] as const,
+  mirror: () => [VAULT, "mirror"] as const,
+  conflicts: (openOnly: boolean) => [VAULT, "conflicts", openOnly] as const,
 };
 
 /** Blobs never change, so their key is outside {@link VAULT} and no refresh reloads them. */
@@ -212,6 +216,22 @@ export function useView(id: Id | null) {
     queryKey: keys.view(id ?? ""),
     queryFn: () => unwrap(commands.viewGet(id ?? "")),
     enabled: id !== null,
+  });
+}
+
+/** Where the files folder stands (ADR-0021). The shell's `mirror-changed` event updates it too. */
+export function useMirrorStatus() {
+  return useQuery<MirrorStatus>({
+    queryKey: keys.mirror(),
+    queryFn: () => unwrap(commands.mirrorStatus()),
+  });
+}
+
+/** The Conflicts inbox: every entry, or only the open ones. */
+export function useConflicts(openOnly = true) {
+  return useQuery<Conflict_Serialize[]>({
+    queryKey: keys.conflicts(openOnly),
+    queryFn: () => unwrap(commands.conflictsList(openOnly)),
   });
 }
 

@@ -611,6 +611,14 @@ impl<F: Fs> Mirror<F> {
             held.state = MirrorFileState::Held;
             vault.mirror_state_set(&held)?;
         }
+        // A file with no row is reported again by every rescan: one open entry per path.
+        if let Some(open) = vault
+            .conflicts(true)?
+            .into_iter()
+            .find(|c| c.kind == ConflictKind::ParseError && c.rel_path.as_deref() == Some(rel_path))
+        {
+            return Ok(open.id);
+        }
         Ok(vault.conflict_add(NewConflict {
             object_id: state.map(|s| s.object_id),
             rel_path: Some(rel_path.to_owned()),

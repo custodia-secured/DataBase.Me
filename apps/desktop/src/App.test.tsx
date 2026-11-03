@@ -42,7 +42,20 @@ describe("App shell", () => {
           case "objects_count":
             return 0;
           case "types_list":
+          case "conflicts_list":
             return [];
+          case "mirror_status":
+            return {
+              enabled: false,
+              folder: null,
+              synced: 0,
+              pending: 0,
+              held: 0,
+              dirty: 0,
+              open_conflicts: 0,
+              hold: null,
+              full_rewrite_needed: false,
+            };
           default:
             return null;
         }
