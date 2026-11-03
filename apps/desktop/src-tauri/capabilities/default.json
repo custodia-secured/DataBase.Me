@@ -50,6 +50,14 @@
     "allow-blocks-apply",
     "allow-attachments-list",
     "allow-attachment-add",
-    "allow-blob-read"
+    "allow-blob-read",
+    "allow-mirror-status",
+    "allow-mirror-enable",
+    "allow-mirror-disable",
+    "allow-mirror-sync-now",
+    "allow-conflicts-list",
+    "allow-conflict-resolve",
+    "allow-mirror-hold-decide",
+    "allow-export-run"
   ]
 }

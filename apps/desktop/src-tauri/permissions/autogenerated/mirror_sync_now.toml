@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mirror-sync-now"
+description = "Enables the mirror_sync_now command without any pre-configured scope."
+commands.allow = ["mirror_sync_now"]
+
+[[permission]]
+identifier = "deny-mirror-sync-now"
+description = "Denies the mirror_sync_now command without any pre-configured scope."
+commands.deny = ["mirror_sync_now"]

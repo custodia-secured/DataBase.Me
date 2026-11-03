@@ -13,7 +13,7 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use dbme_core::chain::OpRecord;
 use dbme_core::files::paths;
@@ -91,7 +91,8 @@ pub struct TypeExport {
 }
 
 /// What an export wrote.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct ExportReport {
     /// Types in `schema/types.json`, each with a CSV under `data/`.
     pub types: usize,

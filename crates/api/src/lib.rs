@@ -7,7 +7,8 @@
 //! [`IpcError`] the UI can act on. After every committed change the session's notifier receives
 //! the [`Committed`] record, which the shell sends to the UI as `vault-changed`.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::mpsc::Sender;
 use std::sync::{Mutex, MutexGuard};
 
 use base64::Engine;
@@ -27,8 +28,14 @@ use dbme_store::{
 };
 
 mod blocks;
+mod mirror;
 
 pub use blocks::BlockChange;
+pub use mirror::{
+    DEFAULT_FOLDER, ExportReport, HoldChoice, MirrorStatus, MirrorSync, MirrorWorker,
+    OVERRIDES_DIR, conflict_resolve, conflicts_list, export_run, mirror_disable, mirror_enable,
+    mirror_hold_decide, mirror_status, mirror_sync_now, spawn_mirror_worker,
+};
 
 /// What went wrong, in a form the UI can act on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -128,11 +135,21 @@ pub const MAX_IPC_BLOB: usize = 32 * 1024 * 1024;
 pub const LONG_SORT_KEY: usize = 16;
 
 type Notify = Box<dyn Fn(&Committed) + Send + Sync>;
+type MirrorNotify = Box<dyn Fn(&MirrorStatus) + Send + Sync>;
 
-/// The vault open in one window, if any, and who to tell about its changes.
+/// The vault open in one window, if any, its files folder while that is on, and who to tell
+/// about its changes.
 pub struct Session {
     vault: Mutex<Option<Vault>>,
+    /// The files folder's engine, while the folder is enabled. Locked after `vault`, never before.
+    mirror: Mutex<Option<mirror::Running>>,
     notify: Notify,
+    mirror_notify: MirrorNotify,
+    /// Where the app keeps its settings, for the files folder's override file. `None` for a shell
+    /// that keeps none.
+    config_dir: Option<PathBuf>,
+    /// The worker's wake-up channel, once one runs.
+    waker: Mutex<Option<Sender<mirror::Wake>>>,
 }
 
 impl Session {
@@ -140,8 +157,29 @@ impl Session {
     pub fn new(notify: impl Fn(&Committed) + Send + Sync + 'static) -> Self {
         Self {
             vault: Mutex::new(None),
+            mirror: Mutex::new(None),
             notify: Box::new(notify),
+            mirror_notify: Box::new(|_| {}),
+            config_dir: None,
+            waker: Mutex::new(None),
         }
+    }
+
+    /// Where the app keeps its settings: the files folder's override file goes there.
+    #[must_use]
+    pub fn with_config_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.config_dir = Some(dir.into());
+        self
+    }
+
+    /// `notify` receives the files folder's status whenever it changes (`mirror-changed`).
+    #[must_use]
+    pub fn with_mirror_notify(
+        mut self,
+        notify: impl Fn(&MirrorStatus) + Send + Sync + 'static,
+    ) -> Self {
+        self.mirror_notify = Box::new(notify);
+        self
     }
 
     fn lock(&self) -> MutexGuard<'_, Option<Vault>> {
@@ -152,9 +190,30 @@ impl Session {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// Closes the open vault, if any.
+    fn lock_mirror(&self) -> MutexGuard<'_, Option<mirror::Running>> {
+        self.mirror
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn lock_waker(&self) -> MutexGuard<'_, Option<Sender<mirror::Wake>>> {
+        self.waker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Wakes the worker, if one runs, so it writes what the last commit changed.
+    fn wake_mirror(&self) {
+        if let Some(tx) = self.lock_waker().as_ref() {
+            let _ = tx.send(mirror::Wake::Changed);
+        }
+    }
+
+    /// Closes the open vault, if any, and stops its files folder.
     pub fn close(&self) {
-        *self.lock() = None;
+        let mut vault = self.lock();
+        *self.lock_mirror() = None;
+        *vault = None;
     }
 
     /// Runs `use_vault` on the open vault.
@@ -179,6 +238,7 @@ impl Session {
         let (value, committed) = self.with(change)?;
         if let Some(committed) = committed {
             (self.notify)(&committed);
+            self.wake_mirror();
         }
         Ok(value)
     }
@@ -207,13 +267,28 @@ fn replace(
     open: impl FnOnce() -> Result<Vault, StoreError>,
 ) -> Reply<VaultInfo> {
     let mut guard = session.lock();
+    let mut running = session.lock_mirror();
     // Close the old vault first: it may be the one being opened again.
+    *running = None;
     *guard = None;
     let vault = open()?;
     let info = info(&vault);
     // The ID only: paths can name people and projects (logs never hold user content).
     tracing::info!(vault = %info.id, "vault open");
+    // The files folder stays on across openings; a folder that cannot be used leaves it off
+    // for this opening, and the status says so.
+    if vault.mirror_meta_get(dbme_store::FOLDER_ENABLED)?.is_some() {
+        match mirror::start(session.config_dir.as_deref(), &vault) {
+            Ok(started) => *running = Some(started),
+            Err(error) => {
+                tracing::warn!(error = %error.message, "files folder: not started");
+            }
+        }
+    }
     *guard = Some(vault);
+    drop(running);
+    drop(guard);
+    session.wake_mirror();
     Ok(info)
 }
 

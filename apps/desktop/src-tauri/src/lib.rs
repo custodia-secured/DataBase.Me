@@ -11,8 +11,8 @@
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use tauri::Manager;
@@ -114,8 +114,15 @@ pub fn run(started: Instant) -> Result<(), Box<dyn std::error::Error>> {
         .setup(move |app| {
             builder.mount_events(app);
             // Commands run on the event loop, which starts after setup, so none can arrive before
-            // the session exists.
-            app.manage(ipc::session(app.handle()));
+            // the session exists. The files folder's worker shares the session and lives as long
+            // as the app; dropping it on exit stops the thread.
+            let session = {
+                let startup = app.state::<Startup>();
+                Arc::new(ipc::session(app.handle(), &startup))
+            };
+            let worker = dbme_api::spawn_mirror_worker(Arc::clone(&session));
+            app.manage(session);
+            app.manage(worker);
             Ok(())
         })
         .run(tauri::generate_context!())?;

@@ -110,10 +110,27 @@ export const commands = {
 	attachmentAdd: (objectId: Id, data: string, filename: string | null, mime: string | null) => typedError<ContentHash, IpcError>(__TAURI_INVOKE("attachment_add", { objectId, data, filename, mime })),
 	/**  A blob's bytes, as base64. */
 	blobRead: (hash: ContentHash) => typedError<string, IpcError>(__TAURI_INVOKE("blob_read", { hash })),
+	/**  Where the files folder stands. */
+	mirrorStatus: () => typedError<MirrorStatus_Serialize, IpcError>(__TAURI_INVOKE("mirror_status")),
+	/**  Turns the files folder on, at `folder` or, with `null`, at `files/` inside the vault. */
+	mirrorEnable: (folder: string | null) => typedError<MirrorStatus_Serialize, IpcError>(__TAURI_INVOKE("mirror_enable", { folder })),
+	/**  Turns the files folder off. The files stay. */
+	mirrorDisable: () => typedError<MirrorStatus_Serialize, IpcError>(__TAURI_INVOKE("mirror_disable")),
+	/**  Syncs the files folder both ways now. */
+	mirrorSyncNow: () => typedError<MirrorSync_Serialize, IpcError>(__TAURI_INVOKE("mirror_sync_now")),
+	/**  The Conflicts inbox: every entry, or only the open ones. */
+	conflictsList: (openOnly: boolean) => typedError<Conflict_Serialize[], IpcError>(__TAURI_INVOKE("conflicts_list", { openOnly })),
+	/**  Marks an inbox entry resolved, with how. Returns `false` if it already was. */
+	conflictResolve: (id: Id, resolution: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("conflict_resolve", { id, resolution })),
+	/**  Decides a bulk-change hold: proceed with the held changes, or restore the folder. */
+	mirrorHoldDecide: (id: Id, choice: HoldChoice) => typedError<MirrorSync_Serialize, IpcError>(__TAURI_INVOKE("mirror_hold_decide", { id, choice })),
+	/**  Writes the export of the open vault into `dir`; with `full`, a copy `import` can rebuild. */
+	exportRun: (dir: string, full: boolean) => typedError<ExportReport_Serialize, IpcError>(__TAURI_INVOKE("export_run", { dir, full })),
 };
 
 /** Events */
 export const events = {
+	mirrorChanged: makeEvent<MirrorChanged_Serialize, MirrorChanged_Deserialize>("mirror-changed"),
 	vaultChanged: makeEvent<VaultChanged_Serialize, VaultChanged_Deserialize>("vault-changed"),
 };
 
@@ -399,6 +416,62 @@ export type Condition_Serialize = {
 	value: Value,
 };
 
+/**  One row of `conflicts`: something in the inbox. */
+export type Conflict = Conflict_Serialize | Conflict_Deserialize;
+
+/**  What kind of thing the person must resolve. */
+export type ConflictKind = 
+/**  The app and the file changed the same block or field, and the texts do not merge. */
+"edit_edit" | 
+/**  One side edited an object the other side deleted. */
+"edit_delete" | 
+/**  The file could not be parsed; its object's writes are held. */
+"parse_error" | 
+/**  A value in the file does not fit its field's kind. */
+"invalid_value" | 
+/**  Two live files carry the same `id`. */
+"duplicate_id" | 
+/**  A file in the folder could not be taken in as an object. */
+"dropped_file" | 
+/**  Too many files changed at once; nothing was applied. */
+"bulk_change_hold" | 
+/**  A file the app knows by path has lost its `id` (informational). */
+"missing_id" | 
+/**  A cloud drive left a conflict copy next to a file. */
+"cloud_conflict_file";
+
+/**  One row of `conflicts`: something in the inbox. */
+export type Conflict_Deserialize = {
+	id: Id,
+	object_id?: Id | null,
+	rel_path?: string | null,
+	kind: ConflictKind,
+	/**  What the inbox shows: the kind decides the shape. */
+	details: Value,
+	/**  The Note that holds the file's version, for an `edit_edit`. */
+	conflict_copy_id?: Id | null,
+	/**  How it was resolved, once it is. */
+	resolution?: string | null,
+	created_at: number,
+	resolved_at?: number | null,
+};
+
+/**  One row of `conflicts`: something in the inbox. */
+export type Conflict_Serialize = {
+	id: Id,
+	object_id: Id | null,
+	rel_path: string | null,
+	kind: ConflictKind,
+	/**  What the inbox shows: the kind decides the shape. */
+	details: Value,
+	/**  The Note that holds the file's version, for an `edit_edit`. */
+	conflict_copy_id: Id | null,
+	/**  How it was resolved, once it is. */
+	resolution: string | null,
+	created_at: number,
+	resolved_at: number | null,
+};
+
 /**  A hash with its algorithm, for example `blake3:af13…` (64 hex digits). */
 export type ContentHash = string;
 
@@ -410,6 +483,37 @@ export type Direction =
 "outgoing" | 
 /**  Results are what points to the object. */
 "incoming";
+
+/**  What an export wrote. */
+export type ExportReport = ExportReport_Serialize | ExportReport_Deserialize;
+
+/**  What an export wrote. */
+export type ExportReport_Deserialize = {
+	/**  Types in `schema/types.json`, each with a CSV under `data/`. */
+	types: number,
+	/**  Files under `views/`. */
+	views: number,
+	/**  Rows across every CSV (an object with two types is counted twice). */
+	objects: number,
+	/**  Lines of `ops.jsonl`, for a full export. */
+	ops?: number | null,
+	/**  Files copied under `blobs/`, for a full export. */
+	blobs?: number | null,
+};
+
+/**  What an export wrote. */
+export type ExportReport_Serialize = {
+	/**  Types in `schema/types.json`, each with a CSV under `data/`. */
+	types: number,
+	/**  Files under `views/`. */
+	views: number,
+	/**  Rows across every CSV (an object with two types is counted twice). */
+	objects: number,
+	/**  Lines of `ops.jsonl`, for a full export. */
+	ops: number | null,
+	/**  Files copied under `blobs/`, for a full export. */
+	blobs: number | null,
+};
 
 /**  One value among a query's results, and how many of them have it. */
 export type FacetBucket = {
@@ -453,6 +557,13 @@ export type From_Serialize = {
 	under: Id | null,
 };
 
+/**  What to do with a held batch of changes. */
+export type HoldChoice = 
+/**  Apply the held changes: the removals and rewrites were meant. */
+"proceed" | 
+/**  Put the folder back the way the vault has it. */
+"restore";
+
 /**  A ULID. Sorts by creation time; safe in file names and block anchors. */
 export type Id = string;
 
@@ -484,6 +595,126 @@ export type IpcErrorKind =
 "invalid" | 
 /**  Reading or writing failed. */
 "storage";
+
+/**
+ *  Sent whenever the files folder's status changes: enabled or disabled, files written or read,
+ *  an inbox entry made or resolved (ADR-0021).
+ */
+export type MirrorChanged = MirrorChanged_Serialize | MirrorChanged_Deserialize;
+
+/**
+ *  Sent whenever the files folder's status changes: enabled or disabled, files written or read,
+ *  an inbox entry made or resolved (ADR-0021).
+ */
+export type MirrorChanged_Deserialize = MirrorStatus_Deserialize;
+
+/**
+ *  Sent whenever the files folder's status changes: enabled or disabled, files written or read,
+ *  an inbox entry made or resolved (ADR-0021).
+ */
+export type MirrorChanged_Serialize = MirrorStatus_Serialize;
+
+/**  Where the files folder stands, for the status line and the `mirror-changed` event. */
+export type MirrorStatus = MirrorStatus_Serialize | MirrorStatus_Deserialize;
+
+/**  Where the files folder stands, for the status line and the `mirror-changed` event. */
+export type MirrorStatus_Deserialize = {
+	/**  Whether the folder is on for this vault. */
+	enabled: boolean,
+	/**  The folder's path, when it is on. */
+	folder?: string | null,
+	/**  Objects whose file is up to date. */
+	synced: number,
+	/**  Objects whose write keeps failing; retried. */
+	pending: number,
+	/**  Objects held by a parse error or a bulk-change hold. */
+	held: number,
+	/**  Objects waiting to be written. */
+	dirty: number,
+	/**  Entries of the Conflicts inbox not yet resolved. */
+	open_conflicts: number,
+	/**  The open bulk-change hold, if any: the UI shows its banner. */
+	hold?: Id | null,
+	/**  Whether every file is about to be written again (first enable, or a type change). */
+	full_rewrite_needed: boolean,
+};
+
+/**  Where the files folder stands, for the status line and the `mirror-changed` event. */
+export type MirrorStatus_Serialize = {
+	/**  Whether the folder is on for this vault. */
+	enabled: boolean,
+	/**  The folder's path, when it is on. */
+	folder: string | null,
+	/**  Objects whose file is up to date. */
+	synced: number,
+	/**  Objects whose write keeps failing; retried. */
+	pending: number,
+	/**  Objects held by a parse error or a bulk-change hold. */
+	held: number,
+	/**  Objects waiting to be written. */
+	dirty: number,
+	/**  Entries of the Conflicts inbox not yet resolved. */
+	open_conflicts: number,
+	/**  The open bulk-change hold, if any: the UI shows its banner. */
+	hold: Id | null,
+	/**  Whether every file is about to be written again (first enable, or a type change). */
+	full_rewrite_needed: boolean,
+};
+
+/**  What one sync did, in both directions. */
+export type MirrorSync = MirrorSync_Serialize | MirrorSync_Deserialize;
+
+/**  What one sync did, in both directions. */
+export type MirrorSync_Deserialize = {
+	/**  Files written. */
+	written: number,
+	/**  Files moved. */
+	renamed: number,
+	/**  Files moved to `.dbme/trash/`. */
+	trashed_files: number,
+	/**  Files removed for good. */
+	removed_files: number,
+	/**  Objects whose write another program blocked. */
+	pending: number,
+	/**  Objects changed from their files. */
+	applied: number,
+	/**  Objects made for new files. */
+	created: number,
+	/**  Objects moved or renamed from their files. */
+	moved: number,
+	/**  Objects trashed because their file is gone. */
+	trashed_objects: number,
+	/**  Inbox entries made. */
+	conflicts: number,
+	/**  The hold made, when the batch was held and nothing applied. */
+	held?: Id | null,
+};
+
+/**  What one sync did, in both directions. */
+export type MirrorSync_Serialize = {
+	/**  Files written. */
+	written: number,
+	/**  Files moved. */
+	renamed: number,
+	/**  Files moved to `.dbme/trash/`. */
+	trashed_files: number,
+	/**  Files removed for good. */
+	removed_files: number,
+	/**  Objects whose write another program blocked. */
+	pending: number,
+	/**  Objects changed from their files. */
+	applied: number,
+	/**  Objects made for new files. */
+	created: number,
+	/**  Objects moved or renamed from their files. */
+	moved: number,
+	/**  Objects trashed because their file is gone. */
+	trashed_objects: number,
+	/**  Inbox entries made. */
+	conflicts: number,
+	/**  The hold made, when the batch was held and nothing applied. */
+	held: Id | null,
+};
 
 /**  A new field of a type. */
 export type NewField = NewField_Serialize | NewField_Deserialize;
@@ -952,13 +1183,22 @@ export type TypeRow_Serialize = {
 
 export type Value = null | boolean | number | string | Value[] | { [key in string]: Value };
 
-/**  Sent after every change to the open vault, including undo and redo. */
+/**
+ *  Sent after every change to the open vault, including undo and redo, and after the files
+ *  folder commits a batch of outside changes.
+ */
 export type VaultChanged = VaultChanged_Serialize | VaultChanged_Deserialize;
 
-/**  Sent after every change to the open vault, including undo and redo. */
+/**
+ *  Sent after every change to the open vault, including undo and redo, and after the files
+ *  folder commits a batch of outside changes.
+ */
 export type VaultChanged_Deserialize = Committed_Deserialize;
 
-/**  Sent after every change to the open vault, including undo and redo. */
+/**
+ *  Sent after every change to the open vault, including undo and redo, and after the files
+ *  folder commits a batch of outside changes.
+ */
 export type VaultChanged_Serialize = Committed_Serialize;
 
 /**  About the open vault. */

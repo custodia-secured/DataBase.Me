@@ -789,6 +789,8 @@ version = "0.0.0"
 dependencies = [
  "base64 0.23.1",
  "dbme-core",
+ "dbme-export",
+ "dbme-mirror",
  "dbme-store",
  "serde",
  "serde_json",
@@ -868,6 +870,7 @@ dependencies = [
  "dbme-store",
  "serde",
  "serde_json",
+ "specta",
  "tempfile",
  "thiserror 2.0.21",
 ]

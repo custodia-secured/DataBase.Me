@@ -16,13 +16,16 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use dbme_api::{self as api, BlockChange, IpcError, IpcErrorKind, Reply, Session, VaultInfo};
+use dbme_api::{
+    self as api, BlockChange, ExportReport, HoldChoice, IpcError, IpcErrorKind, MirrorStatus,
+    MirrorSync, Reply, Session, VaultInfo,
+};
 use dbme_core::model::{AttachmentRow, BlockRow, FieldRow, ObjectRow, TypeRow, ViewRow};
 use dbme_core::query::Query;
 use dbme_core::{ContentHash, Id, SystemClock};
 use dbme_store::{
-    Backlink, Committed, FacetBucket, Identity, NewField, NewObject, NewView, ObjectSummary,
-    ObjectTree, Position, SearchHit, Sort, Source, VaultOptions,
+    Backlink, Committed, Conflict, FacetBucket, Identity, NewField, NewObject, NewView,
+    ObjectSummary, ObjectTree, Position, SearchHit, Sort, Source, VaultOptions,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -34,9 +37,15 @@ use crate::Startup;
 /// The name of the vault the app opens when the UI asks for the default one.
 pub const DEFAULT_VAULT: &str = "Main.dbme";
 
-/// Sent after every change to the open vault, including undo and redo.
+/// Sent after every change to the open vault, including undo and redo, and after the files
+/// folder commits a batch of outside changes.
 #[derive(Clone, Debug, Serialize, Deserialize, specta::Type, tauri_specta::Event)]
 pub struct VaultChanged(pub Committed);
+
+/// Sent whenever the files folder's status changes: enabled or disabled, files written or read,
+/// an inbox entry made or resolved (ADR-0021).
+#[derive(Clone, Debug, Serialize, Deserialize, specta::Type, tauri_specta::Event)]
+pub struct MirrorChanged(pub MirrorStatus);
 
 /// About the running app.
 #[derive(Clone, Debug, Serialize, specta::Type)]
@@ -51,16 +60,30 @@ pub struct AppInfo {
     pub smoke_vault: Option<String>,
 }
 
-/// The session of the main window: its vault, and the `vault-changed` events it sends.
-pub(crate) fn session(app: &AppHandle) -> Session {
-    let app = app.clone();
-    Session::new(move |committed| {
+/// The session of the main window: its vault, its files folder, and the `vault-changed` and
+/// `mirror-changed` events it sends.
+pub(crate) fn session(app: &AppHandle, startup: &Startup) -> Session {
+    let for_vault = app.clone();
+    let for_mirror = app.clone();
+    let session = Session::new(move |committed| {
         // The change is saved whether or not the event gets through; a lost event only delays the
         // UI's refresh.
-        if let Err(error) = VaultChanged(committed.clone()).emit(&app) {
+        if let Err(error) = VaultChanged(committed.clone()).emit(&for_vault) {
             tracing::warn!(%error, "could not send vault-changed");
         }
     })
+    .with_mirror_notify(move |status| {
+        if let Err(error) = MirrorChanged(status.clone()).emit(&for_mirror) {
+            tracing::warn!(%error, "could not send mirror-changed");
+        }
+    });
+    match app_dir(app, startup, true) {
+        Ok(config) => session.with_config_dir(config),
+        Err(error) => {
+            tracing::warn!(error = %error.message, "no configuration folder; the files folder stays at its default");
+            session
+        }
+    }
 }
 
 fn storage(what: &str, error: impl std::fmt::Display) -> IpcError {
@@ -110,7 +133,7 @@ pub(crate) fn app_info(startup: State<'_, Startup>) -> AppInfo {
 pub(crate) fn app_ready(
     app: AppHandle,
     startup: State<'_, Startup>,
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     error: Option<String>,
 ) {
     crate::ready(&app, &startup, error, || session.close());
@@ -122,7 +145,7 @@ pub(crate) fn app_ready(
 pub(crate) async fn vault_create(
     app: AppHandle,
     startup: State<'_, Startup>,
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     path: String,
 ) -> Reply<VaultInfo> {
     api::vault_create(&session, &path, options(&app, &startup)?)
@@ -134,7 +157,7 @@ pub(crate) async fn vault_create(
 pub(crate) async fn vault_open(
     app: AppHandle,
     startup: State<'_, Startup>,
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     path: String,
 ) -> Reply<VaultInfo> {
     api::vault_open(&session, &path, options(&app, &startup)?)
@@ -146,7 +169,7 @@ pub(crate) async fn vault_open(
 pub(crate) async fn vault_open_default(
     app: AppHandle,
     startup: State<'_, Startup>,
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
 ) -> Reply<VaultInfo> {
     let folder = app_dir(&app, &startup, false)?.join("vaults");
     let path = folder.join(DEFAULT_VAULT);
@@ -161,35 +184,35 @@ pub(crate) async fn vault_open_default(
 /// Closes the open vault, if any.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn vault_close(session: State<'_, Session>) -> Reply<()> {
+pub(crate) async fn vault_close(session: State<'_, Arc<Session>>) -> Reply<()> {
     api::vault_close(&session)
 }
 
 /// The open vault, or `None`.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn vault_info(session: State<'_, Session>) -> Reply<Option<VaultInfo>> {
+pub(crate) async fn vault_info(session: State<'_, Arc<Session>>) -> Reply<Option<VaultInfo>> {
     api::vault_info(&session)
 }
 
 /// Undoes the last step. Returns `None` if there is nothing to undo.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn undo(session: State<'_, Session>) -> Reply<Option<Committed>> {
+pub(crate) async fn undo(session: State<'_, Arc<Session>>) -> Reply<Option<Committed>> {
     api::undo(&session)
 }
 
 /// Redoes the last undone step. Returns `None` if there is nothing to redo.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn redo(session: State<'_, Session>) -> Reply<Option<Committed>> {
+pub(crate) async fn redo(session: State<'_, Arc<Session>>) -> Reply<Option<Committed>> {
     api::redo(&session)
 }
 
 /// Every type, by name.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn types_list(session: State<'_, Session>) -> Reply<Vec<TypeRow>> {
+pub(crate) async fn types_list(session: State<'_, Arc<Session>>) -> Reply<Vec<TypeRow>> {
     api::types_list(&session)
 }
 
@@ -197,7 +220,7 @@ pub(crate) async fn types_list(session: State<'_, Session>) -> Reply<Vec<TypeRow
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn fields_list(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     source: Source,
 ) -> Reply<Vec<FieldRow>> {
     api::fields_list(&session, source)
@@ -206,14 +229,14 @@ pub(crate) async fn fields_list(
 /// Adds a field to a type and returns its ID.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn field_create(session: State<'_, Session>, field: NewField) -> Reply<Id> {
+pub(crate) async fn field_create(session: State<'_, Arc<Session>>, field: NewField) -> Reply<Id> {
     api::field_create(&session, field)
 }
 
 /// One object.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn object_get(session: State<'_, Session>, id: Id) -> Reply<ObjectRow> {
+pub(crate) async fn object_get(session: State<'_, Arc<Session>>, id: Id) -> Reply<ObjectRow> {
     api::object_get(&session, id)
 }
 
@@ -221,7 +244,7 @@ pub(crate) async fn object_get(session: State<'_, Session>, id: Id) -> Reply<Obj
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn object_children(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     parent: Option<Id>,
 ) -> Reply<Vec<ObjectRow>> {
     api::object_children(&session, parent)
@@ -230,7 +253,10 @@ pub(crate) async fn object_children(
 /// The objects above `id`, from the top level down to its parent.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn object_ancestors(session: State<'_, Session>, id: Id) -> Reply<Vec<ObjectRow>> {
+pub(crate) async fn object_ancestors(
+    session: State<'_, Arc<Session>>,
+    id: Id,
+) -> Reply<Vec<ObjectRow>> {
     api::object_ancestors(&session, id)
 }
 
@@ -238,7 +264,7 @@ pub(crate) async fn object_ancestors(session: State<'_, Session>, id: Id) -> Rep
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn object_summaries(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     ids: Vec<Id>,
 ) -> Reply<Vec<ObjectSummary>> {
     api::object_summaries(&session, &ids)
@@ -248,7 +274,7 @@ pub(crate) async fn object_summaries(
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn objects_page(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     source: Source,
     sort: Sort,
     offset: u32,
@@ -260,7 +286,7 @@ pub(crate) async fn objects_page(
 /// How many objects `source` lists.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn objects_count(session: State<'_, Session>, source: Source) -> Reply<u32> {
+pub(crate) async fn objects_count(session: State<'_, Arc<Session>>, source: Source) -> Reply<u32> {
     api::objects_count(&session, source)
 }
 
@@ -269,7 +295,7 @@ pub(crate) async fn objects_count(session: State<'_, Session>, source: Source) -
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn object_search(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     text: String,
     limit: u32,
 ) -> Reply<Vec<ObjectSummary>> {
@@ -279,7 +305,7 @@ pub(crate) async fn object_search(
 /// The live relations to an object, with their sources.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn backlinks(session: State<'_, Session>, id: Id) -> Reply<Vec<Backlink>> {
+pub(crate) async fn backlinks(session: State<'_, Arc<Session>>, id: Id) -> Reply<Vec<Backlink>> {
     api::backlinks(&session, id)
 }
 
@@ -287,7 +313,7 @@ pub(crate) async fn backlinks(session: State<'_, Session>, id: Id) -> Reply<Vec<
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn object_tree(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     root: Id,
     limit: u32,
 ) -> Reply<ObjectTree> {
@@ -298,7 +324,7 @@ pub(crate) async fn object_tree(
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn search(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     text: String,
     limit: u32,
 ) -> Reply<Vec<SearchHit>> {
@@ -309,7 +335,7 @@ pub(crate) async fn search(
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn objects_query(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     query: Query,
 ) -> Reply<Vec<ObjectSummary>> {
     api::objects_query(&session, &query)
@@ -318,7 +344,10 @@ pub(crate) async fn objects_query(
 /// How many results a query has in all.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn objects_query_count(session: State<'_, Session>, query: Query) -> Reply<u32> {
+pub(crate) async fn objects_query_count(
+    session: State<'_, Arc<Session>>,
+    query: Query,
+) -> Reply<u32> {
     api::objects_query_count(&session, &query)
 }
 
@@ -326,7 +355,7 @@ pub(crate) async fn objects_query_count(session: State<'_, Session>, query: Quer
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn facets(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     query: Query,
     field: String,
 ) -> Reply<Vec<FacetBucket>> {
@@ -336,56 +365,67 @@ pub(crate) async fn facets(
 /// Every saved view, by name.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn views_list(session: State<'_, Session>) -> Reply<Vec<ViewRow>> {
+pub(crate) async fn views_list(session: State<'_, Arc<Session>>) -> Reply<Vec<ViewRow>> {
     api::views_list(&session)
 }
 
 /// A saved view.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn view_get(session: State<'_, Session>, id: Id) -> Reply<ViewRow> {
+pub(crate) async fn view_get(session: State<'_, Arc<Session>>, id: Id) -> Reply<ViewRow> {
     api::view_get(&session, id)
 }
 
 /// Saves a view and returns its ID.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn view_save(session: State<'_, Session>, view: NewView) -> Reply<Id> {
+pub(crate) async fn view_save(session: State<'_, Arc<Session>>, view: NewView) -> Reply<Id> {
     api::view_save(&session, view)
 }
 
 /// Replaces a saved view's name, renderer, query, settings and owner.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn view_update(session: State<'_, Session>, id: Id, view: NewView) -> Reply<bool> {
+pub(crate) async fn view_update(
+    session: State<'_, Arc<Session>>,
+    id: Id,
+    view: NewView,
+) -> Reply<bool> {
     api::view_update(&session, id, view)
 }
 
 /// Deletes a saved view. Undo brings it back.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn view_delete(session: State<'_, Session>, id: Id) -> Reply<()> {
+pub(crate) async fn view_delete(session: State<'_, Arc<Session>>, id: Id) -> Reply<()> {
     api::view_delete(&session, id)
 }
 
 /// Relates `src` to `dst`, or returns the relation that already does.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn relation_create(session: State<'_, Session>, src: Id, dst: Id) -> Reply<Id> {
+pub(crate) async fn relation_create(
+    session: State<'_, Arc<Session>>,
+    src: Id,
+    dst: Id,
+) -> Reply<Id> {
     api::relation_create(&session, src, dst)
 }
 
 /// Moves a relation to the Trash. Returns `false` if it was already there.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn relation_trash(session: State<'_, Session>, id: Id) -> Reply<bool> {
+pub(crate) async fn relation_trash(session: State<'_, Arc<Session>>, id: Id) -> Reply<bool> {
     api::relation_trash(&session, id)
 }
 
 /// Creates an object and returns its ID.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn object_create(session: State<'_, Session>, object: NewObject) -> Reply<Id> {
+pub(crate) async fn object_create(
+    session: State<'_, Arc<Session>>,
+    object: NewObject,
+) -> Reply<Id> {
     api::object_create(&session, object)
 }
 
@@ -393,7 +433,7 @@ pub(crate) async fn object_create(session: State<'_, Session>, object: NewObject
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn object_rename(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     id: Id,
     title: String,
 ) -> Reply<bool> {
@@ -405,7 +445,7 @@ pub(crate) async fn object_rename(
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn object_set_prop(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     id: Id,
     key: String,
     value: Option<Value>,
@@ -418,7 +458,7 @@ pub(crate) async fn object_set_prop(
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn object_move(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     id: Id,
     parent: Option<Id>,
     position: Position,
@@ -429,14 +469,14 @@ pub(crate) async fn object_move(
 /// Moves an object, and everything below it, to the Trash.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn object_trash(session: State<'_, Session>, id: Id) -> Reply<()> {
+pub(crate) async fn object_trash(session: State<'_, Arc<Session>>, id: Id) -> Reply<()> {
     api::object_trash(&session, id)
 }
 
 /// Takes an object out of the Trash.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn object_restore(session: State<'_, Session>, id: Id) -> Reply<()> {
+pub(crate) async fn object_restore(session: State<'_, Arc<Session>>, id: Id) -> Reply<()> {
     api::object_restore(&session, id)
 }
 
@@ -444,7 +484,7 @@ pub(crate) async fn object_restore(session: State<'_, Session>, id: Id) -> Reply
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn object_add_type(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     id: Id,
     type_id: Id,
 ) -> Reply<bool> {
@@ -455,7 +495,7 @@ pub(crate) async fn object_add_type(
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn object_remove_type(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     id: Id,
     type_id: Id,
 ) -> Reply<bool> {
@@ -466,7 +506,7 @@ pub(crate) async fn object_remove_type(
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn blocks_list(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     object_id: Id,
 ) -> Reply<Vec<BlockRow>> {
     api::blocks_list(&session, object_id)
@@ -476,7 +516,7 @@ pub(crate) async fn blocks_list(
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn blocks_apply(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     object_id: Id,
     changes: Vec<BlockChange>,
 ) -> Reply<()> {
@@ -487,7 +527,7 @@ pub(crate) async fn blocks_apply(
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn attachments_list(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     object_id: Id,
 ) -> Reply<Vec<AttachmentRow>> {
     api::attachments_list(&session, object_id)
@@ -497,7 +537,7 @@ pub(crate) async fn attachments_list(
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn attachment_add(
-    session: State<'_, Session>,
+    session: State<'_, Arc<Session>>,
     object_id: Id,
     data: String,
     filename: Option<String>,
@@ -509,8 +549,85 @@ pub(crate) async fn attachment_add(
 /// A blob's bytes, as base64.
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn blob_read(session: State<'_, Session>, hash: ContentHash) -> Reply<String> {
+pub(crate) async fn blob_read(
+    session: State<'_, Arc<Session>>,
+    hash: ContentHash,
+) -> Reply<String> {
     api::blob_read(&session, &hash)
+}
+
+/// Where the files folder stands.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn mirror_status(session: State<'_, Arc<Session>>) -> Reply<MirrorStatus> {
+    api::mirror_status(&session)
+}
+
+/// Turns the files folder on, at `folder` or, with `null`, at `files/` inside the vault.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn mirror_enable(
+    session: State<'_, Arc<Session>>,
+    folder: Option<String>,
+) -> Reply<MirrorStatus> {
+    api::mirror_enable(&session, folder)
+}
+
+/// Turns the files folder off. The files stay.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn mirror_disable(session: State<'_, Arc<Session>>) -> Reply<MirrorStatus> {
+    api::mirror_disable(&session)
+}
+
+/// Syncs the files folder both ways now.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn mirror_sync_now(session: State<'_, Arc<Session>>) -> Reply<MirrorSync> {
+    api::mirror_sync_now(&session)
+}
+
+/// The Conflicts inbox: every entry, or only the open ones.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn conflicts_list(
+    session: State<'_, Arc<Session>>,
+    open_only: bool,
+) -> Reply<Vec<Conflict>> {
+    api::conflicts_list(&session, open_only)
+}
+
+/// Marks an inbox entry resolved, with how. Returns `false` if it already was.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn conflict_resolve(
+    session: State<'_, Arc<Session>>,
+    id: Id,
+    resolution: String,
+) -> Reply<bool> {
+    api::conflict_resolve(&session, id, resolution)
+}
+
+/// Decides a bulk-change hold: proceed with the held changes, or restore the folder.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn mirror_hold_decide(
+    session: State<'_, Arc<Session>>,
+    id: Id,
+    choice: HoldChoice,
+) -> Reply<MirrorSync> {
+    api::mirror_hold_decide(&session, id, choice)
+}
+
+/// Writes the export of the open vault into `dir`; with `full`, a copy `import` can rebuild.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn export_run(
+    session: State<'_, Arc<Session>>,
+    dir: String,
+    full: bool,
+) -> Reply<ExportReport> {
+    api::export_run(&session, dir, full)
 }
 
 /// The commands and events, for Tauri and for generating the TypeScript bindings.
@@ -562,8 +679,16 @@ pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
             attachments_list,
             attachment_add,
             blob_read,
+            mirror_status,
+            mirror_enable,
+            mirror_disable,
+            mirror_sync_now,
+            conflicts_list,
+            conflict_resolve,
+            mirror_hold_decide,
+            export_run,
         ])
-        .events(tauri_specta::collect_events![VaultChanged])
+        .events(tauri_specta::collect_events![VaultChanged, MirrorChanged])
         // Every 64-bit integer that crosses IPC is a timestamp in milliseconds or an op sequence
         // number, far below 2^53, so a JavaScript number holds it exactly (ADR-0014).
         .dangerously_cast_bigints_to_number()
@@ -613,7 +738,7 @@ mod tests {
         let list = &build[build.find("const COMMANDS").unwrap()..];
         let list = &list[..list.find("];").unwrap()];
         let commands: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
-        assert_eq!(commands.len(), 45);
+        assert_eq!(commands.len(), 53);
         let capability = include_str!("../capabilities/default.json");
         let source = include_str!("ipc.rs");
         let registered = &source[source.find("collect_commands![").unwrap()..];

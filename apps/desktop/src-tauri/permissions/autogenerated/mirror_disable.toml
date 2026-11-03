@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mirror-disable"
+description = "Enables the mirror_disable command without any pre-configured scope."
+commands.allow = ["mirror_disable"]
+
+[[permission]]
+identifier = "deny-mirror-disable"
+description = "Denies the mirror_disable command without any pre-configured scope."
+commands.deny = ["mirror_disable"]
