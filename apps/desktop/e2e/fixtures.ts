@@ -75,8 +75,13 @@ export class App {
     readonly phone: boolean,
   ) {}
 
-  /** Loads the app and waits until it shows a page or offers to make the first one. */
-  async open(): Promise<void> {
+  /**
+   * Loads the app and waits until it shows a page or offers to make the first one. The tests
+   * were written with everything shown, so the session is put in Organizer mode first (M7); a
+   * test of Simple mode asks for it.
+   */
+  async open(options: { mode?: "simple" | "organizer" } = {}): Promise<void> {
+    await this.ipc("settings_set", { patch: { mode: options.mode ?? "organizer" } });
     await this.page.goto(`/?session=${this.session}`);
     await expect(
       this.page

@@ -3,7 +3,7 @@
  * The view registry (handoff brief §8). Every view shows one object and what belongs to it; the
  * shell picks one per pane. Later milestones and plugins add views here.
  */
-import type { Id } from "@databaseme/client";
+import type { Id, Mode } from "@databaseme/client";
 import {
   DocumentIcon,
   LayoutGrid,
@@ -52,4 +52,12 @@ export const VIEWS: readonly ViewDefinition[] = [
 
 export function viewById(id: ViewId): ViewDefinition {
   return VIEWS.find((view) => view.id === id) ?? DOCUMENT;
+}
+
+/** The views Simple mode leaves out (M7): the Table view needs types and fields to mean much. */
+const HIDDEN_IN_SIMPLE: readonly ViewId[] = ["table"];
+
+/** The views a pane offers in `mode`, in the registry's order. */
+export function visibleViews(mode: Mode): readonly ViewDefinition[] {
+  return mode === "organizer" ? VIEWS : VIEWS.filter((view) => !HIDDEN_IN_SIMPLE.includes(view.id));
 }

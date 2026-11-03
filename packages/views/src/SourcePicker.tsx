@@ -2,6 +2,7 @@
 /** Chooses what a Table or Gallery lists: the object's children, or every object of a type. */
 import { useTypes, type Id, type Source } from "@databaseme/client";
 import { useId } from "react";
+import { showsTypes, useMode } from "./mode";
 import { childrenOf } from "./paging";
 
 export function SourcePicker({
@@ -16,6 +17,8 @@ export function SourcePicker({
   const types = useTypes();
   const id = useId();
   const value = source.kind === "type" ? source.type_id : "";
+  // Simple mode has no types to list: the view shows the pages inside this one.
+  if (!showsTypes(useMode())) return null;
   return (
     <span className="dbme-source">
       <label htmlFor={id}>Show</label>

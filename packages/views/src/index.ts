@@ -4,9 +4,17 @@ export { BlockEditor, type BlockEditorProps } from "./editor/BlockEditor";
 export { FilesDialog, type FilesDialogProps } from "./files/FilesDialog";
 export { HoldBanner, type HoldBannerProps } from "./files/HoldBanner";
 export { ImportDialog, type ImportDialogProps } from "./import/ImportDialog";
+export { JOURNAL_TITLE, showsTypes, todayTitle, useMode, type Mode } from "./mode";
 export { MoveDialog } from "./sidebar/MoveDialog";
 export { Sidebar, type SidebarProps } from "./sidebar/Sidebar";
-export { VIEWS, viewById, type ViewDefinition, type ViewId, type ViewProps } from "./registry";
+export {
+  VIEWS,
+  viewById,
+  visibleViews,
+  type ViewDefinition,
+  type ViewId,
+  type ViewProps,
+} from "./registry";
 export {
   CommandPalette,
   type CommandPaletteProps,

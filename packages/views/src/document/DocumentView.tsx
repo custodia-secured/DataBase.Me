@@ -22,11 +22,13 @@ import { actions, attempt } from "../actions";
 import { BlockEditor } from "../editor/BlockEditor";
 import { FieldEditor } from "../fields";
 import { originLine, sizeOf } from "../import/origin";
+import { showsTypes, useMode } from "../mode";
 import type { ViewProps } from "../registry";
 import { displayValue, isEditable } from "../values";
 
 export function DocumentView({ objectId, onOpen }: ViewProps) {
   const object = useObject(objectId);
+  const typed = showsTypes(useMode());
   if (object.isError)
     return <StatusMessage tone="error">This object could not be found.</StatusMessage>;
   if (!object.data) return <StatusMessage>Loading…</StatusMessage>;
@@ -34,9 +36,9 @@ export function DocumentView({ objectId, onOpen }: ViewProps) {
   return (
     <article className="dbme-document" aria-label={title}>
       <TitleField object={object.data} />
-      <TypesLine objectId={objectId} />
+      {typed ? <TypesLine objectId={objectId} /> : null}
       <Origin objectId={objectId} />
-      <Properties object={object.data} />
+      {typed ? <Properties object={object.data} /> : null}
       <BlockEditor objectId={objectId} onOpen={onOpen} label={`Text of ${title}`} />
       <Backlinks objectId={objectId} onOpen={onOpen} />
     </article>

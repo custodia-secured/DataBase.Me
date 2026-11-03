@@ -46,8 +46,10 @@ import {
   reportError,
   ResultsView,
   Sidebar,
-  VIEWS,
+  useMode,
   viewById,
+  visibleViews,
+  type Mode,
   type PaletteCommand,
 } from "@databaseme/views";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -194,8 +196,12 @@ function Shell() {
     />
   );
   const panes = split && splitFits ? 2 : 1;
+  const mode = useMode();
+  const chooseMode = (next: Mode) => {
+    setSettings(client, { mode: next }).catch(reportError);
+  };
   const paletteCommands: PaletteCommand[] = [
-    ...VIEWS.map((view) => ({
+    ...visibleViews(mode).map((view) => ({
       id: `view-${view.id}`,
       label: `Switch to ${view.label}`,
       run: () => {
@@ -209,6 +215,29 @@ function Shell() {
         void actions.create({ title: "", parent_id: null, position: "last" }).then((id) => {
           if (id !== undefined) select(id);
         });
+      },
+    },
+    {
+      id: "today",
+      label: "Today",
+      run: () => {
+        void actions.today().then((id) => {
+          if (id !== undefined) select(id);
+        });
+      },
+    },
+    {
+      id: "mode-simple",
+      label: "Mode: Simple",
+      run: () => {
+        chooseMode("simple");
+      },
+    },
+    {
+      id: "mode-organizer",
+      label: "Mode: Organizer",
+      run: () => {
+        chooseMode("organizer");
       },
     },
     { id: "undo", label: "Undo", run: () => void actions.undo() },
@@ -500,24 +529,29 @@ function Pane({
   objectId: Id;
   onOpen: (id: Id) => void;
 }) {
-  const viewId = useShell((state) => state.views[index]);
+  const chosenId = useShell((state) => state.views[index]);
   const setView = useShell((state) => state.setView);
   const object = useObject(objectId);
   const base = useId();
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
-  const view = viewById(viewId);
+  // The mode decides which views are offered (M7); a chosen view the mode hides shows as the
+  // first one, and the choice itself is kept for when the mode shows it again.
+  const views = visibleViews(useMode());
+  const view =
+    views.find((candidate) => candidate.id === chosenId) ?? views[0] ?? viewById("document");
+  const viewId = view.id;
   const View = view.component;
 
   const onKeyDown = (event: KeyboardEvent) => {
-    const at = VIEWS.findIndex((candidate) => candidate.id === viewId);
+    const at = views.findIndex((candidate) => candidate.id === viewId);
     const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
     let next = at + step;
     if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = VIEWS.length - 1;
+    else if (event.key === "End") next = views.length - 1;
     else if (step === 0) return;
     event.preventDefault();
-    next = (next + VIEWS.length) % VIEWS.length;
-    const target = VIEWS[next];
+    next = (next + views.length) % views.length;
+    const target = views[next];
     if (!target) return;
     setView(index, target.id);
     tabs.current[next]?.focus();
@@ -526,7 +560,7 @@ function Pane({
   return (
     <section className="pane" aria-label={index === 0 ? "Main pane" : "Second pane"}>
       <div className="pane__tabs" role="tablist" aria-label="Views" onKeyDown={onKeyDown}>
-        {VIEWS.map((candidate, i) => {
+        {views.map((candidate, i) => {
           const Icon = candidate.icon;
           const chosen = candidate.id === viewId;
           return (

@@ -12,6 +12,7 @@ import {
   type Position,
   type Value,
 } from "@databaseme/client";
+import { JOURNAL_TITLE, todayTitle } from "./mode";
 
 type ErrorListener = (message: string) => void;
 const errorListeners = new Set<ErrorListener>();
@@ -63,6 +64,26 @@ export const actions = {
   },
   create(object: NewObject_Deserialize) {
     return attempt(() => unwrap(commands.objectCreate(object)));
+  },
+  /**
+   * The daily journal (M7): today's page under the top-level "Journal" page, made when missing,
+   * opened when there. Returns its id.
+   */
+  today() {
+    return attempt(async () => {
+      const top = await unwrap(commands.objectChildren(null));
+      const journal =
+        top.find((page) => page.title === JOURNAL_TITLE && page.deleted_at == null)?.id ??
+        (await unwrap(
+          commands.objectCreate({ title: JOURNAL_TITLE, parent_id: null, position: "last" }),
+        ));
+      const title = todayTitle();
+      const days = await unwrap(commands.objectChildren(journal));
+      return (
+        days.find((page) => page.title === title && page.deleted_at == null)?.id ??
+        (await unwrap(commands.objectCreate({ title, parent_id: journal, position: "first" })))
+      );
+    });
   },
   rename(id: Id, title: string) {
     return attempt(() => unwrap(commands.objectRename(id, title)));

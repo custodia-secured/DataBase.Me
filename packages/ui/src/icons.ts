@@ -40,6 +40,7 @@ export {
   Bold,
   ChevronDown,
   ChevronRight,
+  CalendarDays,
   Columns2,
   Ellipsis,
   FileText as DocumentIcon,
