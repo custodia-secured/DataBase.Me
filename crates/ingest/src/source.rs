@@ -23,6 +23,8 @@ pub enum SourceKind {
 
 /// A source as the plan sees it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+// The store has a `Source` too (a list's); the bindings need distinct names.
+#[serde(rename = "ImportSource")]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Source {
     /// The canonical path.

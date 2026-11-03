@@ -232,7 +232,11 @@ pub enum BlobDraft {
     /// The file at this path.
     File(std::path::PathBuf),
     /// Bytes made by the importer, base64 in the plan's JSON.
-    Derived(#[serde(with = "base64_bytes")] Vec<u8>),
+    Derived(
+        #[serde(with = "base64_bytes")]
+        #[cfg_attr(feature = "specta", specta(type = String))]
+        Vec<u8>,
+    ),
 }
 
 impl AttachmentDraft {

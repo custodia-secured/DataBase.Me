@@ -58,6 +58,9 @@
     "allow-conflicts-list",
     "allow-conflict-resolve",
     "allow-mirror-hold-decide",
-    "allow-export-run"
+    "allow-export-run",
+    "allow-import-plan",
+    "allow-import-apply",
+    "allow-provenance-list"
   ]
 }

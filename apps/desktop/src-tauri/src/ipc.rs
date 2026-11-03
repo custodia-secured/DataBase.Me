@@ -47,6 +47,10 @@ pub struct VaultChanged(pub Committed);
 #[derive(Clone, Debug, Serialize, Deserialize, specta::Type, tauri_specta::Event)]
 pub struct MirrorChanged(pub MirrorStatus);
 
+/// Sent when files are dropped on the window: their paths, for the Import dialog (M6).
+#[derive(Clone, Debug, Serialize, Deserialize, specta::Type, tauri_specta::Event)]
+pub struct ImportDropped(pub Vec<String>);
+
 /// About the running app.
 #[derive(Clone, Debug, Serialize, specta::Type)]
 pub struct AppInfo {
@@ -630,6 +634,37 @@ pub(crate) async fn export_run(
     api::export_run(&session, dir, full)
 }
 
+/// The dry run of an import: what the sources would become, and nothing written.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn import_plan(
+    session: State<'_, Arc<Session>>,
+    sources: Vec<String>,
+    options: api::ImportOptions,
+) -> Reply<api::ImportPlan> {
+    api::import_plan(&session, sources, options)
+}
+
+/// Writes an import plan to the vault, as one or more undo steps.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn import_apply(
+    session: State<'_, Arc<Session>>,
+    plan: api::ImportPlan,
+) -> Reply<api::ImportRun> {
+    api::import_apply(&session, plan)
+}
+
+/// Where an object came from.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn provenance_list(
+    session: State<'_, Arc<Session>>,
+    object_id: Id,
+) -> Reply<Vec<dbme_core::model::ProvenanceRow>> {
+    api::provenance_list(&session, object_id)
+}
+
 /// The commands and events, for Tauri and for generating the TypeScript bindings.
 pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new()
@@ -687,8 +722,15 @@ pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
             conflict_resolve,
             mirror_hold_decide,
             export_run,
+            import_plan,
+            import_apply,
+            provenance_list,
         ])
-        .events(tauri_specta::collect_events![VaultChanged, MirrorChanged])
+        .events(tauri_specta::collect_events![
+            VaultChanged,
+            MirrorChanged,
+            ImportDropped
+        ])
         // Every 64-bit integer that crosses IPC is a timestamp in milliseconds or an op sequence
         // number, far below 2^53, so a JavaScript number holds it exactly (ADR-0014).
         .dangerously_cast_bigints_to_number()
@@ -738,7 +780,7 @@ mod tests {
         let list = &build[build.find("const COMMANDS").unwrap()..];
         let list = &list[..list.find("];").unwrap()];
         let commands: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
-        assert_eq!(commands.len(), 53);
+        assert_eq!(commands.len(), 56);
         let capability = include_str!("../capabilities/default.json");
         let source = include_str!("ipc.rs");
         let registered = &source[source.find("collect_commands![").unwrap()..];

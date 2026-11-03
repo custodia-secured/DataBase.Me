@@ -28,9 +28,12 @@ use dbme_store::{
 };
 
 mod blocks;
+mod import;
 mod mirror;
 
 pub use blocks::BlockChange;
+pub use dbme_ingest::{ImportOptions, ImportPlan, ImportRun};
+pub use import::{import_apply, import_plan, provenance_list};
 pub use mirror::{
     DEFAULT_FOLDER, ExportReport, HoldChoice, MirrorStatus, MirrorSync, MirrorWorker,
     OVERRIDES_DIR, conflict_resolve, conflicts_list, export_run, mirror_disable, mirror_enable,
@@ -228,6 +231,12 @@ impl Session {
     /// Runs a change in one transaction, and tells the notifier what changed.
     fn transact<T>(&self, change: impl FnOnce(&mut Txn<'_>) -> Result<T, StoreError>) -> Reply<T> {
         self.change(|vault| vault.transact(change))
+    }
+
+    /// Tells the notifier about a change made outside [`Session::change`], and wakes the worker.
+    pub(crate) fn notify_committed(&self, committed: &Committed) {
+        (self.notify)(committed);
+        self.wake_mirror();
     }
 
     /// Runs a change and tells the notifier what changed.

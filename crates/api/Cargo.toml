@@ -11,6 +11,7 @@ publish.workspace = true
 base64.workspace = true
 dbme-core.workspace = true
 dbme-export.workspace = true
+dbme-ingest.workspace = true
 dbme-mirror.workspace = true
 dbme-store.workspace = true
 serde.workspace = true
@@ -27,6 +28,7 @@ specta = [
   "dep:specta",
   "dbme-core/specta",
   "dbme-export/specta",
+  "dbme-ingest/specta",
   "dbme-store/specta",
 ]
 

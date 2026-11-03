@@ -126,10 +126,17 @@ export const commands = {
 	mirrorHoldDecide: (id: Id, choice: HoldChoice) => typedError<MirrorSync_Serialize, IpcError>(__TAURI_INVOKE("mirror_hold_decide", { id, choice })),
 	/**  Writes the export of the open vault into `dir`; with `full`, a copy `import` can rebuild. */
 	exportRun: (dir: string, full: boolean) => typedError<ExportReport_Serialize, IpcError>(__TAURI_INVOKE("export_run", { dir, full })),
+	/**  The dry run of an import: what the sources would become, and nothing written. */
+	importPlan: (sources: string[], options: ImportOptions_Deserialize) => typedError<ImportPlan_Serialize, IpcError>(__TAURI_INVOKE("import_plan", { sources, options })),
+	/**  Writes an import plan to the vault, as one or more undo steps. */
+	importApply: (plan: ImportPlan_Deserialize) => typedError<ImportRun_Serialize, IpcError>(__TAURI_INVOKE("import_apply", { plan })),
+	/**  Where an object came from. */
+	provenanceList: (objectId: Id) => typedError<ProvenanceRow_Serialize[], IpcError>(__TAURI_INVOKE("provenance_list", { objectId })),
 };
 
 /** Events */
 export const events = {
+	importDropped: makeEvent<ImportDropped, ImportDropped>("import-dropped"),
 	mirrorChanged: makeEvent<MirrorChanged_Serialize, MirrorChanged_Deserialize>("mirror-changed"),
 	vaultChanged: makeEvent<VaultChanged_Serialize, VaultChanged_Deserialize>("vault-changed"),
 };
@@ -160,6 +167,41 @@ export type AppInfo_Serialize = {
 	format_version: number,
 	/**  In smoke-test mode, where the launch test should create its vault. */
 	smoke_vault: string | null,
+};
+
+/**  A file to attach, by its bytes or by the source file it is. */
+export type AttachmentDraft = AttachmentDraft_Serialize | AttachmentDraft_Deserialize;
+
+/**  A file to attach, by its bytes or by the source file it is. */
+export type AttachmentDraft_Deserialize = {
+	/**  Where the bytes come from. */
+	blob: BlobDraft_Deserialize,
+	/**  The hash of those bytes, computed by the plan. */
+	hash: ContentHash,
+	/**  How many bytes. */
+	size: number,
+	/**  What the blob is to the object. */
+	role: AttachmentRole,
+	/**  The file name to keep. */
+	filename?: string | null,
+	/**  The media type. */
+	mime?: string | null,
+};
+
+/**  A file to attach, by its bytes or by the source file it is. */
+export type AttachmentDraft_Serialize = {
+	/**  Where the bytes come from. */
+	blob: BlobDraft_Serialize,
+	/**  The hash of those bytes, computed by the plan. */
+	hash: ContentHash,
+	/**  How many bytes. */
+	size: number,
+	/**  What the blob is to the object. */
+	role: AttachmentRole,
+	/**  The file name to keep. */
+	filename: string | null,
+	/**  The media type. */
+	mime: string | null,
 };
 
 /**  What a blob is to the object it is attached to. */
@@ -228,6 +270,32 @@ export type Backlink_Serialize = {
 	/**  The block it comes from, for a mention. */
 	block: BlockRow_Serialize | null,
 };
+
+/**
+ *  The bytes of an attachment: a file on disk, read again at apply and checked against the
+ *  planned hash, or bytes the importer made (a thumbnail, extracted text), carried in the plan.
+ */
+export type BlobDraft = BlobDraft_Serialize | BlobDraft_Deserialize;
+
+/**
+ *  The bytes of an attachment: a file on disk, read again at apply and checked against the
+ *  planned hash, or bytes the importer made (a thumbnail, extracted text), carried in the plan.
+ */
+export type BlobDraft_Deserialize = 
+/**  The file at this path. */
+({ file: string }) & { derived?: never } | 
+/**  Bytes made by the importer, base64 in the plan's JSON. */
+({ derived: string }) & { file?: never };
+
+/**
+ *  The bytes of an attachment: a file on disk, read again at apply and checked against the
+ *  planned hash, or bytes the importer made (a thumbnail, extracted text), carried in the plan.
+ */
+export type BlobDraft_Serialize = 
+/**  The file at this path. */
+({ file: string }) & { derived?: never } | 
+/**  Bytes made by the importer, base64 in the plan's JSON. */
+({ derived: string }) & { file?: never };
 
 /**  One change to an object's blocks. */
 export type BlockChange = BlockChange_Serialize | BlockChange_Deserialize;
@@ -307,6 +375,14 @@ after: Id | null } |
 { op: "delete"; 
 /**  The block. */
 id: Id };
+
+/**  A block of the body. */
+export type BlockDraft = {
+	/**  The block kind (`paragraph`, `heading`, `image`). */
+	kind: string,
+	/**  Its content, as `blocks.content_json` (FORMAT.md §3.5). */
+	content: Value,
+};
 
 /**  A node of the content tree inside an object. */
 export type BlockRow = BlockRow_Serialize | BlockRow_Deserialize;
@@ -484,6 +560,46 @@ export type Direction =
 /**  Results are what points to the object. */
 "incoming";
 
+/**  A source the vault already holds, or that another source of the same run is. */
+export type Duplicate = Duplicate_Serialize | Duplicate_Deserialize;
+
+/**  What to do with a source the vault already holds (M6 Decision 3). */
+export type DuplicatePolicy = 
+/**  Leave it out and say so. */
+"skip" | 
+/**  Relate the existing object to the import's parent instead of making another. */
+"attach";
+
+/**  A source the vault already holds, or that another source of the same run is. */
+export type Duplicate_Deserialize = {
+	/**  The source left out. */
+	path: string,
+	/**  Its content hash. */
+	hash: ContentHash,
+	/**
+	 *  The live object that already has it as an original, or `None` when the duplicate is
+	 *  another source of this run.
+	 */
+	existing?: Id | null,
+	/**  The title of that object, or the other source's path. */
+	of: string,
+};
+
+/**  A source the vault already holds, or that another source of the same run is. */
+export type Duplicate_Serialize = {
+	/**  The source left out. */
+	path: string,
+	/**  Its content hash. */
+	hash: ContentHash,
+	/**
+	 *  The live object that already has it as an original, or `None` when the duplicate is
+	 *  another source of this run.
+	 */
+	existing: Id | null,
+	/**  The title of that object, or the other source's path. */
+	of: string,
+};
+
 /**  What an export wrote. */
 export type ExportReport = ExportReport_Serialize | ExportReport_Deserialize;
 
@@ -515,12 +631,112 @@ export type ExportReport_Serialize = {
 	blobs: number | null,
 };
 
+/**  What an importer would make of one source. */
+export type Extract = Extract_Serialize | Extract_Deserialize;
+
+/**  What an importer would make of one source. */
+export type Extract_Deserialize = {
+	/**  The objects, in order; each may have children. */
+	objects: ExtractedObject_Deserialize[],
+	/**
+	 *  Types the objects need that the vault may not have: created, or their missing fields
+	 *  added, before the objects are written (a table's type, one field per column).
+	 */
+	types?: TypeDraft[],
+	/**
+	 *  A folder the files folder's engine imports at apply time (Markdown and Obsidian, M6 Task
+	 *  6): the plan counts its files and writes nothing; `objects` is then empty.
+	 */
+	folder?: FolderImport_Deserialize | null,
+	/**  Things the person should know: a page that gave no text, a cell that did not fit. */
+	warnings: string[],
+};
+
+/**  What an importer would make of one source. */
+export type Extract_Serialize = {
+	/**  The objects, in order; each may have children. */
+	objects: ExtractedObject_Serialize[],
+	/**
+	 *  Types the objects need that the vault may not have: created, or their missing fields
+	 *  added, before the objects are written (a table's type, one field per column).
+	 */
+	types: TypeDraft[],
+	/**
+	 *  A folder the files folder's engine imports at apply time (Markdown and Obsidian, M6 Task
+	 *  6): the plan counts its files and writes nothing; `objects` is then empty.
+	 */
+	folder: FolderImport_Serialize | null,
+	/**  Things the person should know: a page that gave no text, a cell that did not fit. */
+	warnings: string[],
+};
+
+/**  One object to make. */
+export type ExtractedObject = ExtractedObject_Serialize | ExtractedObject_Deserialize;
+
+/**  One object to make. */
+export type ExtractedObject_Deserialize = {
+	/**  The title. */
+	title: string,
+	/**  The type, by name. A system type or one the importer creates (Task 4). */
+	type_name: string,
+	/**  Field values by key. */
+	props?: { [key in string]: Value },
+	/**  The body, top-level blocks in order. */
+	blocks?: BlockDraft[],
+	/**  Files to attach: the original and anything derived from it. */
+	attachments?: AttachmentDraft_Deserialize[],
+	/**  Objects under this one (a folder's files, a workbook's sheets). */
+	children?: ExtractedObject_Deserialize[],
+	/**  When the thing was captured (a photo taken), milliseconds since the epoch. */
+	captured_at?: number | null,
+	/**  Where, when the source says: latitude. */
+	geo_lat?: number | null,
+	/**  And longitude. */
+	geo_lon?: number | null,
+	/**  Where it came from, for the provenance row. */
+	provenance: ProvenanceDraft_Deserialize,
+};
+
+/**  One object to make. */
+export type ExtractedObject_Serialize = {
+	/**  The title. */
+	title: string,
+	/**  The type, by name. A system type or one the importer creates (Task 4). */
+	type_name: string,
+	/**  Field values by key. */
+	props: { [key in string]: Value },
+	/**  The body, top-level blocks in order. */
+	blocks: BlockDraft[],
+	/**  Files to attach: the original and anything derived from it. */
+	attachments: AttachmentDraft_Serialize[],
+	/**  Objects under this one (a folder's files, a workbook's sheets). */
+	children: ExtractedObject_Serialize[],
+	/**  When the thing was captured (a photo taken), milliseconds since the epoch. */
+	captured_at: number | null,
+	/**  Where, when the source says: latitude. */
+	geo_lat: number | null,
+	/**  And longitude. */
+	geo_lon: number | null,
+	/**  Where it came from, for the provenance row. */
+	provenance: ProvenanceDraft_Serialize,
+};
+
 /**  One value among a query's results, and how many of them have it. */
 export type FacetBucket = {
 	/**  The value: a type ID for the type facet, otherwise a field value. */
 	value: Value,
 	/**  How many results have it. */
 	count: number,
+};
+
+/**  A field of a drafted type. */
+export type FieldDraft = {
+	/**  The key, an identifier. */
+	key: string,
+	/**  The label, the column's header as written. */
+	label: string,
+	/**  The kind inferred from the column. */
+	kind: FieldKind,
 };
 
 /**  The kinds a field can have (FORMAT.md §3.3). */
@@ -536,6 +752,39 @@ export type FieldRow = {
 	options_json: Value,
 	required: boolean,
 	sort_order: number,
+};
+
+/**  A folder for the files folder's engine (`Mirror::import_from`). */
+export type FolderImport = FolderImport_Serialize | FolderImport_Deserialize;
+
+/**  A folder for the files folder's engine (`Mirror::import_from`). */
+export type FolderImport_Deserialize = {
+	/**  The folder, canonical. */
+	root: string,
+	/**  Only these paths inside it (a single file dropped in), or every file. */
+	only?: string[] | null,
+	/**  How many `.md` files the plan counted. */
+	markdown_files: number,
+	/**
+	 *  How many other files, which become plain objects with the file attached and then go
+	 *  through the matching importer for what it can extract.
+	 */
+	other_files: number,
+};
+
+/**  A folder for the files folder's engine (`Mirror::import_from`). */
+export type FolderImport_Serialize = {
+	/**  The folder, canonical. */
+	root: string,
+	/**  Only these paths inside it (a single file dropped in), or every file. */
+	only: string[] | null,
+	/**  How many `.md` files the plan counted. */
+	markdown_files: number,
+	/**
+	 *  How many other files, which become plain objects with the file attached and then go
+	 *  through the matching importer for what it can extract.
+	 */
+	other_files: number,
 };
 
 /**  Where a query looks. */
@@ -566,6 +815,153 @@ export type HoldChoice =
 
 /**  A ULID. Sorts by creation time; safe in file names and block anchors. */
 export type Id = string;
+
+/**  Sent when files are dropped on the window: their paths, for the Import dialog (M6). */
+export type ImportDropped = string[];
+
+/**  How a run should go. */
+export type ImportOptions = ImportOptions_Serialize | ImportOptions_Deserialize;
+
+/**  How a run should go. */
+export type ImportOptions_Deserialize = {
+	/**  Where the imported objects land. `None`: a new "Import <date>" note (M6 Decision 4). */
+	parent?: Id | null,
+	/**  What to do with duplicates. */
+	duplicates?: DuplicatePolicy,
+	/**
+	 *  For tables, the column whose cells are the objects' titles, by header or key; the first
+	 *  column when `None`.
+	 */
+	title_column?: string | null,
+};
+
+/**  How a run should go. */
+export type ImportOptions_Serialize = {
+	/**  Where the imported objects land. `None`: a new "Import <date>" note (M6 Decision 4). */
+	parent: Id | null,
+	/**  What to do with duplicates. */
+	duplicates: DuplicatePolicy,
+	/**
+	 *  For tables, the column whose cells are the objects' titles, by header or key; the first
+	 *  column when `None`.
+	 */
+	title_column: string | null,
+};
+
+/**  The dry run, and what [`crate::apply`] takes. */
+export type ImportPlan = ImportPlan_Serialize | ImportPlan_Deserialize;
+
+/**  The dry run, and what [`crate::apply`] takes. */
+export type ImportPlan_Deserialize = {
+	/**  The run's ULID: every provenance row the apply writes names it. */
+	run_id: Id,
+	/**  The options the plan was made with. */
+	options: ImportOptions_Deserialize,
+	/**  The sources that will be imported, in order. */
+	entries: PlanEntry_Deserialize[],
+	/**  The sources left out as duplicates. */
+	duplicates: Duplicate_Deserialize[],
+	/**  The sources that could not be read. */
+	refused: Refused[],
+	/**  Everything the importers warned about, with the source named. */
+	warnings: string[],
+	/**  How many objects the apply will make, the receipt note not counted. */
+	objects: number,
+	/**  How many transactions, and so undo steps, the apply will take (M6 Decision 7). */
+	transactions: number,
+};
+
+/**  The dry run, and what [`crate::apply`] takes. */
+export type ImportPlan_Serialize = {
+	/**  The run's ULID: every provenance row the apply writes names it. */
+	run_id: Id,
+	/**  The options the plan was made with. */
+	options: ImportOptions_Serialize,
+	/**  The sources that will be imported, in order. */
+	entries: PlanEntry_Serialize[],
+	/**  The sources left out as duplicates. */
+	duplicates: Duplicate_Serialize[],
+	/**  The sources that could not be read. */
+	refused: Refused[],
+	/**  Everything the importers warned about, with the source named. */
+	warnings: string[],
+	/**  How many objects the apply will make, the receipt note not counted. */
+	objects: number,
+	/**  How many transactions, and so undo steps, the apply will take (M6 Decision 7). */
+	transactions: number,
+};
+
+/**  What an apply did. */
+export type ImportRun = ImportRun_Serialize | ImportRun_Deserialize;
+
+/**  What an apply did. */
+export type ImportRun_Deserialize = {
+	/**  The run's ULID, as in the plan and in every provenance row. */
+	run_id: Id,
+	/**  The parent the objects landed under: the one named, or the receipt note. */
+	parent: Id,
+	/**  The receipt note, when the run made one. */
+	receipt?: Id | null,
+	/**  The top-level objects made, one per plan entry, in order. */
+	created: Id[],
+	/**  Every object made, children included. */
+	objects: number,
+	/**  How many transactions it took: how many undo steps. */
+	transactions: number,
+	/**  Duplicates related to the parent under the `attach` policy. */
+	attached: Id[],
+	/**
+	 *  What the apply itself found worth saying: a folder's inbox entries, what an importer
+	 *  could not add to a dropped file. The plan's warnings are not repeated here.
+	 */
+	warnings: string[],
+};
+
+/**  What an apply did. */
+export type ImportRun_Serialize = {
+	/**  The run's ULID, as in the plan and in every provenance row. */
+	run_id: Id,
+	/**  The parent the objects landed under: the one named, or the receipt note. */
+	parent: Id,
+	/**  The receipt note, when the run made one. */
+	receipt: Id | null,
+	/**  The top-level objects made, one per plan entry, in order. */
+	created: Id[],
+	/**  Every object made, children included. */
+	objects: number,
+	/**  How many transactions it took: how many undo steps. */
+	transactions: number,
+	/**  Duplicates related to the parent under the `attach` policy. */
+	attached: Id[],
+	/**
+	 *  What the apply itself found worth saying: a folder's inbox entries, what an importer
+	 *  could not add to a dropped file. The plan's warnings are not repeated here.
+	 */
+	warnings: string[],
+};
+
+/**  A source as the plan sees it. */
+export type ImportSource = ImportSource_Serialize | ImportSource_Deserialize;
+
+/**  A source as the plan sees it. */
+export type ImportSource_Deserialize = {
+	/**  The canonical path. */
+	path: string,
+	/**  File or folder. */
+	kind: SourceKind,
+	/**  The sniff of a file; a folder has none. */
+	sniffed?: Sniffed_Deserialize | null,
+};
+
+/**  A source as the plan sees it. */
+export type ImportSource_Serialize = {
+	/**  The canonical path. */
+	path: string,
+	/**  File or folder. */
+	kind: SourceKind,
+	/**  The sniff of a file; a folder has none. */
+	sniffed: Sniffed_Serialize | null,
+};
 
 /**  An error returned by a command. */
 export type IpcError = {
@@ -906,6 +1302,33 @@ export type ObjectTree_Serialize = {
 	truncated: boolean,
 };
 
+/**  One source in the plan. */
+export type PlanEntry = PlanEntry_Serialize | PlanEntry_Deserialize;
+
+/**  One source in the plan. */
+export type PlanEntry_Deserialize = {
+	/**  The source. */
+	source: ImportSource_Deserialize,
+	/**  The importer that took it. */
+	importer: string,
+	/**  What it would make. */
+	extract: Extract_Deserialize,
+	/**  How many objects, children counted. */
+	objects: number,
+};
+
+/**  One source in the plan. */
+export type PlanEntry_Serialize = {
+	/**  The source. */
+	source: ImportSource_Serialize,
+	/**  The importer that took it. */
+	importer: string,
+	/**  What it would make. */
+	extract: Extract_Serialize,
+	/**  How many objects, children counted. */
+	objects: number,
+};
+
 /**  Where to put an item among its siblings. */
 export type Position = 
 /**  Before every sibling. */
@@ -916,6 +1339,80 @@ export type Position =
 ({ before: Id }) & { after?: never } | 
 /**  Just after this sibling. */
 ({ after: Id }) & { before?: never };
+
+/**  The provenance an importer claims for an object. */
+export type ProvenanceDraft = ProvenanceDraft_Serialize | ProvenanceDraft_Deserialize;
+
+/**  The provenance an importer claims for an object. */
+export type ProvenanceDraft_Deserialize = {
+	/**  The source: the file, or `path#sheet=<name>`, or `path#page=<n>`. */
+	source_uri: string,
+	/**  The hash of the source file as attached, when it is. */
+	original_blob?: ContentHash | null,
+	/**  How sure the importer is of what it extracted, 0 to 1. */
+	confidence: number | null,
+};
+
+/**  The provenance an importer claims for an object. */
+export type ProvenanceDraft_Serialize = {
+	/**  The source: the file, or `path#sheet=<name>`, or `path#page=<n>`. */
+	source_uri: string,
+	/**  The hash of the source file as attached, when it is. */
+	original_blob: ContentHash | null,
+	/**  How sure the importer is of what it extracted, 0 to 1. */
+	confidence: number | null,
+};
+
+/**
+ *  Where an object came from (ADR-0026, migration 4): one row per import or capture that made or
+ *  updated it. `source_kind` is `manual`, `import:<importer>`, `clip`, `feed`, `file:external`,
+ *  `ai:<model>` or `plugin:<id>`; `source_uri` is the file, page or address it came from, when
+ *  there is one; `import_run_id` names the run, when one made it; `original_blob` is the source
+ *  file as attached. A row is never updated: `accepted` is set when it is written.
+ */
+export type ProvenanceRow = ProvenanceRow_Serialize | ProvenanceRow_Deserialize;
+
+/**
+ *  Where an object came from (ADR-0026, migration 4): one row per import or capture that made or
+ *  updated it. `source_kind` is `manual`, `import:<importer>`, `clip`, `feed`, `file:external`,
+ *  `ai:<model>` or `plugin:<id>`; `source_uri` is the file, page or address it came from, when
+ *  there is one; `import_run_id` names the run, when one made it; `original_blob` is the source
+ *  file as attached. A row is never updated: `accepted` is set when it is written.
+ */
+export type ProvenanceRow_Deserialize = {
+	id: Id,
+	object_id: Id,
+	source_kind: string,
+	source_uri?: string | null,
+	import_run_id?: Id | null,
+	original_blob?: ContentHash | null,
+	extractor: string,
+	extractor_version: string,
+	confidence: number | null,
+	accepted: boolean,
+	created_at: number,
+};
+
+/**
+ *  Where an object came from (ADR-0026, migration 4): one row per import or capture that made or
+ *  updated it. `source_kind` is `manual`, `import:<importer>`, `clip`, `feed`, `file:external`,
+ *  `ai:<model>` or `plugin:<id>`; `source_uri` is the file, page or address it came from, when
+ *  there is one; `import_run_id` names the run, when one made it; `original_blob` is the source
+ *  file as attached. A row is never updated: `accepted` is set when it is written.
+ */
+export type ProvenanceRow_Serialize = {
+	id: Id,
+	object_id: Id,
+	source_kind: string,
+	source_uri: string | null,
+	import_run_id: Id | null,
+	original_blob: ContentHash | null,
+	extractor: string,
+	extractor_version: string,
+	confidence: number | null,
+	accepted: boolean,
+	created_at: number,
+};
 
 /**  A query over the live objects of a vault. */
 export type Query = Query_Serialize | Query_Deserialize;
@@ -954,6 +1451,14 @@ export type Query_Serialize = {
 	limit: number,
 	/**  How many results to skip. */
 	offset: number,
+};
+
+/**  A source the plan could not take, and why. */
+export type Refused = {
+	/**  The path as given. */
+	path: string,
+	/**  The reason. */
+	reason: string,
 };
 
 /**  Results must have a live relation with this object. */
@@ -1046,6 +1551,33 @@ export type Sensitivity =
 /**  Redacted before anything leaves the device, and never sent to an AI provider. */
 "sensitive";
 
+/**  A file as seen before any importer reads it. */
+export type Sniffed = Sniffed_Serialize | Sniffed_Deserialize;
+
+/**  A file as seen before any importer reads it. */
+export type Sniffed_Deserialize = {
+	/**  The file's name, with its extension. */
+	file_name: string,
+	/**  The extension in lower case, without the dot, if there is one. */
+	extension?: string | null,
+	/**  The size in bytes. */
+	size: number,
+	/**  The media type `infer` names from the first bytes, if it knows the signature. */
+	mime?: string | null,
+};
+
+/**  A file as seen before any importer reads it. */
+export type Sniffed_Serialize = {
+	/**  The file's name, with its extension. */
+	file_name: string,
+	/**  The extension in lower case, without the dot, if there is one. */
+	extension: string | null,
+	/**  The size in bytes. */
+	size: number,
+	/**  The media type `infer` names from the first bytes, if it knows the signature. */
+	mime: string | null,
+};
+
 /**  The order of a list. Ties are broken by ID, in the same direction. */
 export type Sort = Sort_Serialize | Sort_Deserialize;
 
@@ -1092,6 +1624,13 @@ export type Sort_Serialize = {
 
 /**  Which objects a list shows. Objects in the Trash are never listed. */
 export type Source = Source_Serialize | Source_Deserialize;
+
+/**  A file or a folder. */
+export type SourceKind = 
+/**  One file. */
+"file" | 
+/**  A folder, imported with its structure. */
+"folder";
 
 /**  Which objects a list shows. Objects in the Trash are never listed. */
 export type Source_Deserialize = 
@@ -1148,6 +1687,17 @@ export type TreeNode_Serialize = {
 	child_count: number,
 	/**  How many live relations it has with live objects that aren't in the tree. */
 	outside_relations: number,
+};
+
+/**
+ *  A type an import needs, by name. An existing type of that name is reused and only the fields
+ *  it lacks are added; the kinds of the fields it has rule (M6 Task 4).
+ */
+export type TypeDraft = {
+	/**  The type's name. */
+	name: string,
+	/**  Its fields, in column order. */
+	fields: FieldDraft[],
 };
 
 /**  An object type, such as Task or Person. Types can extend one parent type. */

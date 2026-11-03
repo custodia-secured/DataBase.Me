@@ -196,6 +196,16 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
             let dir = vault_path(session, &arg::<String>(args, "dir")?)?;
             ok(api::export_run(s, dir, arg(args, "full")?))
         }
+        "import_plan" => {
+            let sources: Vec<String> = arg(args, "sources")?;
+            let sources = sources
+                .iter()
+                .map(|path| vault_path(session, path))
+                .collect::<Reply<Vec<String>>>()?;
+            ok(api::import_plan(s, sources, arg(args, "options")?))
+        }
+        "import_apply" => ok(api::import_apply(s, arg(args, "plan")?)),
+        "provenance_list" => ok(api::provenance_list(s, arg(args, "objectId")?)),
         _ => Err(invalid(format!("unknown command {cmd:?}"))),
     }
 }
