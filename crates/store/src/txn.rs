@@ -15,13 +15,14 @@ use dbme_core::block::{self, MENTIONS};
 use dbme_core::chain::OpEntry;
 use dbme_core::model::{
     AttachmentRole, AttachmentRow, BlockRow, FieldKind, FieldRow, ObjectRow, ObjectTypeRow, Props,
-    ProvenanceRow, RelationRow, Sensitivity, TypeRow, ViewRow,
+    ProvenanceRow, RelationRow, Sensitivity, TypeRow, ViewRow, key_from_label,
 };
 use dbme_core::op::{Action, Entity, Op, OpBody, OpKind, Row, RowKey};
 use dbme_core::query::Query;
 use dbme_core::value::validate_field_value;
 use dbme_core::{ContentHash, Id, IdGenerator, SortKey};
 
+use crate::list::Source;
 use crate::query::{Reader, Siblings};
 use crate::vault::{Committed, Context};
 use crate::{Result, StoreError, log, mirror, rows, search};
@@ -74,6 +75,77 @@ pub struct NewField {
 
 fn empty_object() -> Value {
     Value::Object(serde_json::Map::new())
+}
+
+/// A new column of a Table (ADR-0030).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct NewColumn {
+    /// Its name.
+    pub label: String,
+    /// What it holds: one of the kinds a Table's cells can edit.
+    pub kind: FieldKind,
+    /// The choices of a `select` column.
+    #[serde(default)]
+    pub choices: Vec<String>,
+}
+
+/// The kinds a Table's cells can edit, so the kinds a column can have.
+const COLUMN_KINDS: [FieldKind; 8] = [
+    FieldKind::Text,
+    FieldKind::Url,
+    FieldKind::Email,
+    FieldKind::Phone,
+    FieldKind::Number,
+    FieldKind::Boolean,
+    FieldKind::Date,
+    FieldKind::Select,
+];
+
+/// Refuses a label a Table could not tell apart: Title, which every Table shows, or one in `taken`.
+fn check_column_label(label: &str, taken: &[FieldRow]) -> Result<()> {
+    let lower = label.to_lowercase();
+    if lower == "title" || taken.iter().any(|f| f.label.to_lowercase() == lower) {
+        return Err(rule(format!("there is already a column called {label:?}")));
+    }
+    Ok(())
+}
+
+/// `base`, or `base` with the first number that makes it differ from every key `taken` holds.
+fn unused_key(base: &str, taken: impl Fn(&str) -> bool) -> String {
+    let mut key = base.to_owned();
+    let mut n = 2;
+    while taken(&key) {
+        key = format!("{base}_{n}");
+        n += 1;
+    }
+    key
+}
+
+/// The options of a new column: a `select` lists its distinct choices, and needs one.
+fn column_options(kind: FieldKind, choices: &[String]) -> Result<Value> {
+    if kind != FieldKind::Select {
+        return Ok(empty_object());
+    }
+    let mut options: Vec<(String, &str)> = Vec::new();
+    for choice in choices.iter().map(|c| c.trim()).filter(|c| !c.is_empty()) {
+        if options.iter().any(|(_, label)| *label == choice) {
+            continue;
+        }
+        let base =
+            key_from_label(choice).unwrap_or_else(|| format!("choice_{}", options.len() + 1));
+        let id = unused_key(&base, |id| options.iter().any(|(taken, _)| taken == id));
+        options.push((id, choice));
+    }
+    if options.is_empty() {
+        return Err(rule("a select column needs at least one choice"));
+    }
+    let options: Vec<Value> = options
+        .into_iter()
+        .map(|(id, label)| serde_json::json!({ "id": id, "label": label }))
+        .collect();
+    Ok(serde_json::json!({ "options": options }))
 }
 
 /// A new object.
@@ -610,6 +682,97 @@ impl<'v> Txn<'v> {
                 Row::Field(before),
                 Row::Field(after),
             )
+        })
+    }
+
+    /// Adds a column to a Table showing `source` (ADR-0030): a field on the type
+    /// [`Reader::column_target`] names, made if need be. A Table of children also gives that type
+    /// to every child, since a column shows through the types of the rows; with no children, it
+    /// makes a first row for the column to show on. Returns the field's ID.
+    pub fn add_column(&mut self, source: Source, column: NewColumn) -> Result<Id> {
+        self.guard(|t| {
+            if !COLUMN_KINDS.contains(&column.kind) {
+                return Err(rule(format!(
+                    "a Table cannot edit a column of kind {:?}",
+                    column.kind
+                )));
+            }
+            let label = column.label.trim().to_owned();
+            let options = column_options(column.kind, &column.choices)?;
+            let target = t.read().column_target(source)?;
+            let type_id = match target.type_id {
+                Some(id) => id,
+                None => t.create_type(NewType {
+                    name: target.type_name,
+                    ..NewType::default()
+                })?,
+            };
+            let mut taken = t.read().fields(type_id)?;
+            for field in t.read().fields_in(source)? {
+                if !taken.iter().any(|f| f.id == field.id) {
+                    taken.push(field);
+                }
+            }
+            check_column_label(&label, &taken)?;
+            let base =
+                key_from_label(&label).unwrap_or_else(|| format!("column_{}", taken.len() + 1));
+            let key = unused_key(&base, |key| taken.iter().any(|f| f.key == key));
+            let field = t.create_field(NewField {
+                type_id,
+                key,
+                label,
+                kind: column.kind,
+                options,
+                required: false,
+            })?;
+            if let Source::Children { parent } = source {
+                let children = t.read().children(parent)?;
+                if children.is_empty() {
+                    t.create_object(NewObject {
+                        parent_id: parent,
+                        type_ids: vec![type_id],
+                        ..NewObject::default()
+                    })?;
+                }
+                for child in children {
+                    t.add_type(child.id, type_id)?;
+                }
+            }
+            Ok(field)
+        })
+    }
+
+    /// Adds a row to a Table showing `source`: an empty object under `parent`, of the type the
+    /// Table lists, or of the types every child already shares. Returns its ID.
+    pub fn add_row(&mut self, source: Source, parent: Id) -> Result<Id> {
+        self.guard(|t| {
+            let type_ids = match source {
+                Source::Type { type_id } => vec![type_id],
+                Source::Children { parent } => t
+                    .read()
+                    .types_shared_by_children(parent)?
+                    .into_iter()
+                    .map(|row| row.id)
+                    .collect(),
+            };
+            t.create_object(NewObject {
+                parent_id: Some(parent),
+                type_ids,
+                ..NewObject::default()
+            })
+        })
+    }
+
+    /// Renames a field. Its key stays, so the values objects hold stay with it. Returns `false` if
+    /// it already had the label.
+    pub fn rename_field(&mut self, id: Id, label: &str) -> Result<bool> {
+        self.guard(|t| {
+            let label = label.trim();
+            let type_id = t.read().field(id)?.type_id;
+            let mut others = t.read().fields(type_id)?;
+            others.retain(|f| f.id != id);
+            check_column_label(label, &others)?;
+            t.update_field(id, |f| label.clone_into(&mut f.label))
         })
     }
 

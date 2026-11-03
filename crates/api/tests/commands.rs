@@ -14,8 +14,8 @@ use dbme_api::{self as api, BlockChange, IpcError, IpcErrorKind, LONG_SORT_KEY, 
 use dbme_core::model::FieldKind;
 use dbme_core::{CoreError, Id, IdGenerator, ManualClock};
 use dbme_store::{
-    Committed, Identity, NewField, NewObject, NewRelation, Position, Sort, Source, StoreError,
-    VaultOptions,
+    Committed, Identity, NewColumn, NewField, NewObject, NewRelation, Position, Sort, Source,
+    StoreError, VaultOptions,
 };
 use serde_json::{Value, json};
 
@@ -445,6 +445,390 @@ fn field_values_are_set_checked_and_cleared() {
     );
     f.tick();
     assert!(api::object_remove_type(&f.session, x, task).unwrap());
+}
+
+/// Tables and their columns (ADR-0030).
+mod columns {
+    use super::*;
+
+    fn type_named(f: &Fixture, name: &str) -> Option<Id> {
+        api::types_list(&f.session)
+            .unwrap()
+            .into_iter()
+            .find(|t| t.name == name)
+            .map(|t| t.id)
+    }
+
+    fn child(f: &Fixture, parent: Id, title: &str, type_ids: Vec<Id>) -> Id {
+        f.tick();
+        api::object_create(
+            &f.session,
+            NewObject {
+                title: title.into(),
+                parent_id: Some(parent),
+                type_ids,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    }
+
+    fn column(label: &str, kind: FieldKind) -> NewColumn {
+        NewColumn {
+            label: label.into(),
+            kind,
+            choices: Vec::new(),
+        }
+    }
+
+    fn add(f: &Fixture, source: Source, label: &str, kind: FieldKind) -> Result<Id, IpcError> {
+        f.tick();
+        api::column_add(&f.session, source, column(label, kind))
+    }
+
+    fn children_of(parent: Id) -> Source {
+        Source::Children {
+            parent: Some(parent),
+        }
+    }
+
+    fn labels(f: &Fixture, source: Source) -> Vec<String> {
+        api::fields_list(&f.session, source)
+            .unwrap()
+            .into_iter()
+            .map(|field| field.label)
+            .collect()
+    }
+
+    fn types_of(f: &Fixture, object: Id) -> Vec<Id> {
+        api::object_summaries(&f.session, &[object]).unwrap()[0]
+            .type_ids
+            .clone()
+    }
+
+    #[test]
+    fn a_column_of_a_type_goes_on_that_type() {
+        let f = Fixture::new();
+        let task = type_named(&f, "Task").unwrap();
+        let source = Source::Type { type_id: task };
+        let target = api::column_target(&f.session, source).unwrap();
+        assert_eq!(target.type_id, Some(task));
+        assert_eq!(target.type_name, "Task");
+
+        add(&f, source, "Serial number", FieldKind::Number).unwrap();
+        let fields = api::fields_list(&f.session, source).unwrap();
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].key, "serial_number");
+        assert_eq!(fields[0].type_id, task);
+    }
+
+    #[test]
+    fn a_column_of_untyped_children_makes_a_type_named_after_the_page() {
+        let f = Fixture::new();
+        let parent = f.object("Infrastructure");
+        let a = child(&f, parent, "a", vec![]);
+        let b = child(&f, parent, "b", vec![]);
+        let source = children_of(parent);
+        let types_before = api::types_list(&f.session).unwrap().len();
+
+        let target = api::column_target(&f.session, source).unwrap();
+        assert_eq!(target.type_id, None);
+        assert_eq!(target.type_name, "Infrastructure");
+
+        add(&f, source, "Serial", FieldKind::Text).unwrap();
+        let made = type_named(&f, "Infrastructure").unwrap();
+        assert_eq!(types_of(&f, a), [made]);
+        assert_eq!(types_of(&f, b), [made]);
+        assert_eq!(labels(&f, source), ["Serial"]);
+        assert_eq!(
+            api::column_target(&f.session, source).unwrap().type_id,
+            Some(made)
+        );
+
+        // The next column goes on the same type, and values are checked against the fields.
+        add(&f, source, "RAM", FieldKind::Number).unwrap();
+        assert_eq!(api::types_list(&f.session).unwrap().len(), types_before + 1);
+        assert_eq!(labels(&f, source), ["Serial", "RAM"]);
+        f.tick();
+        assert!(api::object_set_prop(&f.session, a, "ram".into(), Some(json!(32))).unwrap());
+        f.tick();
+        let bad = api::object_set_prop(&f.session, a, "ram".into(), Some(json!("lots")));
+        assert_eq!(bad.unwrap_err().kind, IpcErrorKind::Invalid);
+
+        // Adding a column is one undo step, whatever it made.
+        f.tick();
+        api::undo(&f.session).unwrap();
+        f.tick();
+        api::undo(&f.session).unwrap();
+        assert_eq!(labels(&f, source), ["Serial"]);
+        f.tick();
+        api::undo(&f.session).unwrap();
+        assert_eq!(labels(&f, source), Vec::<String>::new());
+        assert_eq!(type_named(&f, "Infrastructure"), None);
+        assert!(types_of(&f, a).is_empty());
+        assert!(types_of(&f, b).is_empty());
+    }
+
+    #[test]
+    fn a_column_of_children_sharing_a_type_goes_on_it() {
+        let f = Fixture::new();
+        let first = f.object("Devices");
+        child(&f, first, "a", vec![]);
+        add(&f, children_of(first), "Serial", FieldKind::Text).unwrap();
+        let devices = type_named(&f, "Devices").unwrap();
+
+        let second = f.object("Phones");
+        let c = child(&f, second, "c", vec![devices]);
+        let d = child(&f, second, "d", vec![devices]);
+        let source = children_of(second);
+        assert_eq!(
+            api::column_target(&f.session, source).unwrap().type_id,
+            Some(devices)
+        );
+        add(&f, source, "Carrier", FieldKind::Text).unwrap();
+        assert_eq!(type_named(&f, "Phones"), None);
+        assert_eq!(types_of(&f, c), [devices]);
+        assert_eq!(types_of(&f, d), [devices]);
+        assert_eq!(labels(&f, children_of(first)), ["Serial", "Carrier"]);
+    }
+
+    #[test]
+    fn a_column_leaves_a_built_in_type_alone_unless_it_is_the_tables_type() {
+        let f = Fixture::new();
+        let note = type_named(&f, "Note").unwrap();
+        let parent = f.object("Reading");
+        let a = child(&f, parent, "a", vec![note]);
+        add(&f, children_of(parent), "Rating", FieldKind::Number).unwrap();
+        let made = type_named(&f, "Reading").unwrap();
+        assert_eq!(
+            api::fields_list(&f.session, Source::Type { type_id: note })
+                .unwrap()
+                .len(),
+            0
+        );
+        assert!(types_of(&f, a).contains(&note));
+        assert!(types_of(&f, a).contains(&made));
+
+        // A page named like a built-in type does not take that type's name.
+        let journal = f.object("Journal");
+        child(&f, journal, "day", vec![]);
+        let target = api::column_target(&f.session, children_of(journal)).unwrap();
+        assert_eq!(target.type_id, None);
+        assert_eq!(target.type_name, "Journal pages");
+        add(&f, children_of(journal), "Mood", FieldKind::Text).unwrap();
+        let built_in = type_named(&f, "Journal").unwrap();
+        let fields = api::fields_list(&f.session, Source::Type { type_id: built_in });
+        assert!(fields.unwrap().is_empty());
+        assert!(type_named(&f, "Journal pages").is_some());
+    }
+
+    #[test]
+    fn untyped_children_reuse_a_type_with_the_pages_name_and_a_blank_page_is_untitled() {
+        let f = Fixture::new();
+        let parent = f.object("");
+        let a = child(&f, parent, "a", vec![]);
+        add(&f, children_of(parent), "One", FieldKind::Text).unwrap();
+        let untitled = type_named(&f, "Untitled").unwrap();
+
+        // A child with no type means no type is shared, so the page's own name is used again.
+        let b = child(&f, parent, "b", vec![]);
+        add(&f, children_of(parent), "Two", FieldKind::Text).unwrap();
+        assert_eq!(types_of(&f, a), [untitled]);
+        assert_eq!(types_of(&f, b), [untitled]);
+    }
+
+    #[test]
+    fn a_column_of_an_empty_table_makes_its_first_row() {
+        let f = Fixture::new();
+        let parent = f.object("Empty");
+        let source = children_of(parent);
+        assert_eq!(api::objects_count(&f.session, source).unwrap(), 0);
+
+        add(&f, source, "Serial", FieldKind::Text).unwrap();
+        assert_eq!(api::objects_count(&f.session, source).unwrap(), 1);
+        assert_eq!(labels(&f, source), ["Serial"]);
+
+        // The next row is of the same type, so the column keeps showing.
+        f.tick();
+        let row = api::row_add(&f.session, source, parent).unwrap();
+        assert_eq!(types_of(&f, row), [type_named(&f, "Empty").unwrap()]);
+        assert_eq!(
+            api::object_get(&f.session, row).unwrap().parent_id,
+            Some(parent)
+        );
+    }
+
+    #[test]
+    fn a_new_row_takes_the_types_a_row_there_has() {
+        let f = Fixture::new();
+        let note = type_named(&f, "Note").unwrap();
+        let task = type_named(&f, "Task").unwrap();
+
+        let parent = f.object("Parent");
+        f.tick();
+        let of_type = api::row_add(&f.session, Source::Type { type_id: task }, parent).unwrap();
+        assert_eq!(types_of(&f, of_type), [task]);
+        assert_eq!(
+            api::object_get(&f.session, of_type).unwrap().parent_id,
+            Some(parent)
+        );
+
+        let mixed = f.object("Mixed");
+        child(&f, mixed, "a", vec![note, task]);
+        child(&f, mixed, "b", vec![note]);
+        f.tick();
+        let row = api::row_add(&f.session, children_of(mixed), mixed).unwrap();
+        assert_eq!(types_of(&f, row), [note]);
+
+        let plain = f.object("Plain");
+        child(&f, plain, "a", vec![note]);
+        child(&f, plain, "b", vec![]);
+        f.tick();
+        let row = api::row_add(&f.session, children_of(plain), plain).unwrap();
+        assert!(types_of(&f, row).is_empty());
+
+        let empty = f.object("Empty");
+        f.tick();
+        let row = api::row_add(&f.session, children_of(empty), empty).unwrap();
+        assert!(types_of(&f, row).is_empty());
+    }
+
+    #[test]
+    fn a_trashed_child_does_not_stop_a_type_being_shared() {
+        let f = Fixture::new();
+        let note = type_named(&f, "Note").unwrap();
+        let parent = f.object("Parent");
+        child(&f, parent, "a", vec![note]);
+        let untyped = child(&f, parent, "b", vec![]);
+        f.tick();
+        api::object_trash(&f.session, untyped).unwrap();
+        f.tick();
+        let row = api::row_add(&f.session, children_of(parent), parent).unwrap();
+        assert_eq!(types_of(&f, row), [note]);
+    }
+
+    #[test]
+    fn a_column_is_refused_and_nothing_is_kept() {
+        let f = Fixture::new();
+        let parent = f.object("Parent");
+        let a = child(&f, parent, "a", vec![]);
+        let source = children_of(parent);
+        let types_before = api::types_list(&f.session).unwrap().len();
+
+        for (label, kind) in [
+            ("", FieldKind::Text),
+            ("   ", FieldKind::Text),
+            ("Title", FieldKind::Text),
+            (" title ", FieldKind::Text),
+            ("Where", FieldKind::Geo),
+            ("Status", FieldKind::Select),
+        ] {
+            assert!(add(&f, source, label, kind).is_err(), "{label:?}");
+            assert_eq!(api::types_list(&f.session).unwrap().len(), types_before);
+            assert!(types_of(&f, a).is_empty());
+        }
+        assert!(add(&f, Source::Children { parent: None }, "X", FieldKind::Text).is_err());
+
+        add(&f, source, "Serial", FieldKind::Text).unwrap();
+        assert!(add(&f, source, "serial", FieldKind::Number).is_err());
+        assert_eq!(labels(&f, source), ["Serial"]);
+    }
+
+    #[test]
+    fn a_column_gets_a_key_and_a_select_gets_its_choices() {
+        let f = Fixture::new();
+        let parent = f.object("Parent");
+        let a = child(&f, parent, "a", vec![]);
+        let source = children_of(parent);
+
+        add(&f, source, "Due date", FieldKind::Date).unwrap();
+        add(&f, source, "Due-date!", FieldKind::Date).unwrap();
+        add(&f, source, "名前", FieldKind::Text).unwrap();
+        f.tick();
+        api::column_add(
+            &f.session,
+            source,
+            NewColumn {
+                label: "Status".into(),
+                kind: FieldKind::Select,
+                choices: vec![
+                    "To do".into(),
+                    " Doing ".into(),
+                    "".into(),
+                    "To do".into(),
+                    "To-do".into(),
+                    "完了".into(),
+                ],
+            },
+        )
+        .unwrap();
+
+        let fields = api::fields_list(&f.session, source).unwrap();
+        let keys: Vec<&str> = fields.iter().map(|field| field.key.as_str()).collect();
+        assert_eq!(keys, ["due_date", "due_date_2", "column_3", "status"]);
+        assert_eq!(fields[2].label, "名前");
+        assert_eq!(
+            fields[3].options_json,
+            json!({ "options": [
+                { "id": "to_do", "label": "To do" },
+                { "id": "doing", "label": "Doing" },
+                { "id": "to_do_2", "label": "To-do" },
+                { "id": "choice_4", "label": "完了" },
+            ] })
+        );
+        f.tick();
+        assert!(
+            api::object_set_prop(&f.session, a, "status".into(), Some(json!("doing"))).unwrap()
+        );
+        f.tick();
+        let bad = api::object_set_prop(&f.session, a, "status".into(), Some(json!("nope")));
+        assert_eq!(bad.unwrap_err().kind, IpcErrorKind::Invalid);
+    }
+
+    #[test]
+    fn a_field_is_renamed_and_deleted_and_its_values_stay() {
+        let f = Fixture::new();
+        let parent = f.object("Parent");
+        let a = child(&f, parent, "a", vec![]);
+        let source = children_of(parent);
+        let serial = add(&f, source, "Serial", FieldKind::Text).unwrap();
+        add(&f, source, "Owner", FieldKind::Text).unwrap();
+        f.tick();
+        api::object_set_prop(&f.session, a, "serial".into(), Some(json!("X1"))).unwrap();
+
+        f.tick();
+        assert!(api::field_rename(&f.session, serial, " Serial no. ").unwrap());
+        assert_eq!(labels(&f, source), ["Serial no.", "Owner"]);
+        let renamed = api::fields_list(&f.session, source).unwrap();
+        assert_eq!(renamed[0].key, "serial");
+        assert_eq!(
+            api::object_get(&f.session, a).unwrap().props_json["serial"],
+            "X1"
+        );
+
+        f.tick();
+        assert!(!api::field_rename(&f.session, serial, "Serial no.").unwrap());
+        f.tick();
+        assert!(api::field_rename(&f.session, serial, "SERIAL NO.").unwrap());
+        for refused in ["owner", "Title", "  "] {
+            f.tick();
+            let renamed = api::field_rename(&f.session, serial, refused);
+            assert!(renamed.is_err(), "{refused:?}");
+        }
+        assert_eq!(labels(&f, source), ["SERIAL NO.", "Owner"]);
+
+        f.tick();
+        api::field_delete(&f.session, serial).unwrap();
+        assert_eq!(labels(&f, source), ["Owner"]);
+        assert_eq!(
+            api::object_get(&f.session, a).unwrap().props_json["serial"],
+            "X1"
+        );
+
+        f.tick();
+        api::undo(&f.session).unwrap();
+        assert_eq!(labels(&f, source), ["SERIAL NO.", "Owner"]);
+    }
 }
 
 #[test]

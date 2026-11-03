@@ -858,6 +858,48 @@ li.ProseMirror-selectednode::after {
   gap: var(--dbme-space-2);
 }
 
+/* --- The Table's columns (ADR-0030) --------------------------------------------------------- */
+
+.dbme-columns__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+}
+
+.dbme-columns__form .dbme-dialog__actions {
+  margin-top: var(--dbme-space-2);
+}
+
+.dbme-columns__note {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.dbme-columns__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dbme-columns__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbme-space-2);
+}
+
+.dbme-columns__row .dbme-input {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.dbme-columns__type {
+  font-size: 0.875rem;
+}
+
 /* --- Search (ADR-0020) --------------------------------------------------------------------- */
 
 .dbme-dialog--palette {

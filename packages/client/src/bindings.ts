@@ -35,6 +35,19 @@ export const commands = {
 	fieldsList: (source: Source_Deserialize) => typedError<FieldRow[], IpcError>(__TAURI_INVOKE("fields_list", { source })),
 	/**  Adds a field to a type and returns its ID. */
 	fieldCreate: (field: NewField_Deserialize) => typedError<Id, IpcError>(__TAURI_INVOKE("field_create", { field })),
+	/**  The type a new column of a Table showing `source` goes on (ADR-0030). */
+	columnTarget: (source: Source_Deserialize) => typedError<ColumnTarget_Serialize, IpcError>(__TAURI_INVOKE("column_target", { source })),
+	/**  Adds a column to a Table showing `source`, in one undo step, and returns the field's ID. */
+	columnAdd: (source: Source_Deserialize, column: NewColumn_Deserialize) => typedError<Id, IpcError>(__TAURI_INVOKE("column_add", { source, column })),
+	/**  Renames a field. Returns `false` if it already had the label. */
+	fieldRename: (id: Id, label: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("field_rename", { id, label })),
+	/**  Deletes a field. Values objects hold for it stay in their properties. */
+	fieldDelete: (id: Id) => typedError<null, IpcError>(__TAURI_INVOKE("field_delete", { id })),
+	/**
+	 *  Adds a row to a Table showing `source`: an empty object under `parent`, with the types a row
+	 *  there has. Returns its ID.
+	 */
+	rowAdd: (source: Source_Deserialize, parent: Id) => typedError<Id, IpcError>(__TAURI_INVOKE("row_add", { source, parent })),
 	/**  One object. */
 	objectGet: (id: Id) => typedError<ObjectRow_Serialize, IpcError>(__TAURI_INVOKE("object_get", { id })),
 	/**  The live children of `parent`, or the top-level objects, in order. */
@@ -425,6 +438,25 @@ export type BlockRow_Serialize = {
 	content_json: Value,
 	created_at: number,
 	updated_at: number,
+};
+
+/**  The type a new column of a Table goes on (ADR-0030). */
+export type ColumnTarget = ColumnTarget_Serialize | ColumnTarget_Deserialize;
+
+/**  The type a new column of a Table goes on (ADR-0030). */
+export type ColumnTarget_Deserialize = {
+	/**  The type, or `None` when adding the column makes it. */
+	type_id?: Id | null,
+	/**  Its name. */
+	type_name: string,
+};
+
+/**  The type a new column of a Table goes on (ADR-0030). */
+export type ColumnTarget_Serialize = {
+	/**  The type, or `None` when adding the column makes it. */
+	type_id: Id | null,
+	/**  Its name. */
+	type_name: string,
 };
 
 /**  What a committed transaction, undo or redo did. */
@@ -1174,6 +1206,29 @@ export type Mode =
 "simple" | 
 /**  Everything of M1 to M6: types, fields, the Table view, tags. */
 "organizer";
+
+/**  A new column of a Table (ADR-0030). */
+export type NewColumn = NewColumn_Serialize | NewColumn_Deserialize;
+
+/**  A new column of a Table (ADR-0030). */
+export type NewColumn_Deserialize = {
+	/**  Its name. */
+	label: string,
+	/**  What it holds: one of the kinds a Table's cells can edit. */
+	kind: FieldKind,
+	/**  The choices of a `select` column. */
+	choices?: string[],
+};
+
+/**  A new column of a Table (ADR-0030). */
+export type NewColumn_Serialize = {
+	/**  Its name. */
+	label: string,
+	/**  What it holds: one of the kinds a Table's cells can edit. */
+	kind: FieldKind,
+	/**  The choices of a `select` column. */
+	choices: string[],
+};
 
 /**  A new field of a type. */
 export type NewField = NewField_Serialize | NewField_Deserialize;

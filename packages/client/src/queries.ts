@@ -9,6 +9,7 @@ import type {
   AttachmentRow_Serialize,
   Backlink_Serialize,
   BlockRow_Serialize,
+  ColumnTarget_Serialize,
   Conflict_Serialize,
   FacetBucket,
   FieldRow,
@@ -44,6 +45,7 @@ export const keys = {
     [VAULT, "page", source, sort, offset, limit] as const,
   count: (source: Source) => [VAULT, "count", source] as const,
   fields: (source: Source) => [VAULT, "fields", source] as const,
+  columnTarget: (source: Source) => [VAULT, "column-target", source] as const,
   blocks: (objectId: Id) => [VAULT, "blocks", objectId] as const,
   backlinks: (id: Id) => [VAULT, "backlinks", id] as const,
   search: (text: string, limit: number) => [VAULT, "search", text, limit] as const,
@@ -126,6 +128,15 @@ export function useFields(source: Source) {
   return useQuery<FieldRow[]>({
     queryKey: keys.fields(source),
     queryFn: () => unwrap(commands.fieldsList(source)),
+  });
+}
+
+/** The type a new column of a Table showing `source` goes on (ADR-0030). */
+export function useColumnTarget(source: Source, enabled: boolean) {
+  return useQuery<ColumnTarget_Serialize>({
+    queryKey: keys.columnTarget(source),
+    queryFn: () => unwrap(commands.columnTarget(source)),
+    enabled,
   });
 }
 

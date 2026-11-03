@@ -10,11 +10,11 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use dbme_core::model::{BlockRow, FieldRow, ObjectRow, RelationRow};
+use dbme_core::model::{BlockRow, FieldRow, ObjectRow, RelationRow, TypeRow};
 use dbme_core::{ContentHash, CoreError, Id};
 
 use crate::query::{Reader, count};
-use crate::rows::{object_columns, object_row};
+use crate::rows::{object_columns, object_row, type_columns, type_row};
 use crate::sql::{self, to_json};
 use crate::{Result, StoreError};
 
@@ -39,6 +39,16 @@ pub enum Source {
 }
 
 pub use dbme_core::query::{Sort, SortBy};
+
+/// The type a new column of a Table goes on (ADR-0030).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct ColumnTarget {
+    /// The type, or `None` when adding the column makes it.
+    pub type_id: Option<Id>,
+    /// Its name.
+    pub type_name: String,
+}
 
 /// An object with what a list shows beside it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -337,6 +347,68 @@ impl Reader<'_> {
             new
         });
         Ok(fields)
+    }
+
+    /// The types every live child of `parent` has, by name. None when it has no live children.
+    pub fn types_shared_by_children(&self, parent: Option<Id>) -> Result<Vec<TypeRow>> {
+        let mut statement = self.conn.prepare_cached(concat!(
+            "SELECT ",
+            type_columns!(),
+            " FROM types WHERE id IN (",
+            "SELECT ot.type_id FROM objects o JOIN object_types ot ON ot.object_id = o.id ",
+            "WHERE o.parent_id IS ?1 AND o.deleted_at IS NULL GROUP BY ot.type_id HAVING count(*) = ",
+            "(SELECT count(*) FROM objects WHERE parent_id IS ?1 AND deleted_at IS NULL)",
+            ") ORDER BY name, id"
+        ))?;
+        let rows = statement.query_map([sql::optional(parent)], type_row)?;
+        Ok(rows.collect::<rusqlite::Result<Vec<TypeRow>>>()?)
+    }
+
+    /// The type a new column of a Table showing `source` goes on (ADR-0030): the type it lists; or
+    /// the first non-system type all the children share; or a type named after the parent, which
+    /// is made unless one of that name exists. A built-in type's name is left to the built-in type.
+    pub fn column_target(&self, source: Source) -> Result<ColumnTarget> {
+        let parent = match source {
+            Source::Type { type_id } => {
+                let row = self.type_row(type_id)?;
+                return Ok(ColumnTarget {
+                    type_id: Some(row.id),
+                    type_name: row.name,
+                });
+            }
+            Source::Children { parent: None } => {
+                return Err(StoreError::Rule(
+                    "the top level has no page to name a type after; choose a type".into(),
+                ));
+            }
+            Source::Children {
+                parent: Some(parent),
+            } => parent,
+        };
+        let shared = self.types_shared_by_children(Some(parent))?;
+        if let Some(row) = shared.into_iter().find(|row| !row.is_system) {
+            return Ok(ColumnTarget {
+                type_id: Some(row.id),
+                type_name: row.name,
+            });
+        }
+        let title = self.object(parent)?.title;
+        let title = match title.trim() {
+            "" => "Untitled",
+            title => title,
+        };
+        let title: String = title.chars().take(190).collect();
+        let types = self.types()?;
+        let type_name = if types.iter().any(|row| row.is_system && row.name == title) {
+            format!("{title} pages")
+        } else {
+            title
+        };
+        let type_id = types
+            .iter()
+            .find(|row| row.name == type_name)
+            .map(|row| row.id);
+        Ok(ColumnTarget { type_id, type_name })
     }
 
     /// Live objects whose title contains `text`, ignoring case: titles that start with it first,

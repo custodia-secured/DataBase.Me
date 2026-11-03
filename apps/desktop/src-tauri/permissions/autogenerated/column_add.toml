@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-column-add"
+description = "Enables the column_add command without any pre-configured scope."
+commands.allow = ["column_add"]
+
+[[permission]]
+identifier = "deny-column-add"
+description = "Denies the column_add command without any pre-configured scope."
+commands.deny = ["column_add"]

@@ -37,3 +37,4 @@ other.
 | [0027](0027-settings-modes-and-themes.md)            | Settings, modes and themes                                   | Proposed |
 | [0028](0028-onboarding-and-the-network-guarantee.md) | Onboarding and the network guarantee                         | Proposed |
 | [0029](0029-the-release.md)                          | The release                                                  | Proposed |
+| [0030](0030-table-columns.md)                        | Adding columns to a Table                                    | Proposed |

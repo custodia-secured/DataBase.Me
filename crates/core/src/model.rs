@@ -361,6 +361,33 @@ pub fn is_identifier(text: &str, max: usize) -> bool {
         && bytes.all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'_'))
 }
 
+/// A field key made from a label or a column header: lower case, letters, digits and `_`, starting
+/// with a letter, at most 60 long. `None` when the label has no ASCII letter or digit to use.
+pub fn key_from_label(label: &str) -> Option<String> {
+    let mut key = String::new();
+    let mut last_underscore = true;
+    for ch in label.trim().to_lowercase().chars() {
+        if ch.is_ascii_alphanumeric() {
+            key.push(ch);
+            last_underscore = false;
+        } else if !last_underscore {
+            key.push('_');
+            last_underscore = true;
+        }
+    }
+    let key = key.trim_end_matches('_');
+    if key.is_empty() {
+        return None;
+    }
+    let mut key = if key.starts_with(|ch: char| ch.is_ascii_lowercase()) {
+        key.to_owned()
+    } else {
+        format!("c_{key}")
+    };
+    key.truncate(60);
+    Some(key)
+}
+
 fn check(ok: bool, what: &str, reason: &str) -> Result<(), CoreError> {
     if ok {
         Ok(())
@@ -711,6 +738,22 @@ pub(crate) mod tests {
             assert!(!is_identifier(bad, 64), "{bad:?}");
         }
         assert!(!is_identifier("abc", 2));
+    }
+
+    #[test]
+    fn keys_from_labels() {
+        for (label, key) in [
+            ("Serial number", "serial_number"),
+            ("  Due date! ", "due_date"),
+            ("2nd owner", "c_2nd_owner"),
+            ("Größe", "gr_e"),
+        ] {
+            assert_eq!(key_from_label(label).as_deref(), Some(key), "{label:?}");
+        }
+        assert_eq!(key_from_label("名前"), None);
+        assert_eq!(key_from_label("  "), None);
+        let long = key_from_label(&"a".repeat(100)).unwrap();
+        assert!(is_identifier(&long, 60));
     }
 
     #[test]

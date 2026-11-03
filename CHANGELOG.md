@@ -6,6 +6,15 @@ All notable changes to DataBase.Me are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The Table can add columns ([#15](https://github.com/custodia-secured/DataBase.Me/issues/15)).
+  Nothing in the app could create a field or a type, and the built-in types have no fields, so only
+  an import could add a column. **New column** adds one and says which type it goes on, making a
+  type named after the page when the pages have none to share. **Edit columns** renames and deletes
+  them, and **New row** gives a new row the types of its table, so the columns stay on it. Five new
+  commands (`column_target`, `column_add`, `field_rename`, `field_delete`, `row_add`). ADR-0030.
+
 ## [0.1.0] - 2026-11-03
 
 The MVP: everything below, from the foundations to the release. The app makes no network request

@@ -35,6 +35,7 @@ import { childrenOf, usePagedObjects } from "../paging";
 import type { ViewProps } from "../registry";
 import { SourcePicker } from "../SourcePicker";
 import { displayValue, isEditable } from "../values";
+import { EditColumnsDialog, NewColumnDialog } from "./ColumnDialogs";
 
 interface RowData {
   index: number;
@@ -105,6 +106,7 @@ function Grid({ objectId, source, sort, onSort, onOpen }: GridProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<Cell>({ row: 0, col: 1 });
   const [editing, setEditing] = useState<{ cell: Cell; text?: string } | null>(null);
+  const [columnDialog, setColumnDialog] = useState<"new" | "edit" | null>(null);
   const total = count.data ?? 0;
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual returns new functions each render; nothing here memoises them
@@ -161,7 +163,8 @@ function Grid({ objectId, source, sort, onSort, onOpen }: GridProps) {
   // Keep the active cell on the grid when the grid shrinks.
   useEffect(() => {
     if (active.row >= total && total > 0) setActive({ row: total - 1, col: active.col });
-  }, [total, active]);
+    if (active.col >= cols) setActive({ row: active.row, col: cols - 1 });
+  }, [total, cols, active]);
 
   const cellId = (cell: Cell) => `${gridId}-r${String(cell.row)}-c${String(cell.col)}`;
   const focusGrid = () => scroller.current?.focus();
@@ -252,12 +255,7 @@ function Grid({ objectId, source, sort, onSort, onOpen }: GridProps) {
   };
 
   const addRow = async () => {
-    const id = await actions.create({
-      title: "",
-      parent_id: objectId,
-      position: "last",
-      ...(source.kind === "type" ? { type_ids: [source.type_id] } : {}),
-    });
+    const id = await actions.addRow(source, objectId);
     if (id === undefined) return;
     onSort(MANUAL);
     const row = total;
@@ -275,6 +273,22 @@ function Grid({ objectId, source, sort, onSort, onOpen }: GridProps) {
         <Button onClick={() => void addRow()}>
           <Plus aria-hidden="true" size={16} /> New row
         </Button>
+        <Button
+          onClick={() => {
+            setColumnDialog("new");
+          }}
+        >
+          <Plus aria-hidden="true" size={16} /> New column
+        </Button>
+        {fields.data?.length ? (
+          <Button
+            onClick={() => {
+              setColumnDialog("edit");
+            }}
+          >
+            Edit columns
+          </Button>
+        ) : null}
         <span className="dbme-muted" aria-live="polite">
           {count.isSuccess ? `${total.toLocaleString()} ${total === 1 ? "row" : "rows"}` : ""}
         </span>
@@ -416,6 +430,22 @@ function Grid({ objectId, source, sort, onSort, onOpen }: GridProps) {
           <StatusMessage>No rows yet. Use New row to add one.</StatusMessage>
         ) : null}
       </div>
+      <NewColumnDialog
+        open={columnDialog === "new"}
+        source={source}
+        fields={fields.data ?? []}
+        rows={total}
+        onClose={() => {
+          setColumnDialog(null);
+        }}
+      />
+      <EditColumnsDialog
+        open={columnDialog === "edit"}
+        fields={fields.data ?? []}
+        onClose={() => {
+          setColumnDialog(null);
+        }}
+      />
     </>
   );
 }

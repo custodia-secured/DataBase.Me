@@ -32,7 +32,8 @@ shows at once in every other, including a second pane in **Split view**, and in 
   mouse, keyboard or touch. Far away, the map draws as plain boxes so a large tree stays quick.
 - **Table.** (Organizer mode.) The pages of a type as a grid, one row each, one column per field,
   edited in place. **Show** chooses the type, or the pages inside this one. **New row** makes a
-  page of the type. Thousands of rows scroll smoothly; the grid loads what is on screen.
+  page like the others in the table, **New column** adds a column and **Edit columns** renames or
+  deletes them. Thousands of rows scroll smoothly; the grid loads what is on screen.
 - **Gallery.** The pages inside this one, or of a type, as cards with a cover picture when the
   page has one.
 
@@ -44,9 +45,22 @@ offered; the others are.
 A **type** is a named set of fields: a Milestone with a status, a due date and an estimate, a
 Person with an email. A page may have several types, added from **Add a type** under its title
 and removed from the chip. Each field is a button under the types line that edits in place:
-select from a list, type a number or a date, tick a box. The built-in types cover the common
-things (notes, tasks, people, places, events, files, pictures, web pages, datasets and more), and
-importing a table makes a type from its columns.
+select from a list, type a number or a date, tick a box.
+
+The built-in types name the common things (notes, tasks, people, places, events, files, pictures,
+web pages, datasets and more), and they start with no fields, so adding one to a page adds no
+columns until you give it some. Fields come from two places:
+
+- **New column** in the Table view. A column is a field on a type, and the dialog says which one
+  before you add it. With **Show** set to a type, it goes on that type. With **Show** set to the
+  pages inside this one, it goes on a type those pages all share; if that is only a built-in type,
+  or there is none, they get a new type named after this page. A table with no rows also gets a
+  first row for the column to show on.
+- **Importing a table**, which makes a type from its columns, with new pages for its rows.
+
+A column shows on every page of its type, in every table. **Edit columns** renames a column or
+deletes it; a deleted column's values stay on the pages, and Undo brings it back. A column's kind,
+and the choices in a list, cannot be changed after it is made.
 
 Types and fields live in the vault with the pages; in Simple mode they are hidden, not removed.
 

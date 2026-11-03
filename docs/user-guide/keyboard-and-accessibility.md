@@ -69,6 +69,10 @@ A grid with one tab stop. Arrows move between cells, Home and End to the ends of
 F2 edits the cell, Enter keeps the value and moves down, Tab keeps it and moves right, Escape
 drops it; Space ticks a box. The column headers sort.
 
+**New row**, **New column** and **Edit columns** come before the grid in the tab order. In the New
+column dialog Enter adds the column. In Edit columns, Enter or leaving a name saves it. In both,
+Escape closes the dialog and keeps nothing still being typed.
+
 ## Screen readers
 
 Regions, dialogs, trees, grids, tabs and menus are named and carry the roles assistive technology
