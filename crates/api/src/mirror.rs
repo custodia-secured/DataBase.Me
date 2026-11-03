@@ -202,11 +202,24 @@ pub(crate) fn start(config_dir: Option<&Path>, vault: &Vault) -> Reply<Running> 
     })
 }
 
+/// The folder as a person reads it: a canonical Windows path carries the `\\?\` verbatim prefix
+/// (`\\?\UNC\` for a share), which is the file system's business, not the dialog's.
+fn shown(folder: &Path) -> String {
+    let text = folder.display().to_string();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = text.strip_prefix(r"\\?\") {
+        rest.to_owned()
+    } else {
+        text
+    }
+}
+
 /// The status, read from the vault's bookkeeping.
 pub(crate) fn status_of(vault: &Vault, running: Option<&Running>) -> Reply<MirrorStatus> {
     let mut status = MirrorStatus {
         enabled: running.is_some(),
-        folder: running.map(|r| r.folder.display().to_string()),
+        folder: running.map(|r| shown(&r.folder)),
         ..MirrorStatus::default()
     };
     for state in vault.mirror_states(None)? {

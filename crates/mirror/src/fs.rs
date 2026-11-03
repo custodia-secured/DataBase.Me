@@ -59,8 +59,9 @@ fn name_of(rel_path: &str) -> &str {
 }
 
 /// An in-memory file system for tests: deterministic, with a modification counter for `mtime`
-/// and the ability to make the next renames fail, as a locked file on Windows does.
-#[derive(Debug, Default)]
+/// and the ability to make the next renames fail, as a locked file on Windows does. It clones,
+/// so a test can carry the folder past a vault that is closed and opened again.
+#[derive(Clone, Debug, Default)]
 pub struct MemFs {
     files: BTreeMap<String, (Vec<u8>, i64)>,
     dirs: std::collections::BTreeSet<String>,

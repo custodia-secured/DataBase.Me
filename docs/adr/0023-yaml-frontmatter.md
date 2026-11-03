@@ -95,3 +95,16 @@ What the crate does not provide, and `core/files` therefore does **before** `loa
 - **A YAML subset parser of our own.** The envelope is small, but user fields and Obsidian's
   properties are arbitrary YAML, and the fuzzing requirement is cheaper to meet on a parser that
   passes the YAML test suite.
+
+## Later changes
+
+These notes record what the build found under this decision; the decision itself stands.
+
+- **M5 (2026-11-02):** CRLF is accepted on read (a bare carriage return in the frontmatter is a
+  parse error naming its line); the emitter writes LF only, so a file another editor saved with
+  CRLF, or with its keys reordered, reads as the same document and makes no op (`echo.rs`). The
+  stack finding behind the pre-scan was measured: `MarkedYaml::load_from_str` alone needs more
+  than 256 KiB of stack for 64 nested mappings in a debug build (48 load, 64 do not, 128 do in
+  512 KiB), so the cap of 64 protects a small stack only through what it refuses; the fuzz test
+  runs refused inputs on a 256 KiB thread and admitted ones on 512 KiB. Dates are written quoted
+  (`"2026-11-02T10:00:00.000Z"`), which Obsidian's property editor reads as text.

@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+/**
+ * The milestone's screenshots at both sizes (brief 301-303), written to `target/screenshots/`
+ * and not committed. Nothing is asserted beyond what the flow needs; the pictures are the record.
+ * Runs only when `DBME_SCREENSHOTS` is set, so the suite's time is not spent on it:
+ *
+ *   DBME_SCREENSHOTS=1 pnpm --filter @databaseme/desktop e2e screenshots --project=edge-desktop --project=edge-phone
+ */
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { workspace } from "./data";
+import { expect, test, type App } from "./fixtures";
+
+const ROOT = path.resolve(import.meta.dirname, "../../..");
+const OUT = path.join(ROOT, "target/screenshots");
+
+function folderOf(session: string): string {
+  return path.join(ROOT, "target/e2e-data", session, "vaults/Main.dbme/files");
+}
+
+async function shot(app: App, name: string) {
+  const size = app.page.viewportSize()?.width === 360 ? "phone" : "desktop";
+  mkdirSync(OUT, { recursive: true });
+  await app.page.screenshot({ path: path.join(OUT, `m5-${size}-${name}.png`), fullPage: false });
+}
+
+async function openFiles(app: App) {
+  await app.press(app.page.getByRole("button", { name: /^Files folder/ }));
+  const dialog = app.page.getByRole("dialog", { name: "Files folder" });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+async function syncNow(app: App, dialog: ReturnType<App["page"]["getByRole"]>) {
+  const button = dialog.getByRole("button", { name: "Sync now" });
+  await app.press(button);
+  await expect(button).toBeEnabled();
+}
+
+test.beforeEach(async ({ seed, app }) => {
+  test.skip(!process.env.DBME_SCREENSHOTS, "set DBME_SCREENSHOTS=1 to take the screenshots");
+  await seed(workspace());
+  await app.open();
+});
+
+test("the files folder: off, on and synced, a conflict, and a hold", async ({ app, session }) => {
+  const dialog = await openFiles(app);
+  await shot(app, "files-off");
+  await app.press(dialog.getByRole("button", { name: "Turn on" }));
+  await syncNow(app, dialog);
+  await expect(dialog.getByRole("status").first()).toHaveText(/^On: \d+ synced\.$/);
+  await shot(app, "files-on");
+
+  // An unreadable file in the inbox.
+  const folder = folderOf(session);
+  writeFileSync(path.join(folder, "Broken.md"), "---\nid: [not: valid\n---\n");
+  await syncNow(app, dialog);
+  await expect(dialog.getByRole("list", { name: "Conflicts" }).getByRole("listitem")).toHaveCount(
+    1,
+  );
+  await shot(app, "files-inbox");
+  rmSync(path.join(folder, "Broken.md"));
+
+  // Many files removed at once: the hold and its banner.
+  for (let n = 0; n < 50; n++) writeFileSync(path.join(folder, `Note ${String(n)}.md`), "x\n");
+  await syncNow(app, dialog);
+  for (let n = 0; n < 50; n++) rmSync(path.join(folder, `Note ${String(n)}.md`));
+  await syncNow(app, dialog);
+  await expect(dialog.getByText("Many files changed at once")).toBeVisible();
+  await shot(app, "files-hold");
+  await app.press(dialog.getByRole("button", { name: "Close" }));
+  const close = app.page.getByRole("button", { name: "Close pages" });
+  if (await close.isVisible()) await app.press(close);
+  await expect(app.page.getByRole("region", { name: "Files folder hold" })).toBeVisible();
+  await shot(app, "hold-banner");
+});

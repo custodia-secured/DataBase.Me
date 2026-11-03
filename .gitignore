@@ -21,3 +21,17 @@ Thumbs.db
 # Logs and local vaults created while developing
 *.log
 *.dbme/
+
+# Fixture vaults at known schema versions are committed (fixtures/README.md).
+!fixtures/vaults/*.dbme/
+
+# cargo-fuzz (fuzz/): its own lockfile, corpus and crash artifacts stay local; CI uploads crashes.
+fuzz/Cargo.lock
+fuzz/target/
+fuzz/corpus/
+fuzz/artifacts/
+fuzz/coverage/
+
+# The golden of the Obsidian round trip holds the folder's schema file under .dbme/, which the vault
+# pattern above would otherwise hide (fixtures/obsidian/README.md).
+!fixtures/obsidian-roundtrip/.dbme/

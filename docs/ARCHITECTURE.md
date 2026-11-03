@@ -32,9 +32,12 @@ is the map; the decisions behind it are in [adr/](adr/), and the on-disk format 
    SQLite transaction**, then emits an event.
 3. Every open view receives the event and re-reads what it shows, so all views stay consistent
    (ADR-0017).
-4. The files mirror sees the new op and rewrites the object's Markdown file (debounced, atomic).
-5. An edit made to that file in another tool travels the other way: watcher, parse, three-way merge
-   against the last synced text, and new ops with provenance `file:external` (ADR-0006).
+4. The same transaction marks the objects whose files changed in `mirror_dirty`; the files folder's
+   worker drains it (debounced) and rewrites each Markdown file atomically, unless the file changed
+   on disk since it was last read, in which case the write waits for the merge below (ADR-0021).
+5. An edit made to that file in another tool travels the other way: watcher (or a rescan), parse,
+   three-way merge against the last synced text on the model, and new ops committed under the
+   device the folder derives from the app's, outside the app's undo stack (ADR-0006, ADR-0021).
 
 Undo, history, provenance and later sync all come from the op log (ADR-0002).
 
@@ -47,9 +50,10 @@ Undo, history, provenance and later sync all come from the op log (ADR-0002).
 | `crates/store/`              | SQLite schema, migrations, FTS, vectors, blob store, crypto. All SQL lives here.              | M1                |
 | `crates/api/` (`dbme-api`)   | The commands the UI calls, as plain functions; the shell wraps them (ADR-0017)                | M2                |
 | `crates/e2e-server/`         | Test only: serves the e2e UI build and runs `dbme-api` on real vaults (ADR-0018)              | M2                |
-| `crates/mirror/`             | Two-way files folder engine                                                                   | M5                |
+| `crates/mirror/`             | Two-way files folder engine over an `Fs` seam, the watcher, `mirror-check` (ADR-0021)         | M5                |
 | `crates/ingest/`             | `Importer` trait, built-in importers, sidecar manager                                         | M6                |
-| `crates/export/`             | JSON/CSV export, full export and import                                                       | M5                |
+| `crates/export/`             | JSON/CSV export, full export and import (ADR-0021)                                            | M5                |
+| `fuzz/`                      | cargo-fuzz targets for the file format's parser, outside the workspace; run nightly           | M5                |
 | `crates/plugins/`            | `PluginRuntime` trait and the Extism host                                                     | M10               |
 | `crates/ai/`                 | Provider adapters, policy gate, audit                                                         | M11               |
 | `crates/mcp/`                | MCP server and client                                                                         | M11               |

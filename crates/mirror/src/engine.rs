@@ -10,7 +10,7 @@ use dbme_core::files::paths::{self, file_stem, is_dot_path, path_key};
 use dbme_core::files::{self, FileDoc, LinkResolver, ObjectRows, Schema, TAGGED};
 use dbme_core::model::{ObjectRow, Sensitivity, TypeRow};
 use dbme_core::{Clock, ContentHash, Id, IdGenerator};
-use dbme_store::{MirrorFileState, MirrorState, Reader, StoreError, Vault};
+use dbme_store::{ConflictKind, MirrorFileState, MirrorState, Reader, StoreError, Vault};
 
 use crate::fs::Fs;
 use crate::resolver::VaultResolver;
@@ -64,6 +64,9 @@ pub struct Outbound {
     /// Objects whose write or rename another program blocked; they stay dirty while retries are
     /// left.
     pub pending: Vec<Id>,
+    /// Objects whose file changed on disk since the vault last read it: writing now would lose
+    /// that change, so they stay dirty until a rescan has taken the file in.
+    pub deferred: Vec<Id>,
     /// Whether `.dbme/schema.json` was written.
     pub schema_written: bool,
 }
@@ -447,6 +450,31 @@ impl<F: Fs> Mirror<F> {
             (s.state != MirrorFileState::Trashed && s.state != MirrorFileState::Excluded)
                 .then(|| s.rel_path.clone())
         });
+        // A file that changed on disk since the row last saw it holds an edit the vault has not
+        // read; written over now, that edit would be lost. The object stays dirty, the next
+        // rescan takes the file in (the merge then sees both sides), and the pass after writes
+        // the result. The same size and time test `rescan` uses decides. A file the folder could
+        // not read is held the same way while its inbox entry is open; once the person has
+        // dismissed the entry, the app's version is written over it.
+        if let (Some(s), Some(rel)) = (&state, &current)
+            && s.file_size.is_some()
+            && let Some(disk) = self
+                .fs
+                .stat(rel)
+                .map_err(|e| MirrorError::io("reading", rel, e))?
+            && !disk.is_dir
+            && (s.file_size != Some(disk.size as i64) || s.file_mtime_ms != Some(disk.mtime_ms))
+        {
+            let held_open = s.state == MirrorFileState::Held
+                && vault.conflicts(true)?.iter().any(|c| {
+                    c.kind == ConflictKind::ParseError && c.rel_path.as_deref() == Some(rel)
+                });
+            if s.state != MirrorFileState::Held || held_open {
+                vault.mirror_dirty_mark(&[row.id])?;
+                report.deferred.push(row.id);
+                return Ok(());
+            }
+        }
         let stem = file_stem(&row.title);
         let taken = |candidate: &str| -> bool {
             let rel = paths::join(&[dir.as_str()], candidate);

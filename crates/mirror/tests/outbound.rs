@@ -392,3 +392,54 @@ fn the_real_file_system_behaves_like_the_memory_one() {
     assert_eq!(mem.dirs(), ["A"]);
     let _ = Mirror::new(mem, std::sync::Arc::new(dbme_core::ManualClock::new(0)));
 }
+
+#[test]
+fn a_file_edited_by_hand_is_not_written_over_before_it_is_read() {
+    let mut w = new_world();
+    let alpha = w.object("Alpha", None);
+    let p1 = w.paragraph(alpha, "one");
+    let p2 = w.paragraph(alpha, "two");
+    w.pump_out();
+
+    // The file changes on disk, unread; then the app edits another paragraph.
+    let text = w.text("Alpha.md");
+    w.mirror
+        .fs_mut()
+        .put("Alpha.md", text.replace("two ^", "two (file) ^").as_bytes());
+    w.tick();
+    w.vault
+        .transact(|txn| {
+            txn.update_block(p1, |b| {
+                b.content_json = json!({"inline": [{"text": "one (app)"}]})
+            })
+        })
+        .unwrap();
+
+    // The write waits: the file keeps its edit, the object stays dirty.
+    let out = w.pump_out();
+    assert_eq!(out.deferred, [alpha], "{out:?}");
+    assert!(out.written.is_empty(), "{out:?}");
+    assert!(w.text("Alpha.md").contains("two (file) ^"));
+    assert_eq!(w.vault.mirror_dirty_count().unwrap(), 1);
+    assert_eq!(w.pump_out().deferred, [alpha], "still waiting");
+
+    // A rescan takes the file in: the merge carries both edits, and the next pass writes them.
+    let events = w.mirror.rescan(&w.vault).unwrap();
+    assert_eq!(events, [FileEvent::Modified("Alpha.md".into())]);
+    let report = w.mirror.pump_in(&mut w.vault, events).unwrap();
+    assert_eq!(report.applied, [alpha], "{report:?}");
+    assert!(report.conflicts.is_empty(), "{report:?}");
+    assert_eq!(
+        w.vault.read().block(p2).unwrap().content_json,
+        json!({"inline": [{"text": "two (file)"}]})
+    );
+    let out = w.pump_out();
+    assert_eq!(out.written, [alpha], "{out:?}");
+    let text = w.text("Alpha.md");
+    assert!(
+        text.contains("one (app) ^") && text.contains("two (file) ^"),
+        "{text}"
+    );
+    assert_eq!(w.pump_out(), dbme_mirror::Outbound::default());
+    w.vault.verify(true).unwrap();
+}

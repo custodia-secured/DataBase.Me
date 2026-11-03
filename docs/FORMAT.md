@@ -2,7 +2,7 @@
 
 # DataBase.Me vault format
 
-**Status: draft 4, 2026-11-02. Format version 0.** Nothing here is stable until FORMAT.md v0.1
+**Status: draft 5, 2026-11-02. Format version 0.** Nothing here is stable until FORMAT.md v0.1
 ships with the MVP (M7). Each section says whether it is **Decided** (fixed by an accepted ADR),
 **Draft** (proposed, to be confirmed in the milestone named) or **Open** (not designed yet).
 
@@ -425,6 +425,11 @@ exported as read-only JSON.
 - An inbound apply never writes the file back; only an app-side change rewrites it. Outside edits
   are committed under the device the files folder derives from the app's (`mirror_device_id`) and
   are not steps of the app's undo stack.
+- A file whose size or modification time differs from its `mirror_state` row has an edit the app
+  has not read: the app's write of that file waits until a rescan has taken the file in and merged
+  it. A file the folder could not read waits the same way while its `parse_error` entry is open.
+- `mirror_state.last_hash` is the hash of the bytes last written or read. A file whose bytes hash
+  to it is the folder's own write, whatever event reported it, and is never applied.
 
 ## 7. Export folder (Proposed, M5)
 

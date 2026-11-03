@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Coverage-guided fuzzing of the files-folder parser with cargo-fuzz (M5 Task 9, the second layer
+# behind crates/core/tests/files_fuzz.rs). Needs a nightly toolchain, so it is outside the
+# workspace: `cargo +nightly fuzz run parse` from the repository root; .github/workflows/fuzz.yml
+# runs it on a schedule.
+[package]
+name = "dbme-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+dbme-core = { path = "../crates/core" }
+serde_json = "1"
+
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+bench = false
+
+# Its own workspace, so the root's `--locked` builds and cargo-deny never see it.
+[workspace]

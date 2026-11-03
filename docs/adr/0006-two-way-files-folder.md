@@ -69,3 +69,15 @@ three-way merge (`diffy` or our own diff3 over `similar`).
 - **One-way export only.** Safe and simple, but it fails the decision that outside edits flow back.
 - **Files as the canonical store.** See ADR-0002.
 - **Last writer wins.** Simple, and silently loses edits; it violates "never silently lose data".
+
+## Later changes
+
+These notes record what later milestones did under this decision; the decision itself stands.
+
+- **M5 (2026-11-02):** the engine is ADR-0021 and the crates are ADR-0022 to ADR-0025. Three
+  readings of this record were settled on the way. The bulk-change guard's count rule is `>= 50`,
+  not `> 50`, since the acceptance says fifty deletions trigger it, and the share rule (`> 10%`,
+  no floor) applies to removals only, or one edit in a small folder would be a hold. Provenance is
+  the folder's derived device in the hash chain, not `file:external` on the op; the `provenance`
+  table is M6. Outside edits are not undo steps of the app, a flagged deviation. The write-out
+  debounce is 300 to 500 ms, owned by the worker, not about one second.
