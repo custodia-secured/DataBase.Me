@@ -20,6 +20,7 @@ pub mod images;
 pub mod importer;
 pub mod markdown;
 pub mod plan;
+pub mod probe;
 pub mod sniff;
 pub mod source;
 pub mod tables;

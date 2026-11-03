@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Nightly fuzzing of the files-folder parser (M5 acceptance: fuzzing of the Markdown/frontmatter
-# parser; the first layer, proptest, runs in every CI run). cargo-fuzz needs a nightly toolchain,
-# so the fuzz crate lives outside the workspace (fuzz/Cargo.toml). A crash is uploaded as an
-# artifact with the input that caused it; reproduce with `cargo +nightly fuzz run parse <file>`.
+# parser) and of the CSV and PDF importers (M6 acceptance, brief §10: fuzzing for the importers).
+# The first layer, proptest, runs in every CI run; this is the second. cargo-fuzz needs a nightly
+# toolchain, so the fuzz crate lives outside the workspace (fuzz/Cargo.toml). A crash is uploaded
+# as an artifact with the input that caused it; reproduce with
+# `cargo +nightly fuzz run <target> <file>`.
 name: Fuzz
 
 on:
@@ -11,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       seconds:
-        description: How long to fuzz, in seconds
+        description: How long to fuzz each target, in seconds
         default: "900"
 
 permissions:
@@ -19,9 +21,13 @@ permissions:
 
 jobs:
   fuzz:
-    name: cargo fuzz (parse)
+    name: cargo fuzz (${{ matrix.target }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [parse, csv, pdf]
     steps:
       - uses: actions/checkout@v5
       - name: Install a nightly toolchain beside the pinned one
@@ -34,17 +40,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: fuzz
-      - name: Fuzz the parser
+          key: ${{ matrix.target }}
+      - name: Fuzz ${{ matrix.target }}
         env:
           SECONDS_TO_FUZZ: ${{ inputs.seconds || '900' }}
         run: >-
-          cargo +nightly fuzz run parse --
+          cargo +nightly fuzz run ${{ matrix.target }} --
           -max_total_time="$SECONDS_TO_FUZZ" -max_len=65536 -timeout=10 -rss_limit_mb=2048
       - name: Keep the crashing input
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: fuzz-artifacts
+          name: fuzz-artifacts-${{ matrix.target }}
           path: fuzz/artifacts
           if-no-files-found: ignore
           retention-days: 30

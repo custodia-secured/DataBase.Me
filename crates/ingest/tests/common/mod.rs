@@ -398,3 +398,83 @@ pub fn pixel_png() -> Vec<u8> {
         .unwrap();
     out
 }
+
+// ---- hostile files (M6 Task 9) ----------------------------------------------------------------
+
+/// A page tree that refers to itself: the page's parent is a Pages node whose kid is the page.
+pub fn recursive_pdf() -> Vec<u8> {
+    pdf(
+        &[
+            obj("<< /Type /Catalog /Pages 2 0 R >>"),
+            obj("<< /Type /Pages /Kids [2 0 R 3 0 R] /Count 2 >>"),
+            obj("<< /Type /Page /Parent 6 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>"),
+            text_content("Loop"),
+            obj(HELVETICA),
+            obj(
+                "<< /Type /Pages /Parent 3 0 R /Kids [3 0 R] /Count 1 /Resources << /Font << /F1 5 0 R >> >> >>",
+            ),
+        ],
+        None,
+    )
+}
+
+/// Three levels of a hundred references each: a million pages declared by a 3 KB file.
+pub fn page_tree_bomb() -> Vec<u8> {
+    let kids = |n: u32| format!("[{}]", format!("{n} 0 R ").repeat(100));
+    pdf(
+        &[
+            obj("<< /Type /Catalog /Pages 2 0 R >>"),
+            obj(&format!(
+                "<< /Type /Pages /Kids {} /Count 1000000 >>",
+                kids(6)
+            )),
+            page(7, 4, FONTS),
+            text_content("Boom"),
+            obj(HELVETICA),
+            obj(&format!(
+                "<< /Type /Pages /Parent 2 0 R /Kids {} /Count 10000 >>",
+                kids(6)
+            )),
+            obj(&format!(
+                "<< /Type /Pages /Parent 6 0 R /Kids {} /Count 100 >>",
+                kids(3)
+            )),
+        ],
+        None,
+    )
+}
+
+/// A workbook with one sheet of the given name: a header (`Name`, `Amount`) and one row.
+pub fn one_sheet_workbook(sheet_name: &str) -> Vec<u8> {
+    let content_types = concat!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#,
+        r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">"#,
+        r#"<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>"#,
+        r#"<Default Extension="xml" ContentType="application/xml"/>"#,
+        r#"<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>"#,
+        r#"<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>"#,
+        "</Types>"
+    );
+    let rels = format!(
+        r#"<Relationships xmlns="{NS_PKG_REL}"><Relationship Id="rId1" Type="{NS_REL}/officeDocument" Target="xl/workbook.xml"/></Relationships>"#
+    );
+    let workbook = format!(
+        r#"<workbook xmlns="{NS_MAIN}" xmlns:r="{NS_REL}"><sheets><sheet name="{sheet_name}" sheetId="1" r:id="rId1"/></sheets></workbook>"#
+    );
+    let workbook_rels = format!(
+        r#"<Relationships xmlns="{NS_PKG_REL}"><Relationship Id="rId1" Type="{NS_REL}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#
+    );
+    let sheet1 = format!(
+        r#"<worksheet xmlns="{NS_MAIN}"><sheetData><row r="1">{}{}</row><row r="2">{}<c r="B2"><v>1</v></c></row></sheetData></worksheet>"#,
+        inline("A1", "Name"),
+        inline("B1", "Amount"),
+        inline("A2", "Ada"),
+    );
+    zip_store(&[
+        ("[Content_Types].xml", content_types.as_bytes()),
+        ("_rels/.rels", rels.as_bytes()),
+        ("xl/workbook.xml", workbook.as_bytes()),
+        ("xl/_rels/workbook.xml.rels", workbook_rels.as_bytes()),
+        ("xl/worksheets/sheet1.xml", sheet1.as_bytes()),
+    ])
+}

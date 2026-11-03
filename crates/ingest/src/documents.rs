@@ -6,6 +6,7 @@
 //! and a lower confidence: never dropped. Extraction stops at [`PDF_BUDGET`], checked between
 //! pages, and says how many pages it reached.
 
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::{Duration, Instant};
 
 use dbme_core::ContentHash;
@@ -66,8 +67,15 @@ impl Importer for Pdf {
     }
 
     fn plan(&self, source: &Source, _ctx: &Ctx<'_>) -> Result<Extract, IngestError> {
-        let bytes = source.read()?;
-        let hash = ContentHash::of(&bytes);
+        Ok(self.extract(source, &source.read()?))
+    }
+}
+
+impl Pdf {
+    /// What the file's bytes become: a `Document` with the original attached, its text as
+    /// blocks when the parser takes the file, a warning when it does not.
+    pub(crate) fn extract(&self, source: &Source, bytes: &[u8]) -> Extract {
+        let hash = ContentHash::of(bytes);
         let mut extract = Extract {
             types: vec![document_fields()],
             ..Extract::default()
@@ -88,22 +96,33 @@ impl Importer for Pdf {
             ));
             object.provenance.confidence = 0.5;
         } else {
-            match PdfDocument::load_mem(&bytes) {
-                Ok(doc) => self.extract_pages(&doc, &mut object, &mut extract.warnings),
-                Err(e) => {
+            // The parser panics on some malformed files (found by the proptest layer, M6 Task 9:
+            // a failed assertion on an operator's operands, unwraps on missing objects). A panic
+            // is contained here, so one bad file costs its text and not the import.
+            let outcome = catch_unwind(AssertUnwindSafe(|| {
+                PdfDocument::load_mem(bytes)
+                    .map(|doc| self.extract_pages(&doc, &mut object, &mut extract.warnings))
+            }));
+            match outcome {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
                     extract.warnings.push(format!(
                         "not a PDF the parser takes ({e}): attached without its text"
                     ));
                     object.provenance.confidence = 0.5;
                 }
+                Err(_) => {
+                    extract.warnings.push(
+                        "the PDF parser failed on this file: attached without its text".into(),
+                    );
+                    object.blocks.clear();
+                    object.provenance.confidence = 0.5;
+                }
             }
         }
         extract.objects.push(object);
-        Ok(extract)
+        extract
     }
-}
-
-impl Pdf {
     /// The title and author from the Info dictionary, the page count, and the text of each page
     /// as blocks, inside the budget.
     fn extract_pages(
@@ -132,6 +151,7 @@ impl Pdf {
         let mut reached = 0usize;
         let mut with_text = 0usize;
         let mut failed = 0usize;
+        let mut panicked = 0usize;
         for (n, page_number) in pages.keys().enumerate() {
             if started.elapsed() > self.budget {
                 warnings.push(format!(
@@ -142,15 +162,23 @@ impl Pdf {
                 break;
             }
             reached += 1;
-            let mut text = String::new();
-            let result = {
+            // One page's panic in the parser costs that page, not the rest (see `extract`).
+            let result = catch_unwind(AssertUnwindSafe(|| {
+                let mut text = String::new();
                 let mut output = PlainTextOutput::new(&mut text);
-                output_doc_page(doc, &mut output, *page_number)
+                output_doc_page(doc, &mut output, *page_number).map(|()| text)
+            }));
+            let text = match result {
+                Ok(Ok(text)) => text,
+                Ok(Err(_)) => {
+                    failed += 1;
+                    continue;
+                }
+                Err(_) => {
+                    panicked += 1;
+                    continue;
+                }
             };
-            if result.is_err() {
-                failed += 1;
-                continue;
-            }
             let paragraphs: Vec<String> = text
                 .split("\n\n")
                 .map(|p| p.split_whitespace().collect::<Vec<_>>().join(" "))
@@ -169,6 +197,11 @@ impl Pdf {
         }
         if failed > 0 {
             warnings.push(format!("{failed} page(s) could not be read for text"));
+        }
+        if panicked > 0 {
+            warnings.push(format!(
+                "{panicked} page(s) made the PDF parser fail; their text was left out"
+            ));
         }
         if with_text == 0 && reached > 0 {
             warnings.push(format!(

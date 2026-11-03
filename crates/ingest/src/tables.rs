@@ -59,16 +59,66 @@ impl Importer for Csv {
 
     fn plan(&self, source: &Source, ctx: &Ctx<'_>) -> Result<Extract, IngestError> {
         let bytes = source.read()?;
-        let hash = ContentHash::of(&bytes);
-        let table = read_csv(source, &bytes)?;
-        let mut extract = Extract::default();
         let name = type_name(&source.stem());
-        let (draft, rows) = table.into_objects(&name, source, &hash, ctx, &mut extract.warnings);
-        let mut dataset = dataset(source, &hash, &source.stem());
-        dataset.children = rows;
-        extract.types.push(draft);
-        extract.objects.push(dataset);
-        Ok(extract)
+        csv_extract(
+            source,
+            &bytes,
+            &existing_fields(ctx, &name),
+            ctx.options.title_column.as_deref(),
+        )
+    }
+}
+
+/// What a CSV becomes: a `Dataset` holding the file, one object per row under it, and the type
+/// the rows need. `existing` is that type's fields as the vault has them, which rule over the
+/// inference; the probe for the fuzzers passes none.
+pub(crate) fn csv_extract(
+    source: &Source,
+    bytes: &[u8],
+    existing: &HashMap<String, FieldKind>,
+    title_column: Option<&str>,
+) -> Result<Extract, IngestError> {
+    let hash = ContentHash::of(bytes);
+    let table = read_csv(source, bytes)?;
+    let mut extract = Extract::default();
+    let name = type_name(&source.stem());
+    let (draft, rows) = table.into_objects(
+        &name,
+        source,
+        &hash,
+        existing,
+        title_column,
+        &mut extract.warnings,
+    );
+    let mut dataset = dataset(source, &hash, &source.stem());
+    dataset.children = rows;
+    extract.types.push(draft);
+    extract.objects.push(dataset);
+    Ok(extract)
+}
+
+/// The fields of the vault's type of this name, by key: an existing type's kinds rule over the
+/// inference (M6 Task 4). Empty when the vault has no such type.
+fn existing_fields(ctx: &Ctx<'_>, type_name: &str) -> HashMap<String, FieldKind> {
+    ctx.read
+        .types()
+        .ok()
+        .and_then(|types| types.into_iter().find(|t| t.name == type_name))
+        .and_then(|t| ctx.read.fields(t.id).ok())
+        .map(|fields| fields.into_iter().map(|f| (f.key, f.kind)).collect())
+        .unwrap_or_default()
+}
+
+/// Whether a spreadsheet would read the cell as a formula: it begins with `=` or `@`, or with a
+/// `+` or `-` that does not start a number (brief §10, formula injection). Nothing here evaluates
+/// anything and such a cell is kept as text; the plan counts them so the person knows, and a
+/// later export to a spreadsheet must quote them.
+pub(crate) fn looks_like_formula(text: &str) -> bool {
+    let trimmed = text.trim_start();
+    match trimmed.as_bytes().first() {
+        Some(b'=' | b'@') => true,
+        Some(b'+' | b'-') => trimmed.parse::<f64>().is_err(),
+        _ => false,
     }
 }
 
@@ -97,8 +147,14 @@ impl Importer for Xlsx {
                 continue;
             };
             let name = type_name(&sheet);
-            let (draft, rows) =
-                table.into_objects(&name, source, &hash, ctx, &mut extract.warnings);
+            let (draft, rows) = table.into_objects(
+                &name,
+                source,
+                &hash,
+                &existing_fields(ctx, &name),
+                ctx.options.title_column.as_deref(),
+                &mut extract.warnings,
+            );
             let mut dataset = ExtractedObject::new(
                 &sheet,
                 "Dataset",
@@ -284,21 +340,14 @@ impl Table {
         type_name: &str,
         source: &Source,
         hash: &ContentHash,
-        ctx: &Ctx<'_>,
+        existing: &HashMap<String, FieldKind>,
+        title_column: Option<&str>,
         warnings: &mut Vec<String>,
     ) -> (TypeDraft, Vec<ExtractedObject>) {
         warnings.extend(self.pending.iter().cloned());
         let keys = keys_for(&self.header);
-        let title_column = self.title_column(&keys, ctx.options.title_column.as_deref());
+        let title_column = self.title_column(&keys, title_column);
         // An existing type's fields rule; the rest are inferred.
-        let existing: HashMap<String, FieldKind> = ctx
-            .read
-            .types()
-            .ok()
-            .and_then(|types| types.into_iter().find(|t| t.name == type_name))
-            .and_then(|t| ctx.read.fields(t.id).ok())
-            .map(|fields| fields.into_iter().map(|f| (f.key, f.kind)).collect())
-            .unwrap_or_default();
         let kinds: Vec<FieldKind> = (0..self.header.len())
             .map(|c| {
                 existing
@@ -504,6 +553,7 @@ fn read_csv(source: &Source, bytes: &[u8]) -> Result<Table, IngestError> {
     let mut cut = 0usize;
     let mut ragged = 0usize;
     let mut beyond = 0usize;
+    let mut formulas = 0usize;
     for record in reader.byte_records() {
         let record = record.map_err(|e| IngestError::unreadable(&source.path, e))?;
         let cells: Vec<String> = record
@@ -528,6 +578,7 @@ fn read_csv(source: &Source, bytes: &[u8]) -> Result<Table, IngestError> {
             beyond += 1;
             continue;
         }
+        formulas += cells.iter().filter(|t| looks_like_formula(t)).count();
         let mut row: Vec<Cell> = cells.iter().map(|t| Cell::from_text(t)).collect();
         if row.len() != width {
             ragged += 1;
@@ -547,7 +598,14 @@ fn read_csv(source: &Source, bytes: &[u8]) -> Result<Table, IngestError> {
     table.header.iter_mut().for_each(|h| {
         *h = h.trim().to_owned();
     });
-    Ok(table.with_notes(source, lossy, cut, ragged, beyond))
+    Ok(table.with_notes(source, lossy, cut, ragged, beyond, formulas))
+}
+
+/// The note on cells a spreadsheet would run as formulas.
+fn formula_note(formulas: usize) -> String {
+    format!(
+        "{formulas} cell(s) begin with =, @, + or - like a formula; kept as text, nothing is run"
+    )
 }
 
 impl Table {
@@ -559,10 +617,14 @@ impl Table {
         cut: usize,
         ragged: usize,
         beyond: usize,
+        formulas: usize,
     ) -> Self {
         let mut notes = Vec::new();
         if lossy {
             notes.push("bytes that are not UTF-8 were read as �".to_owned());
+        }
+        if formulas > 0 {
+            notes.push(formula_note(formulas));
         }
         if cut > 0 {
             notes.push(format!(
@@ -609,6 +671,7 @@ fn read_sheet(
     }
     let mut errors = 0usize;
     let mut beyond = 0usize;
+    let mut formulas = 0usize;
     let mut table_rows = Vec::new();
     for row in rows {
         if table_rows.len() == MAX_ROWS {
@@ -618,8 +681,10 @@ fn read_sheet(
         let cells: Vec<Cell> = row
             .iter()
             .map(|c| {
-                if matches!(c, Data::Error(_)) {
-                    errors += 1;
+                match c {
+                    Data::Error(_) => errors += 1,
+                    Data::String(s) if looks_like_formula(s) => formulas += 1,
+                    _ => {}
                 }
                 cell_of(c)
             })
@@ -633,6 +698,9 @@ fn read_sheet(
         warnings.push(format!(
             "sheet {sheet:?}: {errors} cell(s) hold a formula error and were left empty"
         ));
+    }
+    if formulas > 0 {
+        warnings.push(format!("sheet {sheet:?}: {}", formula_note(formulas)));
     }
     if beyond > 0 {
         warnings.push(format!(

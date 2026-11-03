@@ -68,21 +68,32 @@ impl Source {
         })
     }
 
+    /// A file that exists only as bytes a caller holds, for the fuzzers' probes: it has a name
+    /// and no sniff, and [`Source::read`] refuses it.
+    pub(crate) fn in_memory(name: &str) -> Self {
+        Self {
+            path: PathBuf::from(name),
+            kind: SourceKind::File,
+            sniffed: None,
+        }
+    }
+
     /// The path as text, forward slashes, for `source_uri` and for people.
     pub fn uri(&self) -> String {
         shown(&self.path)
     }
 
-    /// The file's name without its extension, for a title.
+    /// The file's name without its extension, for a title; a folder's whole name.
     pub fn stem(&self) -> String {
-        match &self.sniffed {
-            Some(s) => s.stem().to_owned(),
-            None => self
-                .path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default(),
+        if let Some(sniffed) = &self.sniffed {
+            return sniffed.stem().to_owned();
         }
+        match self.kind {
+            SourceKind::File => self.path.file_stem(),
+            SourceKind::Folder => self.path.file_name(),
+        }
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
     }
 
     /// Reads the whole file (a folder has no bytes), checking the cap again against what is read.

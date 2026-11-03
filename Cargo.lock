@@ -1014,6 +1014,7 @@ dependencies = [
  "infer",
  "kamadak-exif",
  "pdf-extract",
+ "proptest",
  "serde",
  "serde_json",
  "specta",
