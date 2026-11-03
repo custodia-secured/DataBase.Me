@@ -32,6 +32,9 @@ pub struct ImportRun {
     pub transactions: usize,
     /// Duplicates related to the parent under the `attach` policy.
     pub attached: Vec<Id>,
+    /// What the apply itself found worth saying: a folder's inbox entries, what an importer
+    /// could not add to a dropped file. The plan's warnings are not repeated here.
+    pub warnings: Vec<String>,
 }
 
 /// Writes `plan` to `vault`. The first transaction makes the receipt note when no parent was
@@ -68,6 +71,7 @@ pub fn apply(vault: &mut Vault, plan: &ImportPlan) -> Result<ImportRun, IngestEr
         objects: 0,
         transactions: 0,
         attached: Vec::new(),
+        warnings: Vec::new(),
     };
 
     let batches: Vec<Vec<&PlanEntry>> = batches(&plan.entries)
@@ -125,6 +129,13 @@ pub fn apply(vault: &mut Vault, plan: &ImportPlan) -> Result<ImportRun, IngestEr
         if committed.is_some() {
             run.transactions += 1;
         }
+        // The folders of this batch: the files folder's engine takes them in, under the parent
+        // the transaction above made or the one named, as undo steps of its own.
+        for entry in batch {
+            if let Some(folder) = &entry.extract.folder {
+                crate::folders::import_folder(vault, &mut run, folder, &entry.importer)?;
+            }
+        }
     }
     Ok(run)
 }
@@ -155,7 +166,7 @@ fn check_types(
 
 /// Creates the drafted type, or adds the fields an existing type of that name lacks. An existing
 /// field keeps its kind (the importer planned around it).
-fn ensure_type(txn: &mut Txn<'_>, draft: &TypeDraft) -> dbme_store::Result<()> {
+pub(crate) fn ensure_type(txn: &mut Txn<'_>, draft: &TypeDraft) -> dbme_store::Result<()> {
     let existing = txn
         .read()
         .types()?

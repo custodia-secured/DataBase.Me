@@ -57,6 +57,9 @@ pub enum IngestError {
     /// The vault refused a change.
     #[error(transparent)]
     Store(#[from] StoreError),
+    /// The files folder's engine, importing a folder, could not go on.
+    #[error(transparent)]
+    Mirror(#[from] dbme_mirror::MirrorError),
 }
 
 impl IngestError {

@@ -175,15 +175,13 @@ pub fn plan(
                 continue;
             }
         };
-        let Some(sniffed) = source.sniffed.as_ref() else {
-            debug_assert_eq!(source.kind, SourceKind::Folder);
-            plan.refused.push(Refused {
-                path: given.clone(),
-                reason: "folders are imported by the Markdown importer (M6 Task 6)".into(),
-            });
-            continue;
+        let importer = match source.sniffed.as_ref() {
+            Some(sniffed) => importers.choose(sniffed),
+            None => {
+                debug_assert_eq!(source.kind, SourceKind::Folder);
+                importers.folder()
+            }
         };
-        let importer = importers.choose(sniffed);
         let extract = match importer.plan(&source, &ctx) {
             Ok(extract) => extract,
             Err(e) => {
@@ -206,7 +204,10 @@ pub fn plan(
             plan.duplicates.push(duplicate);
             continue;
         }
-        let objects = extract.objects.iter().map(ExtractedObject::count).sum();
+        let objects = match &extract.folder {
+            Some(folder) => folder.markdown_files + folder.other_files,
+            None => extract.objects.iter().map(ExtractedObject::count).sum(),
+        };
         plan.objects += objects;
         plan.entries.push(PlanEntry {
             source,

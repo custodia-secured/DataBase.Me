@@ -405,6 +405,11 @@ impl Vault {
         self.ctx.clock.now_ms()
     }
 
+    /// The vault's clock, for an engine that stamps bookkeeping of its own with the same time.
+    pub fn clock(&self) -> Arc<dyn Clock> {
+        Arc::clone(&self.ctx.clock)
+    }
+
     /// A fresh ID, for bookkeeping rows written outside a transaction.
     pub(crate) fn next_id(&self) -> Result<Id> {
         Ok(self.ctx.ids.next(self.now_ms())?)

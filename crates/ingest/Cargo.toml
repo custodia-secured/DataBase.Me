@@ -12,6 +12,7 @@ base64.workspace = true
 calamine.workspace = true
 csv.workspace = true
 dbme-core.workspace = true
+dbme-mirror.workspace = true
 dbme-store.workspace = true
 image.workspace = true
 infer.workspace = true

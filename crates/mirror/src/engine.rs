@@ -82,6 +82,9 @@ pub struct Mirror<F: Fs> {
     pub(crate) skip_guard: bool,
     /// The objects the current batch made for files with an unknown `id:`.
     pub(crate) adopted: std::collections::BTreeSet<Id>,
+    /// Set while a folder is being imported rather than synced (M6, ADR-0026): the bookkeeping
+    /// goes to scratch rows, the writes are ordinary undo steps, the inbox entries are warnings.
+    pub(crate) import: Option<crate::inbound::ImportMode>,
 }
 
 impl<F: Fs> std::fmt::Debug for Mirror<F> {
@@ -179,6 +182,7 @@ impl<F: Fs> Mirror<F> {
             ids: IdGenerator::new(),
             skip_guard: false,
             adopted: std::collections::BTreeSet::new(),
+            import: None,
         }
     }
 

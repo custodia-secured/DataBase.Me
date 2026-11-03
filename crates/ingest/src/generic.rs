@@ -47,6 +47,7 @@ impl Importer for Generic {
             .push(AttachmentDraft::original(source, hash));
         Ok(Extract {
             types: Vec::new(),
+            folder: None,
             objects: vec![object],
             warnings: Vec::new(),
         })

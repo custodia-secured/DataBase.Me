@@ -63,13 +63,23 @@ enum Command {
         #[arg(long)]
         full: bool,
     },
-    /// Create a vault from a full export (the hash chain must come out identical) or from a
-    /// files folder of Markdown files (rebuilt the way the files folder reads them).
+    /// Import into a vault. With an existing vault: any files or folders (Markdown and Obsidian
+    /// folders, CSV, XLSX, PDF, pictures, anything else as a plain file), with a dry run and
+    /// provenance on every object (M6). With a vault that does not exist yet: create it from a
+    /// full export (the hash chain must come out identical) or from a files folder of Markdown
+    /// files (rebuilt the way the files folder reads them).
     Import {
-        /// The export folder or the files folder.
-        source: PathBuf,
-        /// The vault to create (`<name>.dbme`). Must not exist yet, or be empty.
+        /// The export folder, the files folder, or the files to import.
+        #[arg(required = true, num_args = 1..)]
+        source: Vec<PathBuf>,
+        /// The vault (`<name>.dbme`): existing, or to be created.
         path: PathBuf,
+        /// Put the imported objects under this object (an existing vault only).
+        #[arg(long)]
+        into: Option<String>,
+        /// Print the plan as JSON and write nothing (an existing vault only).
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Check a vault's files-folder bookkeeping: every file row names a live object in the right
     /// state and every open conflict names an object. With `--folder`, also count what the folder
@@ -196,8 +206,73 @@ fn run(command: Command, config: &Path, out: &mut impl Write) -> Result<ExitCode
                 writeln!(out, "full export: {ops} ops, {blobs} blobs")?;
             }
         }
-        Command::Import { source, path } => {
+        Command::Import {
+            source,
+            path,
+            into,
+            dry_run,
+        } => {
             let options = options(config)?;
+            if path.join(dbme_store::DATABASE_FILE).is_file() {
+                // An existing vault: the importers.
+                let parent = match into {
+                    Some(text) => Some(dbme_core::Id::parse(&text)?),
+                    None => None,
+                };
+                let mut vault = Vault::open(&path, options)?;
+                let import_options = dbme_ingest::ImportOptions {
+                    parent,
+                    ..dbme_ingest::ImportOptions::default()
+                };
+                let importers = dbme_ingest::Importers::v0();
+                let plan = dbme_ingest::plan(&vault, &source, import_options, &importers)?;
+                if dry_run {
+                    writeln!(out, "{}", serde_json::to_string_pretty(&plan)?)?;
+                    return Ok(ExitCode::SUCCESS);
+                }
+                let run = dbme_ingest::apply(&mut vault, &plan)?;
+                writeln!(
+                    out,
+                    "Imported {} object{} from {} source{} into vault {} in {} undo step{}; run {}",
+                    run.objects,
+                    if run.objects == 1 { "" } else { "s" },
+                    plan.entries.len(),
+                    if plan.entries.len() == 1 { "" } else { "s" },
+                    vault.id(),
+                    run.transactions,
+                    if run.transactions == 1 { "" } else { "s" },
+                    run.run_id
+                )?;
+                for duplicate in &plan.duplicates {
+                    writeln!(
+                        out,
+                        "already in the vault: {} (the same file as {})",
+                        duplicate.path.display(),
+                        duplicate.of
+                    )?;
+                }
+                for refused in &plan.refused {
+                    writeln!(
+                        out,
+                        "not imported: {}: {}",
+                        refused.path.display(),
+                        refused.reason
+                    )?;
+                }
+                for warning in plan.warnings.iter().chain(&run.warnings) {
+                    writeln!(out, "warning: {warning}")?;
+                }
+                return Ok(ExitCode::SUCCESS);
+            }
+            let source = match source.as_slice() {
+                [one] => one.clone(),
+                _ => {
+                    return Err(
+                        "several sources need an existing vault to import into (dbme vault create first)"
+                            .into(),
+                    );
+                }
+            };
             if dbme_export::is_export(&source) {
                 let vault = dbme_export::import(&source, &path, options)?;
                 let report = vault.verify(false)?;
@@ -518,5 +593,106 @@ mod tests {
             "{}",
             dir.display()
         );
+    }
+
+    #[test]
+    fn importing_into_an_existing_vault_plans_dry_and_applies_with_provenance() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("config");
+        let arg = |path: &Path| path.to_str().unwrap().to_owned();
+        let vault = dir.path().join("Notes.dbme");
+        let (code, _) = run_text(parse(&["dbme", "vault", "create", &arg(&vault)]), &config);
+        assert_eq!(code, Ok(ExitCode::SUCCESS));
+        let text = dir.path().join("plain.txt");
+        std::fs::write(&text, b"plain").unwrap();
+        let notes = dir.path().join("notes");
+        std::fs::create_dir(&notes).unwrap();
+        std::fs::write(notes.join("One.md"), "# One\n\nhello\n").unwrap();
+
+        // A dry run prints the plan and writes nothing.
+        let (code, out) = run_text(
+            parse(&[
+                "dbme",
+                "import",
+                "--dry-run",
+                &arg(&text),
+                &arg(&notes),
+                &arg(&vault),
+            ]),
+            &config,
+        );
+        assert_eq!(code, Ok(ExitCode::SUCCESS), "{out}");
+        let plan: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(plan["entries"].as_array().unwrap().len(), 2, "{out}");
+        assert_eq!(plan["entries"][0]["importer"], "file");
+        assert_eq!(plan["entries"][1]["importer"], "markdown");
+        let (code, out) = run_text(parse(&["dbme", "verify", "--json", &arg(&vault)]), &config);
+        assert_eq!(code, Ok(ExitCode::SUCCESS));
+        let report: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(report["ops"], 25, "nothing written by the dry run");
+
+        // The import, under a receipt note; then into a named parent.
+        let (code, out) = run_text(
+            parse(&["dbme", "import", &arg(&text), &arg(&notes), &arg(&vault)]),
+            &config,
+        );
+        assert_eq!(code, Ok(ExitCode::SUCCESS), "{out}");
+        assert!(out.contains("Imported 2 objects from 2 sources"), "{out}");
+        assert!(out.contains("undo steps; run "), "{out}");
+        let clock = Arc::new(dbme_core::ManualClock::new(1));
+        let identity = Identity::generate(clock.as_ref()).unwrap();
+        let open = Vault::open(&vault, VaultOptions { identity, clock }).unwrap();
+        let read = open.read();
+        let receipt = read
+            .children(None)
+            .unwrap()
+            .into_iter()
+            .find(|o| o.title.starts_with("Import "))
+            .expect("the receipt");
+        let under = read.children(Some(receipt.id)).unwrap();
+        assert_eq!(under.len(), 2, "{under:?}");
+        for object in &under {
+            assert_eq!(
+                read.provenance_of(object.id).unwrap().len(),
+                1,
+                "{}",
+                object.title
+            );
+        }
+        let plain = under.iter().find(|o| o.title == "plain").unwrap();
+        drop(open);
+        let (code, out) = run_text(
+            parse(&[
+                "dbme",
+                "import",
+                "--into",
+                &plain.id.to_string(),
+                &arg(&notes),
+                &arg(&vault),
+            ]),
+            &config,
+        );
+        assert_eq!(code, Ok(ExitCode::SUCCESS), "{out}");
+        assert!(out.contains("Imported 1 object from 1 source"), "{out}");
+        let (code, out) = run_text(
+            parse(&[
+                "dbme",
+                "import",
+                "--into",
+                "not-an-id",
+                &arg(&notes),
+                &arg(&vault),
+            ]),
+            &config,
+        );
+        assert!(code.is_err(), "{out}");
+
+        // Several sources need an existing vault.
+        let fresh = dir.path().join("Fresh.dbme");
+        let (code, _) = run_text(
+            parse(&["dbme", "import", &arg(&text), &arg(&notes), &arg(&fresh)]),
+            &config,
+        );
+        assert!(code.unwrap_err().contains("existing vault"));
     }
 }

@@ -311,18 +311,13 @@ fn refused_sources_are_listed_and_a_changed_file_stops_the_apply_before_it_write
         &Importers::v0(),
     )
     .unwrap();
-    assert_eq!(plan.entries.len(), 1);
-    assert_eq!(plan.refused.len(), 2);
+    assert_eq!(plan.entries.len(), 2, "the file and the folder");
+    assert_eq!(plan.refused.len(), 1);
     assert_eq!(plan.refused[0].path, missing);
     assert!(
         plan.refused[0].reason.contains("not a file or folder"),
         "{}",
         plan.refused[0].reason
-    );
-    assert!(
-        plan.refused[1].reason.contains("Task 6"),
-        "{}",
-        plan.refused[1].reason
     );
 
     let before = ops(&vault);
@@ -398,6 +393,7 @@ impl Importer for Many {
             .collect();
         Ok(Extract {
             types: Vec::new(),
+            folder: None,
             objects: vec![root],
             warnings: vec![format!("{n} items")],
         })
@@ -414,7 +410,7 @@ fn a_large_run_is_split_into_transactions_of_ten_thousand_objects() {
     let importers = Importers::v0().with_first(Box::new(Many));
     assert_eq!(
         importers.ids(),
-        ["many", "csv", "xlsx", "pdf", "image", "file"]
+        ["many", "markdown", "csv", "xlsx", "pdf", "image", "file"]
     );
     let plan = plan(
         &vault,
@@ -468,6 +464,7 @@ fn a_plan_naming_an_unknown_type_writes_nothing() {
         fn plan(&self, source: &Source, _ctx: &Ctx<'_>) -> Result<Extract, IngestError> {
             Ok(Extract {
                 types: Vec::new(),
+                folder: None,
                 objects: vec![ExtractedObject::new(
                     "x",
                     "Starship",

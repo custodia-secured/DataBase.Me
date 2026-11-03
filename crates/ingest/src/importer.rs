@@ -49,6 +49,7 @@ impl Importers {
     pub fn v0() -> Self {
         Self {
             importers: vec![
+                Box::new(crate::markdown::Markdown),
                 Box::new(crate::tables::Csv),
                 Box::new(crate::tables::Xlsx),
                 Box::new(crate::documents::Pdf::default()),
@@ -73,6 +74,14 @@ impl Importers {
             .map_or(&crate::generic::Generic as &dyn Importer, |i| i.as_ref())
     }
 
+    /// The importer for a folder: the Markdown one.
+    pub fn folder(&self) -> &dyn Importer {
+        self.importers
+            .iter()
+            .find(|i| i.id() == "markdown")
+            .map_or(&crate::markdown::Markdown as &dyn Importer, |i| i.as_ref())
+    }
+
     /// The ids, in order.
     pub fn ids(&self) -> Vec<&'static str> {
         self.importers.iter().map(|i| i.id()).collect()
@@ -89,8 +98,27 @@ pub struct Extract {
     /// added, before the objects are written (a table's type, one field per column).
     #[serde(default)]
     pub types: Vec<TypeDraft>,
+    /// A folder the files folder's engine imports at apply time (Markdown and Obsidian, M6 Task
+    /// 6): the plan counts its files and writes nothing; `objects` is then empty.
+    #[serde(default)]
+    pub folder: Option<FolderImport>,
     /// Things the person should know: a page that gave no text, a cell that did not fit.
     pub warnings: Vec<String>,
+}
+
+/// A folder for the files folder's engine (`Mirror::import_from`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct FolderImport {
+    /// The folder, canonical.
+    pub root: std::path::PathBuf,
+    /// Only these paths inside it (a single file dropped in), or every file.
+    pub only: Option<Vec<String>>,
+    /// How many `.md` files the plan counted.
+    pub markdown_files: usize,
+    /// How many other files, which become plain objects with the file attached and then go
+    /// through the matching importer for what it can extract.
+    pub other_files: usize,
 }
 
 /// A type an import needs, by name. An existing type of that name is reused and only the fields
@@ -384,7 +412,10 @@ mod tests {
         root.children.push(child);
         assert_eq!(root.count(), 3);
         let registry = Importers::default();
-        assert_eq!(registry.ids(), ["csv", "xlsx", "pdf", "image", "file"]);
+        assert_eq!(
+            registry.ids(),
+            ["markdown", "csv", "xlsx", "pdf", "image", "file"]
+        );
         let sniffed = Sniffed::from_parts(Path::new("x.bin"), 0, b"");
         assert_eq!(registry.choose(&sniffed).id(), "file");
     }

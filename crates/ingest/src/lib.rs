@@ -14,9 +14,11 @@
 
 pub mod apply;
 pub mod documents;
+pub mod folders;
 pub mod generic;
 pub mod images;
 pub mod importer;
+pub mod markdown;
 pub mod plan;
 pub mod sniff;
 pub mod source;
