@@ -48,7 +48,8 @@ test.beforeEach(async ({ seed, app }) => {
 
 test("turns the folder on, writes the pages, and reads a file back", async ({ app, session }) => {
   const dialog = await openFiles(app);
-  await expect(dialog.getByRole("status")).toContainText("Off");
+  // The first status is the folder's; the inbox below it shows its own while it loads.
+  await expect(dialog.getByRole("status").first()).toContainText("Off");
   await app.press(dialog.getByRole("button", { name: "Turn on" }));
   await expect(dialog.getByRole("status").first()).toContainText("On:");
   await expectAccessible(app.page);
