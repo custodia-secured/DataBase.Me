@@ -389,7 +389,19 @@ fn bad_files_go_to_the_inbox_and_hold_only_their_object() {
         .unwrap()
         .0;
     w.vault.transact(|txn| txn.add_type(alpha, kind)).unwrap();
-    w.pump_out();
+    // The app's write waits while the broken file's entry is open (the person may fix the file);
+    // once the entry is dismissed, the app's version is written over it.
+    let out = w.pump_out();
+    assert_eq!(out.deferred, [alpha], "{out:?}");
+    assert!(w.text("Alpha.md").contains("[unclosed"));
+    for entry in open
+        .iter()
+        .filter(|c| c.rel_path.as_deref() == Some("Alpha.md"))
+    {
+        assert!(w.vault.conflict_resolve(entry.id, "dismissed").unwrap());
+    }
+    let out = w.pump_out();
+    assert_eq!(out.written, [alpha], "{out:?}");
     let text = w.text("Alpha.md");
     w.mirror.fs_mut().put(
         "Alpha.md",

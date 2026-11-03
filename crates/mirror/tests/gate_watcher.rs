@@ -149,7 +149,7 @@ fn shell_rename(verb: &[&str], from: &Path, to: &str) {
 #[test]
 #[cfg_attr(
     not(windows),
-    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+    ignore = "gate 1e asserts what Windows reports; CI's watcher probes run it on Linux and macOS with --include-ignored (M5 Task 9)"
 )]
 fn atomic_write_new_then_replace() {
     let w = Watched::start(|_| {});
@@ -169,7 +169,7 @@ fn atomic_write_new_then_replace() {
 #[test]
 #[cfg_attr(
     not(windows),
-    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+    ignore = "gate 1e asserts what Windows reports; CI's watcher probes run it on Linux and macOS with --include-ignored (M5 Task 9)"
 )]
 fn editor_temp_and_rename() {
     let w = Watched::start(|root| fs::write(root.join("Title.md"), "old").unwrap());
@@ -201,7 +201,7 @@ fn editor_temp_and_rename() {
 #[test]
 #[cfg_attr(
     not(windows),
-    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+    ignore = "gate 1e asserts what Windows reports; CI's watcher probes run it on Linux and macOS with --include-ignored (M5 Task 9)"
 )]
 fn in_place_writes_all_look_alike() {
     let w = Watched::start(|root| fs::write(root.join("Title.md"), "same").unwrap());
@@ -241,7 +241,7 @@ fn in_place_writes_all_look_alike() {
 #[test]
 #[cfg_attr(
     not(windows),
-    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+    ignore = "gate 1e asserts what Windows reports; CI's watcher probes run it on Linux and macOS with --include-ignored (M5 Task 9)"
 )]
 fn rename_within_folder_is_one_event() {
     let w = Watched::start(|root| fs::write(root.join("A.md"), "a").unwrap());
@@ -260,7 +260,7 @@ fn rename_within_folder_is_one_event() {
 #[test]
 #[cfg_attr(
     not(windows),
-    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+    ignore = "gate 1e asserts what Windows reports; CI's watcher probes run it on Linux and macOS with --include-ignored (M5 Task 9)"
 )]
 fn moving_across_folders_is_remove_plus_create() {
     let w = Watched::start(|root| {
@@ -292,7 +292,7 @@ fn moving_across_folders_is_remove_plus_create() {
 #[test]
 #[cfg_attr(
     not(windows),
-    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+    ignore = "gate 1e asserts what Windows reports; CI's watcher probes run it on Linux and macOS with --include-ignored (M5 Task 9)"
 )]
 fn deleting_a_file() {
     let w = Watched::start(|root| fs::write(root.join("Gone.md"), "x").unwrap());
@@ -308,7 +308,7 @@ fn deleting_a_file() {
 #[test]
 #[cfg_attr(
     not(windows),
-    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+    ignore = "gate 1e asserts what Windows reports; CI's watcher probes run it on Linux and macOS with --include-ignored (M5 Task 9)"
 )]
 fn deleting_a_folder_with_files() {
     let w = Watched::start(|root| {
@@ -329,7 +329,7 @@ fn deleting_a_folder_with_files() {
 #[test]
 #[cfg_attr(
     not(windows),
-    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+    ignore = "gate 1e asserts what Windows reports; CI's watcher probes run it on Linux and macOS with --include-ignored (M5 Task 9)"
 )]
 fn a_write_inside_a_folder_reports_the_file_only() {
     let w = Watched::start(|root| fs::create_dir(root.join("sub")).unwrap());
@@ -345,7 +345,7 @@ fn a_write_inside_a_folder_reports_the_file_only() {
 #[test]
 #[cfg_attr(
     not(windows),
-    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+    ignore = "gate 1e asserts what Windows reports; CI's watcher probes run it on Linux and macOS with --include-ignored (M5 Task 9)"
 )]
 fn files_inside_a_new_folder_are_reported() {
     let w = Watched::start(|_| {});
@@ -404,7 +404,7 @@ fn rename_over_an_open_file() {
 #[test]
 #[cfg_attr(
     not(windows),
-    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+    ignore = "gate 1e asserts what Windows reports; CI's watcher probes run it on Linux and macOS with --include-ignored (M5 Task 9)"
 )]
 fn case_only_rename_is_not_stitched() {
     let w = Watched::start(|root| fs::write(root.join("Note.md"), "n").unwrap());
@@ -453,7 +453,7 @@ fn case_only_rename_is_not_stitched() {
 #[test]
 #[cfg_attr(
     not(windows),
-    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+    ignore = "gate 1e asserts what Windows reports; CI's watcher probes run it on Linux and macOS with --include-ignored (M5 Task 9)"
 )]
 fn fifty_deletes_arrive_once_each() {
     let w = Watched::start(|root| {
@@ -474,7 +474,7 @@ fn fifty_deletes_arrive_once_each() {
 #[test]
 #[cfg_attr(
     not(windows),
-    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+    ignore = "gate 1e asserts what Windows reports; CI's watcher probes run it on Linux and macOS with --include-ignored (M5 Task 9)"
 )]
 fn own_write_events_name_the_final_path_only() {
     let w = Watched::start(|root| fs::write(root.join("Title.md"), "old").unwrap());
@@ -489,7 +489,7 @@ fn own_write_events_name_the_final_path_only() {
 #[test]
 #[cfg_attr(
     not(windows),
-    ignore = "gate 1e recorded Windows; Linux and macOS are M5 Task 9"
+    ignore = "gate 1e asserts what Windows reports; CI's watcher probes run it on Linux and macOS with --include-ignored (M5 Task 9)"
 )]
 fn files_from_before_the_watch_are_silent() {
     let w = Watched::start(|root| fs::write(root.join("Early.md"), "e").unwrap());

@@ -10,6 +10,8 @@ members = [
   "crates/mirror",
   "crates/store",
 ]
+# The cargo-fuzz crate needs a nightly toolchain and is its own workspace (fuzz/Cargo.toml).
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.0.0"

@@ -24,3 +24,10 @@ Thumbs.db
 
 # Fixture vaults at known schema versions are committed (fixtures/README.md).
 !fixtures/vaults/*.dbme/
+
+# cargo-fuzz (fuzz/): its own lockfile, corpus and crash artifacts stay local; CI uploads crashes.
+fuzz/Cargo.lock
+fuzz/target/
+fuzz/corpus/
+fuzz/artifacts/
+fuzz/coverage/

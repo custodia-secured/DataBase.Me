@@ -5,11 +5,18 @@
 #   licences  cargo-deny and the JS licence check (ADR-0009)
 #   desktop   on Windows, macOS and Linux: rustfmt, clippy -D warnings, cargo test, release build,
 #             then launch the built app and wait for its UI to render and pass its IPC checks
-#   coverage  at least 90% of lines in dbme-core and in dbme-store are tested (M1 acceptance)
+#   coverage  at least 90% of lines in dbme-core, dbme-store, dbme-mirror and dbme-export are
+#             tested by their own tests (M1 acceptance; M5 Decision 24)
 #   mobile    dbme-core and dbme-store build for iOS and Android (M1 acceptance)
-#   budget    10,000 objects created, edited, deleted and undone in under 2 s, release build (M1)
+#   budget    10,000 objects created, edited, deleted and undone in under 2 s, release build (M1);
+#             10,000 random interleavings of app and file edits lose nothing (M5)
+#   mirror    the files-folder budgets, release: an edit reaches its file and a file reaches the
+#   budget    app, each under 2 s with 10,000 pages; gated on Ubuntu, printed on macOS (M5)
+#   watcher   what `notify` reports on each OS, printed as the record; never blocks (M5)
 #   e2e       every view in Edge (for WebView2) and WebKit, at desktop and phone sizes, with axe
-#             and the M2 budgets: a 100k-row table at 60 fps, typing under 16 ms (ADR-0018)
+#             and the M2 budgets: a 100k-row table at 60 fps, typing under 16 ms (ADR-0018); the
+#             files folder both ways through "Sync now" (M5 Decision 25)
+# Nightly fuzzing of the parser is .github/workflows/fuzz.yml.
 name: CI
 
 on:
@@ -159,7 +166,7 @@ jobs:
         run: node scripts/smoke-launch.mjs target/release/dbme-desktop
 
   coverage:
-    name: Coverage (core and store, 90% of lines)
+    name: Coverage (core, store, mirror, export; 90% of lines)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -184,6 +191,10 @@ jobs:
         run: >-
           cargo llvm-cov --locked -p dbme-mirror --summary-only --fail-under-lines 90
           --ignore-filename-regex 'crates/(core|store)/|crates/mirror/src/watcher\.rs'
+      - name: dbme-export
+        run: >-
+          cargo llvm-cov --locked -p dbme-export --summary-only --fail-under-lines 90
+          --ignore-filename-regex 'crates/(core|store|mirror)/'
 
   mobile:
     name: Mobile build (${{ matrix.target }})
@@ -232,6 +243,60 @@ jobs:
         run: cargo test --locked --release -p dbme-store --test budget -- --test-threads=1 --nocapture
       - name: One transaction per change (measured, not gated)
         run: cargo test --locked --release -p dbme-store --test budget -- --ignored --nocapture
+      # The M5 acceptance property at its full count (M5 Decision 22): every `cargo test` runs
+      # 200 cases; this runs 10,000 and prints the time a case takes (gate 1f).
+      - name: 10,000 interleavings of app and file edits lose nothing
+        env:
+          DBME_INTERLEAVINGS: "10000"
+        run: cargo test --locked --release -p dbme-mirror --test interleavings -- --nocapture
+
+  mirror-budget:
+    name: Files-folder budget (${{ matrix.os }}, release)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    # Gated on Ubuntu; macOS prints its figures for the record (M5 Task 9), since FSEvents
+    # latency on a shared runner is not ours to budget.
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: An edit reaches its file, a file reaches the app, each under 2 s with 10,000 pages
+        run: cargo test --locked --release -p dbme-mirror --test budget -- --nocapture
+
+  watcher-probes:
+    name: Watcher probes (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    # The probes assert what Windows reports (gate 1e); on the other two systems the printed
+    # event lists are the record ADR-0024 cites. The job never blocks a merge: the engine does
+    # not depend on the watcher (`rescan` derives the same events), and a runner's file-system
+    # timing is not ours.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: Run the probes and keep what they printed
+        shell: bash
+        run: |
+          mkdir -p target/watcher-probes
+          cargo test --locked -p dbme-mirror --test gate_watcher --test watcher -- \
+            --include-ignored --test-threads=1 --nocapture 2>&1 \
+            | tee "target/watcher-probes/${{ matrix.os }}.txt"
+      - name: Keep the record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: watcher-probes-${{ matrix.os }}
+          path: target/watcher-probes
+          retention-days: 90
 
   e2e:
     name: End-to-end (Edge and WebKit)

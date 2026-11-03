@@ -257,3 +257,71 @@ fn a_broken_export_leaves_nothing_behind() {
         ExportError::Io { .. }
     ));
 }
+
+#[test]
+fn a_corrupt_meta_file_and_an_ops_file_that_is_not_text_are_refused_and_leave_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (source, ..) = populated(&dir.path().join("Source.dbme"));
+    let export_dir = dir.path().join("export");
+    export(&source, &export_dir, true).unwrap();
+    let target = dir.path().join("Bad.dbme");
+
+    // `vault_meta.json` that is not JSON names its file.
+    let meta_path = export_dir.join(dbme_export::META_FILE);
+    let good_meta = fs::read(&meta_path).unwrap();
+    fs::write(&meta_path, "{").unwrap();
+    let error = import(&export_dir, &target, options()).unwrap_err();
+    assert!(
+        matches!(&error, ExportError::Json { path, .. } if path == &meta_path),
+        "{error}"
+    );
+    assert!(error.to_string().contains("vault_meta.json"), "{error}");
+    assert!(!target.exists());
+    fs::write(&meta_path, good_meta).unwrap();
+
+    // `ops.jsonl` that is not UTF-8 is a read error on the way in, not a panic.
+    let ops_path = export_dir.join(OPS_FILE);
+    fs::write(&ops_path, [0xFF, 0xFE, b'{', b'}', b'\n']).unwrap();
+    let error = import(&export_dir, &target, options()).unwrap_err();
+    assert!(matches!(error, ExportError::Store(_)), "{error}");
+    assert!(!target.exists());
+}
+
+#[test]
+fn a_number_and_a_flag_export_as_their_json_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut vault = Vault::create(&dir.path().join("Numbers.dbme"), options()).unwrap();
+    vault
+        .transact(|txn| {
+            let kind = txn.create_type(NewType {
+                name: "Gauge".into(),
+                ..NewType::default()
+            })?;
+            for (key, field_kind) in [("count", FieldKind::Number), ("on", FieldKind::Boolean)] {
+                txn.create_field(NewField {
+                    type_id: kind,
+                    key: key.into(),
+                    label: key.into(),
+                    kind: field_kind,
+                    options: json!({}),
+                    required: false,
+                })?;
+            }
+            txn.create_object(NewObject {
+                title: "Reading".into(),
+                type_ids: vec![kind],
+                props: Props::from_iter([
+                    ("count".to_owned(), json!(42)),
+                    ("on".to_owned(), json!(true)),
+                ]),
+                ..NewObject::default()
+            })
+        })
+        .unwrap();
+    let export_dir = dir.path().join("export");
+    export(&vault, &export_dir, false).unwrap();
+    let csv = fs::read_to_string(export_dir.join("data/Gauge.csv")).unwrap();
+    let mut lines = csv.lines();
+    assert!(lines.next().unwrap().ends_with(",count,on"), "{csv}");
+    assert!(lines.next().unwrap().ends_with(",42,true"), "{csv}");
+}

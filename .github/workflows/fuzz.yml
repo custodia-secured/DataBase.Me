@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Nightly fuzzing of the files-folder parser (M5 acceptance: fuzzing of the Markdown/frontmatter
+# parser; the first layer, proptest, runs in every CI run). cargo-fuzz needs a nightly toolchain,
+# so the fuzz crate lives outside the workspace (fuzz/Cargo.toml). A crash is uploaded as an
+# artifact with the input that caused it; reproduce with `cargo +nightly fuzz run parse <file>`.
+name: Fuzz
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: How long to fuzz, in seconds
+        default: "900"
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: cargo fuzz (parse)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install a nightly toolchain beside the pinned one
+        run: |
+          rustup toolchain install nightly --profile minimal
+          rustup run nightly cargo --version
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - name: Fuzz the parser
+        env:
+          SECONDS_TO_FUZZ: ${{ inputs.seconds || '900' }}
+        run: >-
+          cargo +nightly fuzz run parse --
+          -max_total_time="$SECONDS_TO_FUZZ" -max_len=65536 -timeout=10 -rss_limit_mb=2048
+      - name: Keep the crashing input
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts
+          if-no-files-found: ignore
+          retention-days: 30
