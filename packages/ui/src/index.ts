@@ -15,3 +15,10 @@ export {
 } from "./components";
 export * from "./icons";
 export { useMediaQuery } from "./media";
+export {
+  applyTheme,
+  effectiveTheme,
+  readThemeHint,
+  THEME_HINT_KEY,
+  type ThemeChoice,
+} from "./theme";

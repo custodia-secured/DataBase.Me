@@ -12,12 +12,15 @@ import {
   useObject,
   useMirrorStatus,
   usePage,
+  useSettings,
   useVaultInfo,
   useViews,
   MANUAL,
+  setSettings,
   type Id,
 } from "@databaseme/client";
 import {
+  applyTheme,
   Button,
   Columns2,
   Dialog,
@@ -31,6 +34,7 @@ import {
   Undo2,
   useMediaQuery,
   X,
+  type ThemeChoice,
 } from "@databaseme/ui";
 import {
   actions,
@@ -39,6 +43,7 @@ import {
   HoldBanner,
   ImportDialog,
   onActionError,
+  reportError,
   ResultsView,
   Sidebar,
   VIEWS,
@@ -115,6 +120,7 @@ export function App() {
 }
 
 function Shell() {
+  const client = useQueryClient();
   const wide = useMediaQuery(WIDE);
   const splitFits = useMediaQuery(SPLIT);
   const {
@@ -154,6 +160,17 @@ function Shell() {
       stop?.();
     };
   }, [setImporting]);
+
+  // The theme follows the settings (M7): the hint applied before the first paint is confirmed
+  // or corrected here, and every change goes through the same place.
+  const settings = useSettings();
+  const theme = settings.data?.theme;
+  useEffect(() => {
+    if (theme !== undefined) applyTheme(theme);
+  }, [theme]);
+  const chooseTheme = (next: ThemeChoice) => {
+    setSettings(client, { theme: next }).catch(reportError);
+  };
 
   // Open the first page when nothing is open yet.
   const first = topLevel.data?.[0]?.object.id ?? null;
@@ -208,6 +225,27 @@ function Shell() {
       label: "Import files",
       run: () => {
         setImporting([]);
+      },
+    },
+    {
+      id: "theme-system",
+      label: "Theme: follow the system",
+      run: () => {
+        chooseTheme("system");
+      },
+    },
+    {
+      id: "theme-light",
+      label: "Theme: light",
+      run: () => {
+        chooseTheme("light");
+      },
+    },
+    {
+      id: "theme-dark",
+      label: "Theme: dark",
+      run: () => {
+        chooseTheme("dark");
       },
     },
     ...(splitFits

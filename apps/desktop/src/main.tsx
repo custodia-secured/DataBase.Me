@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { applyTheme, readThemeHint } from "@databaseme/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -14,6 +15,9 @@ if (import.meta.env.MODE === "e2e") {
   const { installE2eTransport } = await import("@databaseme/client/e2e");
   installE2eTransport();
 }
+
+// The last chosen theme, before the first paint; the settings confirm it once they are read (M7).
+applyTheme(readThemeHint());
 
 const container = document.getElementById("root");
 if (!container) {
