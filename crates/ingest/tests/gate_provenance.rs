@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Gate 1e (M6): the `provenance` entity's op shape against ADR-0012's rules, before Task 2 adds
-//! it to `dbme-core`. The row is drafted here with the brief's columns; the probes check that
-//! its payload is a whole row that round-trips through the stored JSON text, that `confidence`
-//! survives as the number written, that the chain hashes an op of the new kind by the same bytes
-//! as any other, and what `dbme-core` says about the kind today (nothing: Task 2 changes that).
+//! Gate 1e (M6): the `provenance` entity's op shape against ADR-0012's rules. Written before
+//! Task 2 added the entity to `dbme-core`, against a drafted row; now it probes the real one. The
+//! probes check that the payload is a whole row that round-trips through the stored JSON text,
+//! that `confidence` survives as the number written, that the chain hashes an op of the kind by
+//! the same bytes as any other, and the rules the entity follows: create and delete only, the
+//! op targeting the object, `confidence` bounded to 0..=1.
 
 #![allow(
     clippy::unwrap_used,
@@ -12,26 +13,9 @@
 )]
 
 use dbme_core::chain::OpEntry;
-use dbme_core::op::{Action, Entity, OpKind};
-use dbme_core::{ContentHash, CoreError, Id};
-use serde::{Deserialize, Serialize};
-
-/// The row as planned (M6.md Design, brief §4): the columns FORMAT.md §3.4 will carry.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ProvenanceRow {
-    id: Id,
-    object_id: Id,
-    source_kind: String,
-    source_uri: String,
-    import_run_id: Id,
-    original_blob: Option<ContentHash>,
-    extractor: String,
-    extractor_version: String,
-    confidence: f64,
-    accepted: bool,
-    created_at: i64,
-}
+use dbme_core::model::ProvenanceRow;
+use dbme_core::op::{Action, Entity, Op, OpKind, Row, RowKey};
+use dbme_core::{ContentHash, Id};
 
 fn id(n: u8) -> Id {
     Id::parse(&format!(
@@ -46,8 +30,8 @@ fn row() -> ProvenanceRow {
         id: id(0),
         object_id: id(1),
         source_kind: "import:csv".to_owned(),
-        source_uri: "C:/people/team.csv#sheet=People".to_owned(),
-        import_run_id: id(2),
+        source_uri: Some("C:/people/team.csv#sheet=People".to_owned()),
+        import_run_id: Some(id(2)),
         original_blob: Some(ContentHash::of(b"the file")),
         extractor: dbme_ingest::EXTRACTOR.to_owned(),
         extractor_version: dbme_ingest::EXTRACTOR_VERSION.to_owned(),
@@ -76,7 +60,7 @@ fn entry(kind: &str, payload_json: String) -> OpEntry {
 #[test]
 fn the_payload_is_the_whole_row_and_round_trips() {
     let row = row();
-    let json = serde_json::to_string(&row).unwrap();
+    let json = Row::Provenance(row.clone()).to_json().unwrap();
     println!("{json}");
     let back: ProvenanceRow = serde_json::from_str(&json).unwrap();
     assert_eq!(back, row);
@@ -98,13 +82,13 @@ fn the_payload_is_the_whole_row_and_round_trips() {
     }
     // A payload with a column the row does not have is refused, as every row's is.
     let extra = json.replacen("\"accepted\"", "\"flag\":1,\"accepted\"", 1);
-    assert!(serde_json::from_str::<ProvenanceRow>(&extra).is_err());
+    assert!(Row::from_json(Entity::Provenance, &extra).is_err());
 }
 
 // Probe 2: `confidence` is written as the number given and read back exactly (the workspace's
-// serde_json keeps float round trips, ADR-0012). NaN and infinity are written as `null` without
-// an error, and `null` does not read back as a number: a payload like that would never replay.
-// So the row's validation must bound `confidence` to 0..=1 before an op is made.
+// serde_json keeps float round trips, ADR-0012). NaN and the infinities are written as `null`
+// without an error, and `null` does not read back as a number: a payload like that would never
+// replay. So the row's validation bounds `confidence` to 0..=1 before an op is made.
 #[test]
 fn confidence_round_trips_exactly_and_nan_writes_a_null_that_cannot_be_read() {
     for value in [0.0, 0.1, 0.3, 1.0, 0.123_456_789_012_345_67] {
@@ -125,13 +109,19 @@ fn confidence_round_trips_exactly_and_nan_writes_a_null_that_cannot_be_read() {
             json.contains("\"confidence\":null,"),
             "written as null, no error"
         );
-        let back = serde_json::from_str::<ProvenanceRow>(&json);
-        assert!(back.is_err(), "and null does not read back as a number");
+        assert!(
+            serde_json::from_str::<ProvenanceRow>(&json).is_err(),
+            "and null does not read back as a number"
+        );
+        assert!(
+            Op::create(Row::Provenance(row)).apply(None, 1).is_err(),
+            "so validation refuses it before an op is made"
+        );
     }
 }
 
-// Probe 3: the chain hashes an op of the new kind by the same bytes as any other kind: the kind
-// is text, so no change to the hash is needed, and a different confidence is a different hash.
+// Probe 3: the chain hashes an op of the kind by the same bytes as any other kind: the kind is
+// text, so no change to the hash was needed, and a different confidence is a different hash.
 #[test]
 fn the_chain_hashes_a_provenance_op_like_any_other() {
     let payload = serde_json::to_string(&row()).unwrap();
@@ -152,28 +142,38 @@ fn the_chain_hashes_a_provenance_op_like_any_other() {
         create.hash(Some(&first)),
         "the previous hash is in it"
     );
+    assert_eq!(
+        create.op().unwrap().key(),
+        Row::Provenance(row()).key(),
+        "and the entry decodes to the op"
+    );
 }
 
-// Probe 4: what `dbme-core` says today, which is what Task 2 changes: the kind is unknown, the
-// entry does not decode, and the actions the entity will take are create and delete only.
+// Probe 4: the rules the entity follows (Decision 13): create and delete only, like attachment;
+// the op targets the object; the key prints as the row's id.
 #[test]
-fn core_does_not_know_the_kind_yet_and_the_actions_are_create_and_delete() {
-    let unknown = OpKind::parse("provenance.create");
-    println!("today: {unknown:?}");
-    assert!(matches!(unknown, Err(CoreError::UnknownOpKind(_))));
-    let payload = serde_json::to_string(&row()).unwrap();
-    assert!(entry("provenance.create", payload).op().is_err());
-    assert_eq!(Entity::ALL.len(), 8, "eight entities before Task 2");
-
-    // The rule for the new entity, by the pattern attachment set: create and delete exist,
-    // update does not (a provenance row is immutable; `accepted` is set when it is written),
-    // and move, trash and restore do not apply. Attachment is the entity it will mirror.
-    assert!(OpKind::new(Entity::Attachment, Action::Create).is_ok());
-    assert!(OpKind::new(Entity::Attachment, Action::Delete).is_ok());
-    assert!(OpKind::new(Entity::Attachment, Action::Update).is_err());
-    assert!(OpKind::new(Entity::Attachment, Action::Move).is_err());
-    assert!(OpKind::new(Entity::Attachment, Action::Trash).is_err());
-    let create = OpKind::new(Entity::Attachment, Action::Create).unwrap();
+fn the_entity_takes_create_and_delete_only_and_targets_the_object() {
+    assert_eq!(Entity::ALL.len(), 9, "nine entities since Task 2");
+    assert_eq!(Entity::Provenance.as_str(), "provenance");
+    assert!(!Entity::Provenance.has_updated_at());
+    assert!(OpKind::new(Entity::Provenance, Action::Create).is_ok());
+    assert!(OpKind::new(Entity::Provenance, Action::Delete).is_ok());
+    assert!(OpKind::new(Entity::Provenance, Action::Update).is_err());
+    assert!(OpKind::new(Entity::Provenance, Action::Move).is_err());
+    assert!(OpKind::new(Entity::Provenance, Action::Trash).is_err());
+    assert!(OpKind::new(Entity::Provenance, Action::Restore).is_err());
+    let create = OpKind::parse("provenance.create").unwrap();
     assert_eq!(create.inverse().action(), Action::Delete);
     assert_eq!(create.inverse().inverse(), create);
+
+    let key = Row::Provenance(row()).key();
+    assert_eq!(
+        key,
+        RowKey::Provenance {
+            id: id(0),
+            object_id: id(1)
+        }
+    );
+    assert_eq!(key.target_id(), id(1), "the object, as for attachments");
+    assert_eq!(key.to_string(), id(0).to_string());
 }

@@ -22,8 +22,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
 use crate::model::{
-    AttachmentRole, AttachmentRow, BlockRow, FieldRow, ObjectRow, ObjectTypeRow, RelationRow,
-    TypeRow, ViewRow,
+    AttachmentRole, AttachmentRow, BlockRow, FieldRow, ObjectRow, ObjectTypeRow, ProvenanceRow,
+    RelationRow, TypeRow, ViewRow,
 };
 use crate::{ContentHash, CoreError, Id};
 
@@ -39,11 +39,12 @@ pub enum Entity {
     Relation,
     Attachment,
     View,
+    Provenance,
 }
 
 impl Entity {
     /// Every entity.
-    pub const ALL: [Entity; 8] = [
+    pub const ALL: [Entity; 9] = [
         Self::Type,
         Self::Field,
         Self::Object,
@@ -52,6 +53,7 @@ impl Entity {
         Self::Relation,
         Self::Attachment,
         Self::View,
+        Self::Provenance,
     ];
 
     /// The name used in op kinds.
@@ -65,6 +67,7 @@ impl Entity {
             Self::Relation => "relation",
             Self::Attachment => "attachment",
             Self::View => "view",
+            Self::Provenance => "provenance",
         }
     }
 
@@ -140,7 +143,10 @@ impl OpKind {
         let kind = Self { entity, action };
         let exists = match action {
             Action::Create | Action::Delete => true,
-            Action::Update => !matches!(entity, Entity::ObjectType | Entity::Attachment),
+            Action::Update => !matches!(
+                entity,
+                Entity::ObjectType | Entity::Attachment | Entity::Provenance
+            ),
             Action::Move => matches!(entity, Entity::Object | Entity::Block),
             Action::Trash | Action::Restore => matches!(entity, Entity::Object | Entity::Relation),
         };
@@ -254,6 +260,14 @@ pub enum RowKey {
         /// What the blob is to the object.
         role: AttachmentRole,
     },
+    /// A row of `provenance`: keyed by its own `id`, but an op on it targets its object, so the
+    /// object's history and change events carry it (ADR-0026).
+    Provenance {
+        /// The row.
+        id: Id,
+        /// The object it describes.
+        object_id: Id,
+    },
 }
 
 impl RowKey {
@@ -263,6 +277,7 @@ impl RowKey {
             Self::Id(entity, _) => *entity,
             Self::ObjectType { .. } => Entity::ObjectType,
             Self::Attachment { .. } => Entity::Attachment,
+            Self::Provenance { .. } => Entity::Provenance,
         }
     }
 
@@ -270,7 +285,9 @@ impl RowKey {
     pub fn target_id(&self) -> Id {
         match self {
             Self::Id(_, id) => *id,
-            Self::ObjectType { object_id, .. } | Self::Attachment { object_id, .. } => *object_id,
+            Self::ObjectType { object_id, .. }
+            | Self::Attachment { object_id, .. }
+            | Self::Provenance { object_id, .. } => *object_id,
         }
     }
 }
@@ -278,7 +295,7 @@ impl RowKey {
 impl fmt::Display for RowKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Id(_, id) => write!(f, "{id}"),
+            Self::Id(_, id) | Self::Provenance { id, .. } => write!(f, "{id}"),
             Self::ObjectType { object_id, type_id } => write!(f, "{object_id}/{type_id}"),
             Self::Attachment {
                 object_id,
@@ -301,6 +318,7 @@ pub enum Row {
     Relation(RelationRow),
     Attachment(AttachmentRow),
     View(ViewRow),
+    Provenance(ProvenanceRow),
 }
 
 fn to_map<T: Serialize>(row: &T) -> Result<Map<String, Value>, CoreError> {
@@ -325,6 +343,7 @@ impl Row {
             Self::Relation(_) => Entity::Relation,
             Self::Attachment(_) => Entity::Attachment,
             Self::View(_) => Entity::View,
+            Self::Provenance(_) => Entity::Provenance,
         }
     }
 
@@ -337,6 +356,10 @@ impl Row {
             Self::Block(r) => RowKey::Id(Entity::Block, r.id),
             Self::Relation(r) => RowKey::Id(Entity::Relation, r.id),
             Self::View(r) => RowKey::Id(Entity::View, r.id),
+            Self::Provenance(r) => RowKey::Provenance {
+                id: r.id,
+                object_id: r.object_id,
+            },
             Self::ObjectType(r) => RowKey::ObjectType {
                 object_id: r.object_id,
                 type_id: r.type_id,
@@ -360,6 +383,7 @@ impl Row {
             Self::Relation(r) => r.validate(),
             Self::Attachment(r) => r.validate(),
             Self::View(r) => r.validate(),
+            Self::Provenance(r) => r.validate(),
         }
     }
 
@@ -374,6 +398,7 @@ impl Row {
             Self::Relation(r) => serde_json::to_string(r),
             Self::Attachment(r) => serde_json::to_string(r),
             Self::View(r) => serde_json::to_string(r),
+            Self::Provenance(r) => serde_json::to_string(r),
         }?)
     }
 
@@ -392,6 +417,7 @@ impl Row {
             Entity::Relation => Self::Relation(serde_json::from_value(value)?),
             Entity::Attachment => Self::Attachment(serde_json::from_value(value)?),
             Entity::View => Self::View(serde_json::from_value(value)?),
+            Entity::Provenance => Self::Provenance(serde_json::from_value(value)?),
         })
     }
 
@@ -405,6 +431,7 @@ impl Row {
             Self::Relation(r) => to_map(r),
             Self::Attachment(r) => to_map(r),
             Self::View(r) => to_map(r),
+            Self::Provenance(r) => to_map(r),
         }
     }
 
@@ -868,6 +895,8 @@ mod tests {
             "view.create",
             "view.update",
             "view.delete",
+            "provenance.create",
+            "provenance.delete",
         ];
         for text in all {
             let k = kind(text);
@@ -889,6 +918,9 @@ mod tests {
             "field.move",
             "view.trash",
             "view.move",
+            "provenance.update",
+            "provenance.move",
+            "provenance.trash",
             ".create",
         ] {
             assert!(
@@ -897,8 +929,68 @@ mod tests {
             );
         }
         assert!(Entity::Object.has_updated_at() && !Entity::Relation.has_updated_at());
+        assert!(!Entity::Provenance.has_updated_at());
         assert!(kind("object.update").allows_props() && !kind("object.move").allows_props());
         assert!(kind("object_type.create").columns().is_empty());
+        assert_eq!(Entity::ALL.len(), 9);
+    }
+
+    fn provenance(n: u128, object: u128) -> ProvenanceRow {
+        ProvenanceRow {
+            id: id(n),
+            object_id: id(object),
+            source_kind: "import:csv".into(),
+            source_uri: Some("C:/people/team.csv".into()),
+            import_run_id: Some(id(900)),
+            original_blob: Some(ContentHash::of(b"the file")),
+            extractor: "dbme-ingest".into(),
+            extractor_version: "0.0.0".into(),
+            confidence: 0.9,
+            accepted: true,
+            created_at: 1,
+        }
+    }
+
+    // A provenance op targets its object, carries the whole row, inverts to a delete and refuses
+    // a confidence outside 0..=1 (ADR-0026, M6 gate 1e).
+    #[test]
+    fn provenance_rows_target_their_object_and_bound_confidence() {
+        let row = Row::Provenance(provenance(1, 2));
+        assert_eq!(row.entity(), Entity::Provenance);
+        assert_eq!(
+            row.key(),
+            RowKey::Provenance {
+                id: id(1),
+                object_id: id(2)
+            }
+        );
+        assert_eq!(row.key().target_id(), id(2), "the object, not the row");
+        assert_eq!(row.key().to_string(), id(1).to_string());
+        let create = Op::create(row.clone());
+        assert_eq!(create.kind(), kind("provenance.create"));
+        assert_eq!(create.apply(None, 5).unwrap(), Some(row.clone()));
+        let json = create.payload_json().unwrap();
+        assert!(json.contains("\"confidence\":0.9,"), "{json}");
+        let decoded = Op::decode("provenance.create", &json).unwrap();
+        assert_eq!(decoded.key(), row.key());
+        let inverse = create.inverse(Some(&row)).unwrap();
+        assert_eq!(inverse.kind(), kind("provenance.delete"));
+        assert_eq!(inverse.apply(Some(&row), 6).unwrap(), None);
+
+        for bad in [-0.1, 1.1, f64::NAN, f64::INFINITY] {
+            let mut row = provenance(3, 2);
+            row.confidence = bad;
+            assert!(
+                Op::create(Row::Provenance(row)).apply(None, 5).is_err(),
+                "{bad}"
+            );
+        }
+        let mut blank = provenance(4, 2);
+        blank.source_kind = " ".into();
+        assert!(Op::create(Row::Provenance(blank)).apply(None, 5).is_err());
+        let mut long = provenance(5, 2);
+        long.extractor_version = "v".repeat(65);
+        assert!(Op::create(Row::Provenance(long)).apply(None, 5).is_err());
     }
 
     #[test]

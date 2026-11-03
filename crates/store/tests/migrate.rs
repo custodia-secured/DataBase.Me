@@ -42,7 +42,7 @@ fn a_schema_version_2_vault_opens_migrates_and_verifies() {
     let report = vault.verify(true).unwrap();
     assert!(report.is_ok(), "{:#?}", report.problems);
     assert_eq!(report.schema_version, SCHEMA_VERSION);
-    assert_eq!(report.schema_version, 3);
+    assert_eq!(report.schema_version, 4);
     assert_eq!(
         report.ops, 25,
         "the built-in types, and nothing from the migration"
@@ -50,6 +50,14 @@ fn a_schema_version_2_vault_opens_migrates_and_verifies() {
 
     // The new tables are there and empty.
     assert!(vault.mirror_states(None).unwrap().is_empty());
+    assert!(
+        vault
+            .read()
+            .provenance_of_run(dbme_core::Id::from_parts(1, 1))
+            .unwrap()
+            .is_empty(),
+        "migration 4's table"
+    );
     assert_eq!(vault.mirror_dirty_count().unwrap(), 0);
     assert!(vault.conflicts(false).unwrap().is_empty());
     assert_eq!(
@@ -74,5 +82,5 @@ fn a_schema_version_2_vault_opens_migrates_and_verifies() {
     // Opening it again finds it already migrated.
     drop(vault);
     let vault = Vault::open(&path, options()).unwrap();
-    assert_eq!(vault.verify(false).unwrap().schema_version, 3);
+    assert_eq!(vault.verify(false).unwrap().schema_version, 4);
 }

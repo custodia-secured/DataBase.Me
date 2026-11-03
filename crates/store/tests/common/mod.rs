@@ -92,6 +92,7 @@ pub fn snapshot(path: &Path) -> Vec<String> {
         ("blocks", "id"),
         ("relations", "id"),
         ("attachments", "object_id, blob_hash, role"),
+        ("provenance", "id"),
     ] {
         let mut statement = conn
             .prepare(&format!("SELECT * FROM {table} ORDER BY {order}"))

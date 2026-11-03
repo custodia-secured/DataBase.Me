@@ -8,7 +8,7 @@ use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use dbme_core::model::{
     AttachmentRole, AttachmentRow, BlockRow, FieldKind, FieldRow, ObjectRow, ObjectTypeRow,
-    RelationRow, Sensitivity, TypeRow, ViewRow,
+    ProvenanceRow, RelationRow, Sensitivity, TypeRow, ViewRow,
 };
 use dbme_core::op::{Entity, Op, Row, RowKey};
 use dbme_core::{CoreError, Id};
@@ -48,6 +48,12 @@ macro_rules! view_columns {
         "id, name, renderer, query_json, config_json, owner_object_id, created_at, updated_at"
     };
 }
+macro_rules! provenance_columns {
+    () => {
+        "id, object_id, source_kind, source_uri, import_run_id, original_blob, extractor, \
+         extractor_version, confidence, accepted, created_at"
+    };
+}
 // The blob's size comes from a subquery rather than a join. Every attachment has its blob (a
 // foreign key), so both give the same rows; a lookup that finds no attachment, the usual case,
 // took a fifth of the time (ADR-0015).
@@ -58,8 +64,8 @@ macro_rules! attachment_select {
     };
 }
 pub(crate) use {
-    attachment_select, block_columns, field_columns, object_columns, relation_columns,
-    type_columns, view_columns,
+    attachment_select, block_columns, field_columns, object_columns, provenance_columns,
+    relation_columns, type_columns, view_columns,
 };
 
 pub(crate) fn type_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TypeRow> {
@@ -162,6 +168,22 @@ pub(crate) fn attachment_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Attachme
     })
 }
 
+pub(crate) fn provenance_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<ProvenanceRow> {
+    Ok(ProvenanceRow {
+        id: sql::id(r, 0)?,
+        object_id: sql::id(r, 1)?,
+        source_kind: r.get(2)?,
+        source_uri: r.get(3)?,
+        import_run_id: sql::optional_id(r, 4)?,
+        original_blob: sql::optional_hash(r, 5)?,
+        extractor: r.get(6)?,
+        extractor_version: r.get(7)?,
+        confidence: r.get(8)?,
+        accepted: r.get(9)?,
+        created_at: r.get(10)?,
+    })
+}
+
 fn by_id<T>(
     conn: &Connection,
     sql: &str,
@@ -227,7 +249,18 @@ pub(crate) fn load(conn: &Connection, key: &RowKey) -> Result<Option<Row>> {
             view_row,
         )?
         .map(Row::View),
-        RowKey::Id(entity @ (Entity::ObjectType | Entity::Attachment), _) => {
+        RowKey::Provenance { id, .. } => by_id(
+            conn,
+            concat!(
+                "SELECT ",
+                provenance_columns!(),
+                " FROM provenance WHERE id = ?1"
+            ),
+            *id,
+            provenance_row,
+        )?
+        .map(Row::Provenance),
+        RowKey::Id(entity @ (Entity::ObjectType | Entity::Attachment | Entity::Provenance), _) => {
             return Err(not_keyed_by_id(*entity));
         }
         RowKey::ObjectType { object_id, type_id } => conn
@@ -349,6 +382,22 @@ fn values(row: &Row) -> Result<Vec<Value>> {
             r.created_at.into(),
             r.updated_at.into(),
         ],
+        Row::Provenance(r) => vec![
+            id(r.id),
+            id(r.object_id),
+            r.source_kind.clone().into(),
+            r.source_uri.clone().into(),
+            optional_id(r.import_run_id),
+            r.original_blob
+                .as_ref()
+                .map(|h| h.as_str().to_owned())
+                .into(),
+            r.extractor.clone().into(),
+            r.extractor_version.clone().into(),
+            r.confidence.into(),
+            r.accepted.into(),
+            r.created_at.into(),
+        ],
     })
 }
 
@@ -401,6 +450,11 @@ fn insert(conn: &Connection, row: &Row) -> Result<()> {
             view_columns!(),
             ") VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
         ),
+        Entity::Provenance => concat!(
+            "INSERT INTO provenance (",
+            provenance_columns!(),
+            ") VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"
+        ),
     };
     let changed = conn
         .prepare_cached(sql)?
@@ -420,6 +474,9 @@ fn update(conn: &Connection, before: &Row, after: &Row) -> Result<()> {
         Row::Relation(_) => ("relations", relation_columns!()),
         Row::View(_) => ("views", view_columns!()),
         Row::ObjectType(_) | Row::Attachment(_) => return Err(not_keyed_by_id(after.entity())),
+        Row::Provenance(_) => {
+            return Err(CoreError::invalid("row key", "provenance rows are never updated").into());
+        }
     };
     let new = values(after)?;
     debug_assert_eq!(columns.split(", ").count(), new.len(), "{table} columns");
@@ -454,10 +511,15 @@ fn delete(conn: &Connection, key: &RowKey) -> Result<()> {
                 Entity::Block => "DELETE FROM blocks WHERE id = ?1",
                 Entity::Relation => "DELETE FROM relations WHERE id = ?1",
                 Entity::View => "DELETE FROM views WHERE id = ?1",
-                Entity::ObjectType | Entity::Attachment => return Err(not_keyed_by_id(*entity)),
+                Entity::ObjectType | Entity::Attachment | Entity::Provenance => {
+                    return Err(not_keyed_by_id(*entity));
+                }
             };
             conn.prepare_cached(sql)?.execute([id.to_string()])?
         }
+        RowKey::Provenance { id, .. } => conn
+            .prepare_cached("DELETE FROM provenance WHERE id = ?1")?
+            .execute([id.to_string()])?,
         RowKey::ObjectType { object_id, type_id } => conn
             .prepare_cached("DELETE FROM object_types WHERE object_id = ?1 AND type_id = ?2")?
             .execute([object_id.to_string(), type_id.to_string()])?,

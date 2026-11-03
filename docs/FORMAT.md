@@ -2,7 +2,7 @@
 
 # DataBase.Me vault format
 
-**Status: draft 5, 2026-11-02. Format version 0.** Nothing here is stable until FORMAT.md v0.1
+**Status: draft 6, 2026-11-03. Format version 0.** Nothing here is stable until FORMAT.md v0.1
 ships with the MVP (M7). Each section says whether it is **Decided** (fixed by an accepted ADR),
 **Draft** (proposed, to be confirmed in the milestone named) or **Open** (not designed yet).
 
@@ -137,6 +137,14 @@ never fails on them.
 | `mirror_meta`  | Facts about the folder as a whole                   | `key` (primary key), `value`. Keys: `folder_enabled`, `full_rewrite_needed`, `last_rescan_at`                                                                                                                                                                                                                                                                                      |
 | `conflicts`    | The Conflicts inbox: things the person must resolve | `id`, `object_id?`, `rel_path?`, `kind` (`edit_edit`, `edit_delete`, `parse_error`, `invalid_value`, `duplicate_id`, `dropped_file`, `bulk_change_hold`, `missing_id`, `cloud_conflict_file`), `details_json`, `conflict_copy_id?` (the Note holding the file's version), `resolution?`, `created_at`, `resolved_at?`                                                              |
 
+Migration 4 (M6, ADR-0026; Proposed) adds one table the op log produces: where an object came
+from. A row is written by an import or a capture and never updated; it goes when its object is
+deleted for good, and with the undo of the transaction that wrote it.
+
+| Table        | Purpose                                                  | Columns                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provenance` | Where an object came from: one row per import or capture | `id`, `object_id` → `objects`, `source_kind` (`manual`, `import:<importer>`, `clip`, `feed`, `file:external`, `ai:<model>` or `plugin:<id>`), `source_uri?` (the file, page or address), `import_run_id?` (the run's ULID; the run's rows are its receipt), `original_blob?` (the source file in the blob store, usually the object's `original` attachment; not a foreign key, since `blobs` rows exist only once an attachment refers to a blob), `extractor`, `extractor_version`, `confidence` (0 to 1), `accepted`, `created_at` |
+
 Rules the schema does not express, which an app MUST keep:
 
 - An object's parents never loop, and a block's parents never loop or leave its object. A type's
@@ -189,15 +197,14 @@ reachable URL. The options of a `select` or `multi_select` field are listed in `
 These tables arrive with the migrations of the milestones that use them. Their columns are the
 handoff brief's draft.
 
-| Table          | Purpose                                                               | Columns                                                                                                                                                                                                                                                  |
-| -------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `provenance`   | Where an object came from                                             | `id`, `object_id`, `source_kind` (`manual`, `import:<importer>`, `clip`, `feed`, `file:external`, `ai:<model>`, `plugin:<id>`), `source_uri`, `import_run_id`, `original_blob`, `extractor`, `extractor_version`, `confidence`, `accepted`, `created_at` |
-| `canvas_items` | Positions on a canvas view                                            | `view_id`, `item_id`, `object_id`, `x`, `y`, `w`, `h`, `z`, `style_json`                                                                                                                                                                                 |
-| `spaces`       | Top-level spaces and their AI policy                                  | `id`, `name`, `ai_policy` (`none`, `local_only`, `any`), `settings_json`                                                                                                                                                                                 |
-| `ai_audit`     | Every AI call                                                         | `id`, `ts`, `provider`, `model`, `purpose`, `object_ids_json`, `bytes_sent`, `user_initiated`                                                                                                                                                            |
-| `vec_chunks`   | sqlite-vec embeddings (derived; only with an embedding provider, M11) | `chunk_id`, `embedding`                                                                                                                                                                                                                                  |
+| Table          | Purpose                                                               | Columns                                                                                       |
+| -------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `canvas_items` | Positions on a canvas view                                            | `view_id`, `item_id`, `object_id`, `x`, `y`, `w`, `h`, `z`, `style_json`                      |
+| `spaces`       | Top-level spaces and their AI policy                                  | `id`, `name`, `ai_policy` (`none`, `local_only`, `any`), `settings_json`                      |
+| `ai_audit`     | Every AI call                                                         | `id`, `ts`, `provider`, `model`, `purpose`, `object_ids_json`, `bytes_sent`, `user_initiated` |
+| `vec_chunks`   | sqlite-vec embeddings (derived; only with an embedding provider, M11) | `chunk_id`, `embedding`                                                                       |
 
-`mirror_state` and `conflicts` arrived with migration 3 (§3.1).
+`mirror_state` and `conflicts` arrived with migration 3, and `provenance` with migration 4 (§3.1).
 
 ### 3.5 Block content (Decided, ADR-0016)
 
@@ -246,26 +253,27 @@ verification does this (§5.5). Rows of `ops` are never updated or deleted.
 
 ### 5.1 Columns
 
-| Column         | Meaning                                                                                       |
-| -------------- | --------------------------------------------------------------------------------------------- |
-| `seq`          | Position in this vault's log, from 1. Local: not hashed, and may differ between synced copies |
-| `op_id`        | The op's ULID                                                                                 |
-| `group_id`     | The undo step: every op committed in one transaction shares one ULID                          |
-| `undo_of`      | For the ops of an undo or redo, the `group_id` of the step they reverse; otherwise `NULL`     |
-| `actor_id`     | Who made the change (a ULID made on first launch, ADR-0003)                                   |
-| `device_id`    | On which device (likewise)                                                                    |
-| `ts`           | When, in milliseconds since the Unix epoch                                                    |
-| `kind`         | `<entity>.<action>` (§5.2)                                                                    |
-| `target_id`    | The changed row's `id`; for `object_type` and `attachment` rows, the row's `object_id`        |
-| `payload_json` | The payload (§5.3)                                                                            |
-| `prev_hash`    | The previous op's `hash`; `NULL` for the first op of a vault                                  |
-| `hash`         | The op's hash (§5.4)                                                                          |
-| `signature`    | Reserved for shared spaces (M15); `NULL`                                                      |
+| Column         | Meaning                                                                                        |
+| -------------- | ---------------------------------------------------------------------------------------------- |
+| `seq`          | Position in this vault's log, from 1. Local: not hashed, and may differ between synced copies  |
+| `op_id`        | The op's ULID                                                                                  |
+| `group_id`     | The undo step: every op committed in one transaction shares one ULID                           |
+| `undo_of`      | For the ops of an undo or redo, the `group_id` of the step they reverse; otherwise `NULL`      |
+| `actor_id`     | Who made the change (a ULID made on first launch, ADR-0003)                                    |
+| `device_id`    | On which device (likewise)                                                                     |
+| `ts`           | When, in milliseconds since the Unix epoch                                                     |
+| `kind`         | `<entity>.<action>` (§5.2)                                                                     |
+| `target_id`    | The changed row's `id`; for `object_type`, `attachment` and `provenance` rows, its `object_id` |
+| `payload_json` | The payload (§5.3)                                                                             |
+| `prev_hash`    | The previous op's `hash`; `NULL` for the first op of a vault                                   |
+| `hash`         | The op's hash (§5.4)                                                                           |
+| `signature`    | Reserved for shared spaces (M15); `NULL`                                                       |
 
 ### 5.2 Kinds
 
 An op changes exactly one row. Its entity names the table: `type`, `field`, `object`,
-`object_type`, `block`, `relation`, `attachment` or, from migration 2, `view`. The actions are:
+`object_type`, `block`, `relation`, `attachment`, from migration 2 `view`, and from migration 4
+`provenance`. The actions are:
 
 | Action    | Entities             | Payload | Columns it may change                                                                                            |
 | --------- | -------------------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -283,7 +291,8 @@ An op changes exactly one row. Its entity names the table: `type`, `field`, `obj
 
 Every update-shaped op (`update`, `move`, `trash`, `restore`) of a row that has an `updated_at`
 column also sets it to the op's `ts`; `updated_at` never appears in a payload. No other
-entity–action pairs exist.
+entity–action pairs exist: `object_type`, `attachment` and `provenance` rows are created and
+deleted, never updated.
 
 ### 5.3 Payloads
 
@@ -469,11 +478,12 @@ export followed by an import therefore reproduces every table and the chain (M5 
 
 ## 10. Changes to this document
 
-| Version | Date       | Change                                                                                                                                          |
-| ------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Draft 0 | 2026-10-25 | First draft (M0).                                                                                                                               |
-| Draft 1 | 2026-10-25 | M1: vault lock and creation (§1), sort keys (§2.1), the tables of migration 1 (§3), field values (§3.3) and the op log (§5) are decided.        |
-| Draft 2 | 2026-10-25 | M2: block content and mentions (§3.5) are decided.                                                                                              |
-| Draft 3 | 2026-11-01 | M3: `related` is the `rel_type` of a relation drawn on the mind map; it has no `field_id` or `src_block_id` (§3.1).                             |
-| Draft 4 | 2026-11-02 | M4: migration 2 adds `views` and the derived search tables (§3.1), and the `view` entity (§5.2). Proposed, with ADR-0020.                       |
-| Draft 5 | 2026-11-02 | M5: migration 3 adds the files folder's bookkeeping (§3.1); the files folder (§6) and the full export and import (§7). Proposed, with ADR-0021. |
+| Version | Date       | Change                                                                                                                                              |
+| ------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Draft 0 | 2026-10-25 | First draft (M0).                                                                                                                                   |
+| Draft 1 | 2026-10-25 | M1: vault lock and creation (§1), sort keys (§2.1), the tables of migration 1 (§3), field values (§3.3) and the op log (§5) are decided.            |
+| Draft 2 | 2026-10-25 | M2: block content and mentions (§3.5) are decided.                                                                                                  |
+| Draft 3 | 2026-11-01 | M3: `related` is the `rel_type` of a relation drawn on the mind map; it has no `field_id` or `src_block_id` (§3.1).                                 |
+| Draft 4 | 2026-11-02 | M4: migration 2 adds `views` and the derived search tables (§3.1), and the `view` entity (§5.2). Proposed, with ADR-0020.                           |
+| Draft 5 | 2026-11-02 | M5: migration 3 adds the files folder's bookkeeping (§3.1); the files folder (§6) and the full export and import (§7). Proposed, with ADR-0021.     |
+| Draft 6 | 2026-11-03 | M6: migration 4 adds `provenance` (§3.1) and the `provenance` entity, created and deleted only, targeting its object (§5). Proposed, with ADR-0026. |

@@ -45,7 +45,7 @@ pub struct OpEntry {
     pub ts: i64,
     /// The op kind, `<entity>.<action>`.
     pub kind: String,
-    /// The changed row, or its object for `object_type` and `attachment` rows.
+    /// The changed row, or its object for `object_type`, `attachment` and `provenance` rows.
     pub target_id: Id,
     /// The payload as stored.
     pub payload_json: String,
