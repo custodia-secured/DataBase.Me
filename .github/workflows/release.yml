@@ -9,6 +9,10 @@ name: Release
 on:
   push:
     tags: ["v*"]
+    # M7 gate 1e: a manual run needs the workflow on the default branch, which it is not yet, so a
+    # change to this file on the milestone branch builds the bundles once. Removed at Task 11.
+    branches: ["m7-mvp"]
+    paths: [".github/workflows/release.yml"]
   workflow_dispatch:
 
 permissions:
