@@ -59,8 +59,8 @@ The app opens on a short setup:
 **Finish** opens the vault. Nothing in setup, and nothing after it, touches the network: see
 [privacy](privacy.md).
 
-Setup can be run again from Settings (**Set up again**). With a vault open, it keeps the vault
-and skips that step.
+Setup can be run again from Settings (**Set up again**). With a vault open, it keeps the vault:
+that step shows where the vault is instead of asking.
 
 ## Where things are
 

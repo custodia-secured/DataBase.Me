@@ -90,9 +90,11 @@ was.
 
 The folder opens in Obsidian as a vault with no plugin. Properties show in Obsidian's editor;
 block anchors and wikilinks resolve; tags are tags. Obsidian's own folders (`.obsidian/`) and any
-dot-prefixed file are left alone by the app. The app's frontmatter keys (`id`, `types`, `tags`,
-`created`, `updated`, `relations`, `links`) are reserved; a field of yours with one of those names
-is written under `fields:` and read back from there.
+dot-prefixed file are left alone by the app. The app's frontmatter keys are reserved: `id`,
+`types`, `tags`, `created`, `updated`, `summary`, `captured_at`, `event_start`, `event_end`,
+`geo_lat`, `geo_lon`, `sensitivity`, `sort`, `fields`, `relations`, `links`, and Obsidian's
+`aliases` and `cssclasses`. A field of yours with one of those names is written under `fields:`
+and read back from there.
 
 Importing an existing Obsidian vault is a different act from pointing the files folder at it:
 [importing](importing.md) copies the notes in as pages, with links, frontmatter, tags and pictures

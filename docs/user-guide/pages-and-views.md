@@ -8,9 +8,9 @@ is that tree. A page is one thing shown many ways; the views are the ways.
 
 The tree on the left (in a drawer behind the **Pages** button on a phone). Choose a page to open it
 in the main pane. **New page** makes a page at the top; the **⋯** button above the list holds the
-actions for the open page: **New page inside** and **Move to…**, which finds the new parent by
-title. Pages can also be dragged to a new place, and **Today** opens the day's page under
-Journal.
+actions for the open page: **New page inside**, **Move up** and **Move down** among its siblings,
+**Move to…**, which finds the new parent by title, and **Move to Trash**. Pages can also be
+dragged to a new place, and **Today** opens the day's page under Journal.
 
 The breadcrumbs at the top name the open page and the pages above it; each is a link.
 
