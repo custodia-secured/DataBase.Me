@@ -84,3 +84,7 @@ These notes record what later milestones did under this decision; the decision i
   which the UI's Files dialog, badge and hold banner follow. An inbound batch from the folder is one
   `vault-changed` built from the op log's `seq` range and the batch's object ids, since the engine
   commits several transactions (ADR-0021).
+- **M7 (2026-11-03):** three commands for the settings and the diagnostic report (`settings_get`,
+  `settings_set`, `app_diagnostics`), 59 in all; the e2e harness fails any request the page makes
+  to an origin other than the e2e server's (ADR-0028). The planned `settings-changed` event waits
+  for a second window (ADR-0027).

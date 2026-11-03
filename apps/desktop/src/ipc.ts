@@ -89,23 +89,31 @@ export function notifyReady(): Promise<void> {
   return ready;
 }
 
+/** How long the clipboard probe waits for the webview before it gives up. */
+const CLIPBOARD_PROBE_MS = 2000;
+
 /**
  * What the webview's clipboard does under the app's CSP, for the record (M7 gate 1c): writes a
- * line and reads it back. The outcome is a note, never a failure: the diagnostic report falls
- * back to a text box the person copies from when the API is not there.
+ * line, which is all the diagnostic report needs. The outcome is a note, never a failure: the
+ * report falls back to a text box the person copies from when the write is refused. The write
+ * is given two seconds: WebView2 answered a clipboard call with a prompt nobody is there to
+ * answer, and the launch waited on it (found at gate 1c). Nothing is read back: reading the
+ * clipboard is a permission question on every webview, and the app never needs it.
  */
 async function clipboardProbe(): Promise<string> {
   const text = `dbme clipboard probe ${String(Date.now())}`;
+  const timeout = new Promise<"timeout">((resolve) => {
+    setTimeout(() => {
+      resolve("timeout");
+    }, CLIPBOARD_PROBE_MS);
+  });
   try {
-    await navigator.clipboard.writeText(text);
+    const outcome = await Promise.race([navigator.clipboard.writeText(text), timeout]);
+    return outcome === "timeout"
+      ? `clipboard: no answer to the write within ${String(CLIPBOARD_PROBE_MS)} ms`
+      : "clipboard: write ok";
   } catch (failure: unknown) {
     return `clipboard: write failed (${failure instanceof Error ? failure.message : String(failure)})`;
-  }
-  try {
-    const back = await navigator.clipboard.readText();
-    return back === text ? "clipboard: write and read ok" : "clipboard: write ok, read differs";
-  } catch (failure: unknown) {
-    return `clipboard: write ok, read failed (${failure instanceof Error ? failure.message : String(failure)})`;
   }
 }
 

@@ -908,7 +908,7 @@ dependencies = [
 
 [[package]]
 name = "dbme-api"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "dbme-core",
@@ -925,7 +925,7 @@ dependencies = [
 
 [[package]]
 name = "dbme-cli"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "clap",
  "dbme-core",
@@ -939,7 +939,7 @@ dependencies = [
 
 [[package]]
 name = "dbme-core"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "blake3",
  "diffy",
@@ -957,7 +957,7 @@ dependencies = [
 
 [[package]]
 name = "dbme-desktop"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "dbme-api",
  "dbme-core",
@@ -977,7 +977,7 @@ dependencies = [
 
 [[package]]
 name = "dbme-e2e-server"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "dbme-api",
@@ -990,7 +990,7 @@ dependencies = [
 
 [[package]]
 name = "dbme-export"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "dbme-core",
  "dbme-store",
@@ -1003,7 +1003,7 @@ dependencies = [
 
 [[package]]
 name = "dbme-ingest"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "calamine",
@@ -1025,7 +1025,7 @@ dependencies = [
 
 [[package]]
 name = "dbme-mirror"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "dbme-core",
  "dbme-store",
@@ -1039,7 +1039,7 @@ dependencies = [
 
 [[package]]
 name = "dbme-store"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "criterion",
  "dbme-core",

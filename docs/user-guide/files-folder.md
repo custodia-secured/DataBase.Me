@@ -68,11 +68,12 @@ only when that fails is it a **conflict**.
 The dialog's lower half. An entry appears when:
 
 - the same block changed in the app and in the file at once, and the lines could not be merged:
-  the app's version stays on the page and the file's becomes a conflict copy, kept here until you
-  **Dismiss** it or open the page and take what you want from it;
+  the app's version stays on the page and the file's becomes a conflict copy: **Open the page**
+  and **Open the file's version** show the two, and **Done** closes the entry once you have taken
+  what you want;
 - a file could not be read (a broken frontmatter, a value a field rejects, a file too large): the
   file is left untouched and the page is not written over it until the file is fixed or the entry
-  dismissed;
+  is marked **Done**;
 - two files carry the same `id`, or a cloud drive left a "conflicted copy" beside a file.
 
 Nothing is lost on a conflict: both texts exist until you decide.
