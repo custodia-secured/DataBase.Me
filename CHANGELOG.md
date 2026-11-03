@@ -9,7 +9,10 @@ All notable changes to DataBase.Me are recorded here. The format follows
 ## [0.1.0] - 2026-11-03
 
 The MVP: everything below, from the foundations to the release. The app makes no network request
-on its own, and 0.1 has no updater; the setting that will govern one is recorded and off.
+on its own, and 0.1 has no updater; the setting that will govern one is recorded and off. The
+installers are not code-signed: check a download against `SHA256SUMS.txt`, and see the user
+guide's [getting started](https://github.com/custodia-secured/DataBase.Me/blob/main/docs/user-guide/getting-started.md)
+page for what each system warns.
 
 ### Added
 

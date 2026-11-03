@@ -32,8 +32,10 @@ empty identity), so the workflow exports the variables only when the correspondi
 Authenticode on Windows (`TAURI_WINDOWS_SIGNTOOL_CERTIFICATE`), Developer ID and notarization on
 macOS (the certificate imported into a temporary keychain, the identity, Apple ID, app password and
 team). Each job prints whether it signed. Linux artifacts are not signed in 0.1. Whether to buy the
-certificates is the owner's decision (M7 Decision 6); 0.1 may ship unsigned, with the user guide
-saying what each operating system will warn and how to verify the checksums instead.
+certificates was the owner's decision (M7 Decision 6), taken on 2026-11-03: **0.1 ships unsigned**,
+the release notes say so, and the user guide says what each operating system will warn and how to
+verify the checksums instead. The workflow's unsigned path was proven on the branch (run
+41629117934: all four targets built and printed "no certificate secret").
 
 **The version lives in two files and one test keeps them equal:** the workspace `Cargo.toml`
 (`workspace.package.version`, which every crate and the Tauri shell inherit) and
@@ -61,7 +63,8 @@ Draft with its ADR or milestone, and `dbme-store` writes this text into every va
   against the release's `SHA256SUMS.txt`.
 - The macOS build without a Developer ID produces an app Gatekeeper refuses by default; the user
   guide gives the right-click-Open step. Windows SmartScreen warns about an unsigned installer
-  until the certificate's reputation builds. Both are the cost of Decision 6 until it is taken.
+  until the certificate's reputation builds. Both are the cost of Decision 6 for 0.1; the first
+  release with certificates removes them without a change to the workflow.
 - The CHANGELOG is part of the release: a version with no section ships with "See CHANGELOG.md"
   as its notes, which is a defect to fix before publishing the draft.
 - The Pages site rebuilds on every push to `main` that touches `docs/`; a broken relative link is
