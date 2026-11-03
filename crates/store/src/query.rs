@@ -17,6 +17,7 @@ use crate::rows::{
     object_columns, object_row, relation_columns, relation_row, type_columns, type_row,
 };
 use crate::sql::{self, to_json};
+use crate::vault::VaultMeta;
 use crate::{Position, Result, StoreError};
 
 /// Read access to a vault.
@@ -367,6 +368,84 @@ impl Reader<'_> {
             (a.role.as_str(), &a.blob_hash).cmp(&(b.role.as_str(), &b.blob_hash))
         });
         Ok(attachments)
+    }
+
+    /// The live objects under `parent` (`None`: the top level) with exactly this title, in order.
+    /// The files folder names objects by path, so a path is resolved one title at a time.
+    pub fn objects_titled(&self, parent: Option<Id>, title: &str) -> Result<Vec<ObjectRow>> {
+        collect(
+            self.conn,
+            concat!(
+                "SELECT ",
+                object_columns!(),
+                " FROM objects WHERE parent_id IS ?1 AND title = ?2 AND deleted_at IS NULL \
+                 ORDER BY sort_key, id"
+            ),
+            params![sql::optional(parent), title],
+            object_row,
+        )
+    }
+
+    /// Up to `limit` ops after `seq`, oldest first: for the export and for the files folder's
+    /// ledger of what it has synced.
+    pub fn ops_after(&self, seq: i64, limit: u32) -> Result<Vec<OpRecord>> {
+        collect(
+            self.conn,
+            concat!(
+                "SELECT ",
+                op_columns!(),
+                " FROM ops WHERE seq > ?1 ORDER BY seq LIMIT ?2"
+            ),
+            params![seq, limit],
+            crate::log::record,
+        )
+    }
+
+    /// The facts recorded about the vault when it was created, by key: `vault_id`,
+    /// `created_at`, `created_by`, `format_version`.
+    pub fn vault_meta(&self) -> Result<Vec<(String, String)>> {
+        collect(
+            self.conn,
+            "SELECT key, value FROM vault_meta ORDER BY key",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+    }
+
+    /// The facts of [`Reader::vault_meta`] as a [`VaultMeta`]: what an export writes to
+    /// `vault_meta.json` (FORMAT.md §7).
+    pub fn vault_meta_record(&self) -> Result<VaultMeta> {
+        let mut map = serde_json::Map::new();
+        for (key, value) in self.vault_meta()? {
+            let typed = match key.as_str() {
+                "created_at" | "format_version" => value
+                    .parse::<i64>()
+                    .map(serde_json::Value::from)
+                    .map_err(|_| {
+                        StoreError::Rule(format!("vault_meta.{key} is not a number: {value}"))
+                    })?,
+                _ => serde_json::Value::String(value),
+            };
+            map.insert(key, typed);
+        }
+        serde_json::from_value(serde_json::Value::Object(map))
+            .map_err(|e| StoreError::Rule(format!("vault_meta is incomplete: {e}")))
+    }
+
+    /// The live (not trashed) objects that have `type_id` as one of their types, by ID. Objects of
+    /// a type that extends it are not included.
+    pub fn objects_of_type(&self, type_id: Id) -> Result<Vec<ObjectRow>> {
+        collect(
+            self.conn,
+            concat!(
+                "SELECT ",
+                object_columns!(),
+                " FROM objects WHERE deleted_at IS NULL AND id IN \
+                 (SELECT object_id FROM object_types WHERE type_id = ?1) ORDER BY id"
+            ),
+            [type_id.to_string()],
+            object_row,
+        )
     }
 
     /// The most recent ops, newest first.

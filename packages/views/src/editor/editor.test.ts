@@ -44,6 +44,8 @@ describe("runs", () => {
       { text: "line\nbreak", italic: true as const, link: "https://example.org/" },
       { mention: OBJECT_IDS[0] ?? "" },
       { text: "code", code: true as const },
+      // What a wikilink in the files folder said rides along (ADR-0016, M5 note).
+      { mention: OBJECT_IDS[1] ?? "", shown: "that one", block: "BLOCK", embed: true as const },
     ];
     expect(inlineToRuns(runsToInline(runs))).toEqual(runs);
   });

@@ -24,7 +24,7 @@ use dbme_core::{ContentHash, Id, IdGenerator, SortKey};
 
 use crate::query::{Reader, Siblings};
 use crate::vault::{Committed, Context};
-use crate::{Result, StoreError, log, rows, search};
+use crate::{Result, StoreError, log, mirror, rows, search};
 
 /// Where to put an item among its siblings.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,6 +85,12 @@ fn empty_object() -> Value {
 #[serde(default, deny_unknown_fields)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct NewObject {
+    /// An ID the caller brings (a file's `id:`, M5 Decision 13), or `None` for a fresh one. No
+    /// other object, live or in the Trash, may have it.
+    pub id: Option<Id>,
+    /// When the object was created, if known from outside (a file's `created:`); the
+    /// transaction's time otherwise.
+    pub created_at: Option<i64>,
     pub title: String,
     pub parent_id: Option<Id>,
     pub position: Position,
@@ -192,6 +198,13 @@ pub struct Txn<'v> {
     changed: BTreeSet<Id>,
     /// The objects whose text the search index must look at again before this commits.
     touched: BTreeSet<Id>,
+    /// The objects whose files the folder must write again (ADR-0021).
+    mirror_touched: BTreeSet<Id>,
+    /// The objects whose title or place changed: at commit, everything below them and everything
+    /// linking to those joins `mirror_touched` in one query.
+    mirror_moved: BTreeSet<Id>,
+    /// Whether a type or field changed, so every file needs writing again.
+    full_rewrite: bool,
     failed: bool,
 }
 
@@ -216,6 +229,9 @@ impl<'v> Txn<'v> {
             last_seq: 0,
             changed: BTreeSet::new(),
             touched: BTreeSet::new(),
+            mirror_touched: BTreeSet::new(),
+            mirror_moved: BTreeSet::new(),
+            full_rewrite: false,
             failed: false,
         })
     }
@@ -228,6 +244,14 @@ impl<'v> Txn<'v> {
             ));
         }
         search::mark_dirty(&self.tx, &self.touched)?;
+        mirror::mark_dirty(&self.tx, &self.mirror_touched)?;
+        if !self.mirror_moved.is_empty() {
+            let below = mirror::below_and_linking(&self.tx, &self.mirror_moved)?;
+            mirror::mark_dirty(&self.tx, &below)?;
+        }
+        if self.full_rewrite {
+            mirror::meta_set(&self.tx, mirror::FULL_REWRITE_NEEDED, Some("1"))?;
+        }
         self.tx.commit()?;
         Ok(self.first_seq.map(|first_seq| Committed {
             group_id: self.group_id,
@@ -262,10 +286,26 @@ impl<'v> Txn<'v> {
         &self.ctx.ids
     }
 
+    /// The transaction's connection, for the bookkeeping tables (`mirror.rs`).
+    pub(crate) fn conn(&self) -> &Connection {
+        &self.tx
+    }
+
     /// Applies one op and appends it to the log.
     pub(crate) fn apply(&mut self, op: Op) -> Result<()> {
+        // The files folder needs to know whether a title changed, which only the row before
+        // the update can tell; the one indexed read is spent on object updates alone.
+        let before = if self.ctx.notes_mirror
+            && op.kind().entity() == Entity::Object
+            && op.kind().action() == Action::Update
+        {
+            rows::load(&self.tx, &op.key())?
+        } else {
+            None
+        };
         rows::apply(&self.tx, &op, self.ts)?;
         self.note_search(&op)?;
+        self.note_mirror(&op, before.as_ref())?;
         self.log(op)
     }
 
@@ -273,7 +313,74 @@ impl<'v> Txn<'v> {
     pub(crate) fn apply_to(&mut self, op: Op, current: Option<&Row>) -> Result<()> {
         rows::apply_to(&self.tx, &op, current, self.ts)?;
         self.note_search(&op)?;
+        self.note_mirror(&op, current)?;
         self.log(op)
+    }
+
+    /// Notes the objects whose files the folder must write again because of `op` (ADR-0021):
+    /// the owning object of every op, the source object of a relation, and, when an object's
+    /// title or place changes, everything below it (their paths change) and every object whose
+    /// relations point at any of them (their wikilinks name the path). A type or field change
+    /// marks every file instead. Only under a context that notes for the mirror; the mirror's own
+    /// commits never write back.
+    fn note_mirror(&mut self, op: &Op, before: Option<&Row>) -> Result<()> {
+        if !self.ctx.notes_mirror {
+            return Ok(());
+        }
+        let entity = op.kind().entity();
+        let action = op.kind().action();
+        match (entity, op.body()) {
+            (Entity::Type | Entity::Field, _) => self.full_rewrite = true,
+            (Entity::View, _) => {}
+            (Entity::Object, _) => {
+                let id = op.key().target_id();
+                self.mirror_touched.insert(id);
+                let paths_changed = match action {
+                    Action::Move | Action::Trash | Action::Restore => true,
+                    Action::Update => match (before, rows::load(&self.tx, &op.key())?) {
+                        (Some(Row::Object(was)), Some(Row::Object(now))) => was.title != now.title,
+                        _ => false,
+                    },
+                    Action::Create | Action::Delete => false,
+                };
+                if paths_changed {
+                    self.mirror_moved.insert(id);
+                }
+            }
+            (Entity::ObjectType, _) => {
+                if let RowKey::ObjectType { object_id, .. } = op.key() {
+                    self.mirror_touched.insert(object_id);
+                }
+            }
+            (Entity::Attachment, _) => {
+                if let RowKey::Attachment { object_id, .. } = op.key() {
+                    self.mirror_touched.insert(object_id);
+                }
+            }
+            (
+                Entity::Block,
+                OpBody::Create(Row::Block(block)) | OpBody::Delete(Row::Block(block)),
+            ) => {
+                self.mirror_touched.insert(block.object_id);
+            }
+            (Entity::Block, _) => {
+                if let Some(Row::Block(block)) = rows::load(&self.tx, &op.key())? {
+                    self.mirror_touched.insert(block.object_id);
+                }
+            }
+            (
+                Entity::Relation,
+                OpBody::Create(Row::Relation(relation)) | OpBody::Delete(Row::Relation(relation)),
+            ) => {
+                self.mirror_touched.insert(relation.src_id);
+            }
+            (Entity::Relation, _) => {
+                if let Some(Row::Relation(relation)) = rows::load(&self.tx, &op.key())? {
+                    self.mirror_touched.insert(relation.src_id);
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Notes the object whose searchable text `op` may have changed: the object itself, unless it
@@ -519,7 +626,15 @@ impl<'v> Txn<'v> {
                 }
             }
             t.check_props(&type_ids, &new.props, None)?;
-            let id = t.new_id()?;
+            let id = match new.id {
+                Some(id) => {
+                    if rows::load(&t.tx, &RowKey::Id(Entity::Object, id))?.is_some() {
+                        return Err(rule(format!("object ID {id} is already in use")));
+                    }
+                    id
+                }
+                None => t.new_id()?,
+            };
             let sort_key =
                 t.read()
                     .sort_key_at(Siblings::Objects(new.parent_id), new.position, None)?;
@@ -530,7 +645,7 @@ impl<'v> Txn<'v> {
                 parent_id: new.parent_id,
                 sort_key,
                 props_json: new.props,
-                created_at: t.ts,
+                created_at: new.created_at.unwrap_or(t.ts),
                 updated_at: t.ts,
                 captured_at: new.captured_at,
                 event_start: new.event_start,

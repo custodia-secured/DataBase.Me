@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mirror-hold-decide"
+description = "Enables the mirror_hold_decide command without any pre-configured scope."
+commands.allow = ["mirror_hold_decide"]
+
+[[permission]]
+identifier = "deny-mirror-hold-decide"
+description = "Denies the mirror_hold_decide command without any pre-configured scope."
+commands.deny = ["mirror_hold_decide"]

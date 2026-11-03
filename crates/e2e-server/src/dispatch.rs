@@ -173,6 +173,29 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
             arg(args, "mime")?,
         )),
         "blob_read" => ok(api::blob_read(s, &arg(args, "hash")?)),
+        "mirror_status" => ok(api::mirror_status(s)),
+        "mirror_enable" => {
+            let folder: Option<String> = arg(args, "folder")?;
+            let folder = folder.map(|path| vault_path(session, &path)).transpose()?;
+            ok(api::mirror_enable(s, folder))
+        }
+        "mirror_disable" => ok(api::mirror_disable(s)),
+        "mirror_sync_now" => ok(api::mirror_sync_now(s)),
+        "conflicts_list" => ok(api::conflicts_list(s, arg(args, "openOnly")?)),
+        "conflict_resolve" => ok(api::conflict_resolve(
+            s,
+            arg(args, "id")?,
+            arg(args, "resolution")?,
+        )),
+        "mirror_hold_decide" => ok(api::mirror_hold_decide(
+            s,
+            arg(args, "id")?,
+            arg(args, "choice")?,
+        )),
+        "export_run" => {
+            let dir = vault_path(session, &arg::<String>(args, "dir")?)?;
+            ok(api::export_run(s, dir, arg(args, "full")?))
+        }
         _ => Err(invalid(format!("unknown command {cmd:?}"))),
     }
 }

@@ -9,6 +9,7 @@ import {
   unwrap,
   useAncestors,
   useObject,
+  useMirrorStatus,
   usePage,
   useVaultInfo,
   useViews,
@@ -19,6 +20,7 @@ import {
   Button,
   Columns2,
   Dialog,
+  FolderSync,
   IconButton,
   PanelLeft,
   Redo2,
@@ -31,6 +33,8 @@ import {
 import {
   actions,
   CommandPalette,
+  FilesDialog,
+  HoldBanner,
   onActionError,
   ResultsView,
   Sidebar,
@@ -117,6 +121,8 @@ function Shell() {
     setDrawer,
     palette,
     setPalette,
+    files,
+    setFiles,
     results,
     showResults,
     setView,
@@ -165,6 +171,13 @@ function Shell() {
     },
     { id: "undo", label: "Undo", run: () => void actions.undo() },
     { id: "redo", label: "Redo", run: () => void actions.redo() },
+    {
+      id: "files",
+      label: "Files folder",
+      run: () => {
+        setFiles(true);
+      },
+    },
     ...(splitFits
       ? [
           {
@@ -218,8 +231,18 @@ function Shell() {
             }}
           />
         ) : null}
+        <FilesButton
+          onClick={() => {
+            setFiles(true);
+          }}
+        />
         <HistoryButtons />
       </header>
+      <HoldBanner
+        onDetails={() => {
+          setFiles(true);
+        }}
+      />
       {wide ? <aside className="app__sidebar">{sidebar}</aside> : null}
       {wide ? null : (
         <Dialog
@@ -271,8 +294,35 @@ function Shell() {
         }}
         commands={paletteCommands}
       />
+      <FilesDialog
+        open={files}
+        onClose={() => {
+          setFiles(false);
+        }}
+        onOpen={select}
+      />
       <Errors />
     </div>
+  );
+}
+
+/** Opens the files folder dialog; the badge counts the open entries of the Conflicts inbox. */
+function FilesButton({ onClick }: { onClick: () => void }) {
+  const status = useMirrorStatus();
+  const open = status.data?.open_conflicts ?? 0;
+  const label =
+    open === 0
+      ? "Files folder"
+      : `Files folder, ${String(open)} ${open === 1 ? "conflict" : "conflicts"}`;
+  return (
+    <span className="dbme-files-badge">
+      <IconButton label={label} icon={FolderSync} onClick={onClick} />
+      {open > 0 ? (
+        <span className="dbme-files-badge__count" aria-hidden="true">
+          {open > 99 ? "99+" : open}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

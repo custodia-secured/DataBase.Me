@@ -3,7 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { emit } from "@tauri-apps/api/event";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Committed_Serialize } from "./bindings";
+import type { Committed_Serialize, MirrorStatus } from "./bindings";
 import { installE2eTransport } from "./e2e";
 import { CommandError, commands, unwrap } from "./ipc";
 import { onVaultChanged, startLiveRefresh } from "./live";
@@ -88,6 +88,32 @@ describe("live refresh", () => {
   it("keys every vault read under the vault prefix", () => {
     expect(keys.object("A")[0]).toBe(VAULT);
     expect(keys.search("x", 5)[0]).toBe(VAULT);
+    expect(keys.mirror()[0]).toBe(VAULT);
+    expect(keys.conflicts(true)[0]).toBe(VAULT);
+  });
+
+  it("takes the files folder's status from mirror-changed and reads the inbox again", async () => {
+    mockIPC(() => null, { shouldMockEvents: true });
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    const stop = await startLiveRefresh(client);
+    const status: MirrorStatus = {
+      enabled: true,
+      folder: "Main.dbme/files",
+      synced: 3,
+      pending: 0,
+      held: 0,
+      dirty: 1,
+      open_conflicts: 2,
+      hold: null,
+      full_rewrite_needed: false,
+    };
+    await emit("mirror-changed", status);
+    expect(client.getQueryData(keys.mirror())).toEqual(status);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [VAULT, "conflicts"] });
+    stop();
+    await emit("mirror-changed", { ...status, dirty: 0 });
+    expect(client.getQueryData(keys.mirror())).toEqual(status);
   });
 });
 

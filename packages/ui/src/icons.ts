@@ -44,6 +44,7 @@ export {
   Ellipsis,
   FileText as DocumentIcon,
   FolderInput,
+  FolderSync,
   GripVertical,
   Heading2,
   Italic,

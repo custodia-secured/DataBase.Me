@@ -60,7 +60,10 @@ impl TestSession {
             sink.lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .push(committed.clone());
-        });
+        })
+        // The files folder's override file lives beside the identity, as in the app. No worker:
+        // the UI's e2e tests drive the folder with `mirror_sync_now` (M5 Decision 25).
+        .with_config_dir(dir.join("config"));
         Ok(Self {
             api,
             dir,

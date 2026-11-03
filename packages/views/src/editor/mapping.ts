@@ -38,7 +38,15 @@ export type Run =
       code?: true;
       link?: string;
     }
-  | { mention: string };
+  | {
+      mention: string;
+      /** What a wikilink in the files folder shows, `[[path|shown]]` (ADR-0016, M5 note). */
+      shown?: string;
+      /** The block a wikilink points at, `[[path#^block]]`. */
+      block?: string;
+      /** An embed, `![[path]]`. */
+      embed?: true;
+    };
 
 export const MARKS = ["bold", "italic", "underline", "strike", "code"] as const;
 type MarkName = (typeof MARKS)[number];
@@ -118,7 +126,12 @@ function readRuns(value: Value | undefined): Run[] | null {
   for (const run of value) {
     if (!isObject(run)) return null;
     if (typeof run.mention === "string" && run.text === undefined) {
-      runs.push({ mention: run.mention });
+      // The wikilink keys a file brought in ride along, so the next app-side edit keeps them.
+      const mention: Run = { mention: run.mention };
+      if (typeof run.shown === "string" && run.shown !== "") mention.shown = run.shown;
+      if (typeof run.block === "string" && run.block !== "") mention.block = run.block;
+      if (run.embed === true) mention.embed = true;
+      runs.push(mention);
     } else if (typeof run.text === "string" && run.text !== "" && run.mention === undefined) {
       const text: Run = { text: run.text };
       for (const mark of MARKS) if (run[mark] === true) text[mark] = true;
@@ -144,7 +157,15 @@ export function runsToInline(runs: readonly Run[]): JSONContent[] {
   const nodes: JSONContent[] = [];
   for (const run of runs) {
     if ("mention" in run) {
-      nodes.push({ type: "mention", attrs: { id: run.mention } });
+      nodes.push({
+        type: "mention",
+        attrs: {
+          id: run.mention,
+          shown: run.shown ?? null,
+          block: run.block ?? null,
+          embed: run.embed ?? false,
+        },
+      });
       continue;
     }
     const marks = marksOf(run);
@@ -171,6 +192,11 @@ export function inlineToRuns(nodes: readonly JSONContent[] | undefined): Run[] {
       const id: unknown = node.attrs?.id;
       if (typeof id !== "string") continue;
       run = { mention: id };
+      const shown: unknown = node.attrs?.shown;
+      const block: unknown = node.attrs?.block;
+      if (typeof shown === "string" && shown !== "") run.shown = shown;
+      if (typeof block === "string" && block !== "") run.block = block;
+      if (node.attrs?.embed === true) run.embed = true;
     } else if (node.type === "text" || node.type === "hardBreak") {
       const text = node.type === "text" ? (node.text ?? "") : "\n";
       if (text === "") continue;

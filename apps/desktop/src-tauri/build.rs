@@ -51,6 +51,14 @@ const COMMANDS: &[&str] = &[
     "attachments_list",
     "attachment_add",
     "blob_read",
+    "mirror_status",
+    "mirror_enable",
+    "mirror_disable",
+    "mirror_sync_now",
+    "conflicts_list",
+    "conflict_resolve",
+    "mirror_hold_decide",
+    "export_run",
 ];
 
 /// The Windows application manifest. tauri-build links its copy into the app binary only, so the

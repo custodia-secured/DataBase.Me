@@ -9,6 +9,7 @@
 pub mod block;
 pub mod chain;
 mod error;
+pub mod files;
 pub mod hash;
 pub mod id;
 pub mod model;

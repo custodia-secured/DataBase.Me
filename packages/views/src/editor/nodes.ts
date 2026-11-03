@@ -139,7 +139,14 @@ export const Mention = Node.create<{ services: NodeServices | null }>({
   },
 
   addAttributes() {
-    return { id: { default: null, rendered: false } };
+    // `shown`, `block` and `embed` are what a wikilink in the files folder said (ADR-0016, M5
+    // note). The editor shows the title regardless, but keeps them so a save does not drop them.
+    return {
+      id: { default: null, rendered: false },
+      shown: { default: null, rendered: false },
+      block: { default: null, rendered: false },
+      embed: { default: false, rendered: false },
+    };
   },
 
   renderHTML() {

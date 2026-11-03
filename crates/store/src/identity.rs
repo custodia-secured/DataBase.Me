@@ -11,7 +11,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use dbme_core::{Clock, CoreError, Id, IdGenerator};
+use dbme_core::{Clock, ContentHasher, CoreError, Id, IdGenerator};
 
 use crate::{Result, StoreError};
 
@@ -37,6 +37,16 @@ impl Identity {
             actor_id: ids.next(now)?,
             device_id: ids.next(now)?,
         })
+    }
+
+    /// The identity the files folder commits under: the same person, on a device derived from
+    /// this one ([`mirror_device_id`]), so an outside edit is tamper-evident in the op log as a
+    /// second device's work (M5 Decision 1).
+    pub fn mirror(&self) -> Self {
+        Self {
+            actor_id: self.actor_id,
+            device_id: mirror_device_id(self.device_id),
+        }
     }
 
     /// The identity kept in `folder`, made and saved there on first use.
@@ -69,10 +79,47 @@ impl Identity {
     }
 }
 
+/// The device ID the files folder's commits record for a device: the same timestamp, with the
+/// random part replaced by the first 80 bits of `blake3("dbme mirror device\0" + <device ID>)`.
+/// Deterministic, so every session derives the same ID and the op log can be filtered by it.
+pub fn mirror_device_id(device_id: Id) -> Id {
+    let hash = ContentHasher::new()
+        .update(b"dbme mirror device\0")
+        .update(device_id.to_string().as_bytes())
+        .finalize();
+    // 20 hex digits are 80 bits; `from_parts` masks to 80 anyway.
+    let random = u128::from_str_radix(&hash.hex()[..20], 16).unwrap_or(0);
+    Id::from_parts(device_id.timestamp_ms(), random)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use dbme_core::ManualClock;
+
+    #[test]
+    fn the_mirror_device_is_derived_and_stable() {
+        let device = Id::from_parts(1_761_380_471_000, 0xabcd);
+        let mirror = mirror_device_id(device);
+        assert_ne!(mirror, device);
+        assert_eq!(mirror.timestamp_ms(), device.timestamp_ms());
+        assert_eq!(mirror_device_id(device), mirror);
+        assert_ne!(
+            mirror_device_id(Id::from_parts(1_761_380_471_000, 1)),
+            mirror
+        );
+        let identity = Identity {
+            actor_id: Id::from_parts(1, 1),
+            device_id: device,
+        };
+        assert_eq!(
+            identity.mirror(),
+            Identity {
+                actor_id: identity.actor_id,
+                device_id: mirror,
+            }
+        );
+    }
 
     #[test]
     fn made_once_then_reused() {

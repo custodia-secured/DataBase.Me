@@ -309,13 +309,18 @@ fn a_vault_from_before_the_index_gets_one_when_it_opens() {
     let raw = t.raw();
     raw.execute_batch(
         "DROP TRIGGER search_text_insert; DROP TRIGGER search_text_delete; DROP TRIGGER search_text_update; \
-         DROP TABLE fts; DROP TABLE search_text; DROP TABLE search_dirty; DROP TABLE views; PRAGMA user_version = 1",
+         DROP TABLE fts; DROP TABLE search_text; DROP TABLE search_dirty; DROP TABLE views; \
+         DROP TABLE mirror_state; DROP TABLE mirror_dirty; DROP TABLE mirror_meta; DROP TABLE conflicts; \
+         PRAGMA user_version = 1",
     )
     .unwrap();
     drop(raw);
 
     let t = t.reopen();
-    assert_eq!(t.vault.verify(false).unwrap().schema_version, 2);
+    assert_eq!(
+        t.vault.verify(false).unwrap().schema_version,
+        dbme_store::SCHEMA_VERSION
+    );
     assert_eq!(titles(&find(&t, "gannet")), ["Old page"]);
     t.assert_verifies();
 }

@@ -187,7 +187,10 @@ fn optional(map: &Map<String, Value>, key: &str, ok: fn(&Value) -> bool) -> Resu
         .map_or(Ok(()), |v| if ok(v) { Ok(()) } else { Err(()) })
 }
 
-/// A run is `{"text": "<not empty>", <marks>, "link"?: "<url>"}` or `{"mention": "<object ID>"}`.
+/// A run is `{"text": "<not empty>", <marks>, "link"?: "<url>"}` or `{"mention": "<object ID>",
+/// "shown"?: "<not empty>", "block"?: "<block ID>", "embed"?: true}`. The three optional mention
+/// keys carry what a wikilink in the files folder says (`[[path|shown]]`, `[[path#^block]]`,
+/// `![[path]]`; ADR-0016, M5 note); the editor shows the mentioned object's title regardless.
 fn check_run(run: &Value) -> Result<(), String> {
     let Some(map) = run.as_object() else {
         return Err("not a JSON object".into());
@@ -210,10 +213,27 @@ fn check_run(run: &Value) -> Result<(), String> {
             }
             Ok(())
         }
-        (None, Some(mention)) => match mention.as_str().map(Id::parse) {
-            Some(Ok(_)) => Ok(()),
-            _ => Err("\"mention\" must be an object ID".into()),
-        },
+        (None, Some(mention)) => {
+            if !matches!(mention.as_str().map(Id::parse), Some(Ok(_))) {
+                return Err("\"mention\" must be an object ID".into());
+            }
+            if map
+                .get("shown")
+                .is_some_and(|v| !v.as_str().is_some_and(|s| !s.is_empty()))
+            {
+                return Err("\"shown\" must be a string that is not empty".into());
+            }
+            if map
+                .get("block")
+                .is_some_and(|v| !matches!(v.as_str().map(Id::parse), Some(Ok(_))))
+            {
+                return Err("\"block\" must be a block ID".into());
+            }
+            if map.get("embed").is_some_and(|v| v != &Value::Bool(true)) {
+                return Err("\"embed\" must be true or left out".into());
+            }
+            Ok(())
+        }
         _ => Err("a run has either \"text\" or \"mention\"".into()),
     }
 }
@@ -264,6 +284,7 @@ mod tests {
             {"text": "Hello "},
             {"text": "world", "bold": true, "italic": true, "link": "https://example.org"},
             {"mention": ID},
+            {"mention": ID, "shown": "the task", "block": "01JB3R7Q8Y5K3M2N4P6Q8R0S2V", "embed": true},
             {"text": "line\nbreak", "code": true, "strike": true, "underline": true}
         ]);
         for kind in ["paragraph", "bullet", "numbered", "quote"] {
@@ -310,6 +331,22 @@ mod tests {
             json!({"inline": [{"mention": ID, "text": "both"}]}),
         );
         bad("paragraph", json!({"inline": [{"bold": true}]}));
+        bad(
+            "paragraph",
+            json!({"inline": [{"mention": ID, "shown": ""}]}),
+        );
+        bad(
+            "paragraph",
+            json!({"inline": [{"mention": ID, "shown": 1}]}),
+        );
+        bad(
+            "paragraph",
+            json!({"inline": [{"mention": ID, "block": "nope"}]}),
+        );
+        bad(
+            "paragraph",
+            json!({"inline": [{"mention": ID, "embed": false}]}),
+        );
         bad("heading", json!({"inline": []}));
         bad("heading", json!({"level": 0, "inline": []}));
         bad("heading", json!({"level": 7, "inline": []}));

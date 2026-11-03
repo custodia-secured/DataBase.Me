@@ -125,6 +125,18 @@ Migration 2 (M4, ADR-0020) adds one more table the op log produces, and three it
 The derived tables are not part of the op log's promise: a reader MAY ignore them, and an app MAY
 rebuild them from `objects` and `blocks` at any time.
 
+Migration 3 (M5, ADR-0021; Proposed) adds the files folder's bookkeeping (§6): four tables the op
+log does not produce and `verify` does not replay. They describe files on disk, so a rescan of the
+folder can rebuild them; they carry no foreign keys, so a permanent delete replayed from the log
+never fails on them.
+
+| Table          | Purpose                                             | Columns                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mirror_state` | One row per object the folder holds or held         | `object_id` (primary key), `rel_path` (unique; forward slashes, relative to the folder), `path_key` (unique; `rel_path` in NFC, case-folded), `last_hash?` (of the bytes last written or read), `base_text?` (the Markdown last synced: the merge base), `synced_seq?`, `synced_at?`, `file_size?`, `file_mtime_ms?`, `state` (`synced`, `pending`, `held`, `excluded`, `trashed`) |
+| `mirror_dirty` | Objects whose file must be written again            | `object_id` (primary key). Every app-side transaction adds the objects whose files it changed; a type or field change sets `full_rewrite_needed` in `mirror_meta` instead                                                                                                                                                                                                          |
+| `mirror_meta`  | Facts about the folder as a whole                   | `key` (primary key), `value`. Keys: `folder_enabled`, `full_rewrite_needed`, `last_rescan_at`                                                                                                                                                                                                                                                                                      |
+| `conflicts`    | The Conflicts inbox: things the person must resolve | `id`, `object_id?`, `rel_path?`, `kind` (`edit_edit`, `edit_delete`, `parse_error`, `invalid_value`, `duplicate_id`, `dropped_file`, `bulk_change_hold`, `missing_id`, `cloud_conflict_file`), `details_json`, `conflict_copy_id?` (the Note holding the file's version), `resolution?`, `created_at`, `resolved_at?`                                                              |
+
 Rules the schema does not express, which an app MUST keep:
 
 - An object's parents never loop, and a block's parents never loop or leave its object. A type's
@@ -183,9 +195,9 @@ handoff brief's draft.
 | `canvas_items` | Positions on a canvas view                                            | `view_id`, `item_id`, `object_id`, `x`, `y`, `w`, `h`, `z`, `style_json`                                                                                                                                                                                 |
 | `spaces`       | Top-level spaces and their AI policy                                  | `id`, `name`, `ai_policy` (`none`, `local_only`, `any`), `settings_json`                                                                                                                                                                                 |
 | `ai_audit`     | Every AI call                                                         | `id`, `ts`, `provider`, `model`, `purpose`, `object_ids_json`, `bytes_sent`, `user_initiated`                                                                                                                                                            |
-| `mirror_state` | Files-folder bookkeeping per object                                   | `object_id`, `rel_path` (unique), `last_hash`, `base_text` (last synced Markdown), `synced_seq`, `synced_at`                                                                                                                                             |
-| `conflicts`    | Things the user must resolve                                          | `id`, `object_id`, `kind` (`edit_edit`, `parse_error`, `bulk_change_hold`, `missing_id`, `cloud_conflict_file`), `details_json`, `conflict_copy_id`, `created_at`, `resolved_at`                                                                         |
 | `vec_chunks`   | sqlite-vec embeddings (derived; only with an embedding provider, M11) | `chunk_id`, `embedding`                                                                                                                                                                                                                                  |
+
+`mirror_state` and `conflicts` arrived with migration 3 (§3.1).
 
 ### 3.5 Block content (Decided, ADR-0016)
 
@@ -318,19 +330,25 @@ exactly as stored, so a reader never re-encodes JSON. `seq` and `signature` are 
   to an empty database gives exactly the tables of §3.1; and every blob in `blobs` exists in the
   blob store with the recorded size (and, in a deep verification, the recorded hash).
 
-## 6. The files folder (Draft, M5; rules in ADR-0006)
+## 6. The files folder (Proposed, M5; rules in ADR-0006 and ADR-0021)
 
 The files folder is a replica of the database that any Markdown tool can edit. It is designed to
-open as an Obsidian vault.
+open as an Obsidian vault. The reader and writer live in `dbme-core` (`files`), whose module
+documentation is the reference for every rule below; the folder's engine commits outside edits
+through the store like a second device (ADR-0021).
 
 ### 6.1 Paths
 
-- An object lives at `files/<Space>/<ancestors>/<Title>.md`. Its children live in a folder with the
-  same name, next to it: `files/<Space>/<ancestors>/<Title>/`.
-- File names are derived from titles. Characters that are invalid on any supported OS or that break
-  wikilinks (`\ / : * ? " < > | # ^ [ ]`) are replaced, trailing dots and spaces are removed,
-  Windows reserved names (`CON`, `NUL`, `COM1`, ...) are avoided, and siblings with the same title
-  are told apart (Open: exact rule and length limit).
+- An object lives at `files/<Space>/<ancestors>/<Title>.md`; until spaces exist, a top-level object
+  stands where `<Space>` will. Its children live in a folder with the same name, next to it.
+- File names are derived from titles: `\ / : * ? " < > | # ^ [ ]` and control characters are
+  replaced, leading and trailing dots and spaces are removed, a Windows reserved name (`CON`,
+  `NUL`, `COM1`, …) gets `_` before its extension, an empty name becomes `Untitled`, and a name is
+  cut to 120 bytes at a character boundary. A sibling whose name is already taken gets ` (2)`,
+  ` (3)`, …, compared by `path_key`: NFC, case-folded, one slash form. A relative path longer than
+  200 bytes is cut from its deepest names, never below eight bytes each.
+- Dot-prefixed names are not the app's, except `.dbme/`, which holds `schema.json` (§6.5) and
+  `trash/<id>.md`, where a trashed object's file goes until it is restored.
 - The path is a convenience. The object's identity is the `id` in its frontmatter.
 
 ### 6.2 Frontmatter
@@ -342,48 +360,93 @@ types: [Task]
 tags: [travel, admin]
 created: 2026-10-25T08:21:11.000Z
 updated: 2026-10-25T09:02:40.000Z
-fields:
-  due: 2026-11-30
-  status: Waiting
+due: 2026-11-30
+status: Waiting
 relations:
   assigned_to:
     - id: 01JB3R9C0D4E5F6G7H8J9K0M1N
-      link: "[[Alex Doe]]"
+      link: "[[People/Alex Doe]]"
+links:
+  - id: 01JB3RB6QH1WJ2XK3YL4ZM5NA6
+    link: "[[Projects/Alpha]]"
+    type: related
 ---
 ```
 
-- `id` is REQUIRED for a file the app wrote. A file without one is a new object, or is matched by
-  content hash (ADR-0006).
-- Relations carry both the target's ID (authoritative) and a wikilink (for Obsidian and for
-  people). If the two disagree, the ID wins.
-- Open (M5): whether user fields sit under `fields:` as above or at the top level as Obsidian
-  properties, which would make Obsidian's property editor and Bases work on them at the cost of
-  reserving key names.
+- The envelope keys, in this order: `id`, `types`, `tags`, `created`, `updated`, `summary`,
+  `captured_at`, `event_start`, `event_end`, `geo_lat`, `geo_lon`, `sensitivity`, `sort` (the
+  object's sort key; a change is a move). `updated` is informational on the way in.
+- **User fields sit at the top level**, as Obsidian properties, in the schema's field order, each
+  encoded by its field kind (§3.3; `schema.json` gives the kind on a rebuild). The envelope keys,
+  `relations`, `links`, `fields`, and Obsidian's `aliases` and `cssclasses` are reserved: a user
+  field whose key is reserved is written under `fields:`, and a reader accepts both shapes.
+- `relations:` lists relations that belong to a field, by field key, each `{id, link}`; `links:`
+  lists relations with no field, each `{id, link, type, label?, props?, block?}`. The ID is
+  authoritative; the wikilink is for Obsidian and for people. If the two disagree, the ID wins.
+- `tags:` and `#tag` in the body are `tagged` relations to `Tag` objects by title. `mentions`
+  relations are never written; they are derived from the body.
+- Any other key round-trips verbatim through `props_json._frontmatter`.
+- `id` is REQUIRED for a file the app wrote. A file without one is matched by path, then by content
+  hash, and is a new object otherwise (ADR-0006); nothing is ever trashed on an inference.
+- Limits: a file over 16 MiB, a frontmatter over 256 KiB or nested deeper than 64 levels, and a
+  block tree deeper than 64 levels are refused as a parse error, bytes untouched.
 
 ### 6.3 Body
 
-- Blocks are written as Markdown in order. A block that has an ID ends with an Obsidian block
-  anchor: ` ^01JB3RB6...`. Open (M5): whether every block carries an anchor or only blocks that are
-  referenced elsewhere.
-- Links to other objects are wikilinks: `[[Title]]`, `[[path/Title|shown text]]`, `[[Title#^block]]`.
-  Embeds (transclusions) are `![[Title]]` or `![[Title#^block]]`.
-- Tags are `#tag` in the body or `tags:` in the frontmatter.
+- Blocks are written as Markdown in order. Every block ends with an Obsidian block anchor
+  ` ^<block ID>`: on the line for paragraphs, list items and images; on its own line, with a blank
+  line before and after, for headings, code fences, dividers (`***`), quotes and tables. A lone
+  `^id` line attaches to the block before it. An empty paragraph is its anchor alone.
+- List items nest by the parent's marker width (two spaces under `- `, three under `1. `), and are
+  reparented by indentation on the way in.
+- Links to other objects are wikilinks naming the path: `[[Projects/Alpha]]`,
+  `[[Projects/Alpha|shown text]]`, `[[Projects/Alpha#^block]]`; embeds are `![[…]]`. The alias,
+  block reference and embed survive as the `shown`, `block` and `embed` keys of the mention run
+  (§3.5). A wikilink that resolves to no object is text.
+- An attachment is `![[attachments/<hash><ext>]]`. A block kind the file format does not spell is a
+  ` ```dbme ` fence holding its JSON.
+- The round trip is normalising: `parse(serialize(x))` is a fixed point of the model, and a file
+  the app wrote is written back byte for byte.
 
 ### 6.4 Not in the files folder
 
 Canvas layouts, view configurations, the op log and the AI audit log stay in the database. They are
 exported as read-only JSON.
 
-## 7. Export folder (Draft, M5)
+### 6.5 Merge, identity and `schema.json`
+
+- `.dbme/schema.json` holds every type and field (the content of the export's `types.json`), so
+  a folder can be read without the database.
+- An outside edit is merged on the model, not the bytes: frontmatter field by field and the body
+  block by block against the last synced text (`mirror_state.base_text`), one side's change taken
+  as is, both sides' changes to one block merged line-wise, and a conflict only when that fails. On
+  a conflict the app's version stays, the file's becomes a conflict copy in the inbox, and the file
+  is rewritten only after the copy is saved.
+- An inbound apply never writes the file back; only an app-side change rewrites it. Outside edits
+  are committed under the device the files folder derives from the app's (`mirror_device_id`) and
+  are not steps of the app's undo stack.
+
+## 7. Export folder (Proposed, M5)
 
 - `export/schema/types.json`: every type with its fields.
 - `export/views/<view-id>.json`: one file per saved view.
-- `export/data/<Type>.csv`: one CSV per type, one row per object: `id`, `title`, `parent_id`,
-  `created_at`, `updated_at`, then the type's fields in `sort_order`. Multi-valued fields are JSON
-  arrays in a single cell.
+- `export/data/<Type>.csv`: one CSV per type, one row per live (not trashed) object of the type:
+  `id`, `title`, `parent_id`, `created_at`, `updated_at`, then the type's fields in `sort_order`,
+  inherited fields included. Multi-valued fields are JSON arrays in a single cell. RFC 4180
+  quoting, LF line ends.
 
-These files are export-only. A full export followed by an import MUST reproduce the vault
-losslessly (M5 tests this).
+These files are export-only: a reader for other tools, not a copy of the vault. The **full export**
+adds what makes it one:
+
+- `export/vault_meta.json`: the `vault_meta` table as an object (`vault_id`, `created_at`,
+  `created_by`, `format_version`).
+- `export/ops.jsonl`: the op log, one op per line in `seq` order, every column of §5.1 included.
+- `export/blobs/`: the blob store, same layout as §4.
+
+An import creates an empty vault under the exported `vault_id` and `vault_meta`, **without** the
+built-in types, copies the blobs, and appends every op in order, applying each; the hash chain it
+builds MUST equal the one exported, hash for hash, or the import fails and leaves nothing. A full
+export followed by an import therefore reproduces every table and the chain (M5 tests this).
 
 ## 8. Logs (Draft, M11)
 
@@ -401,10 +464,11 @@ losslessly (M5 tests this).
 
 ## 10. Changes to this document
 
-| Version | Date       | Change                                                                                                                                   |
-| ------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Draft 0 | 2026-10-25 | First draft (M0).                                                                                                                        |
-| Draft 1 | 2026-10-25 | M1: vault lock and creation (§1), sort keys (§2.1), the tables of migration 1 (§3), field values (§3.3) and the op log (§5) are decided. |
-| Draft 2 | 2026-10-25 | M2: block content and mentions (§3.5) are decided.                                                                                       |
-| Draft 3 | 2026-11-01 | M3: `related` is the `rel_type` of a relation drawn on the mind map; it has no `field_id` or `src_block_id` (§3.1).                      |
-| Draft 4 | 2026-11-02 | M4: migration 2 adds `views` and the derived search tables (§3.1), and the `view` entity (§5.2). Proposed, with ADR-0020.                |
+| Version | Date       | Change                                                                                                                                          |
+| ------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Draft 0 | 2026-10-25 | First draft (M0).                                                                                                                               |
+| Draft 1 | 2026-10-25 | M1: vault lock and creation (§1), sort keys (§2.1), the tables of migration 1 (§3), field values (§3.3) and the op log (§5) are decided.        |
+| Draft 2 | 2026-10-25 | M2: block content and mentions (§3.5) are decided.                                                                                              |
+| Draft 3 | 2026-11-01 | M3: `related` is the `rel_type` of a relation drawn on the mind map; it has no `field_id` or `src_block_id` (§3.1).                             |
+| Draft 4 | 2026-11-02 | M4: migration 2 adds `views` and the derived search tables (§3.1), and the `view` entity (§5.2). Proposed, with ADR-0020.                       |
+| Draft 5 | 2026-11-02 | M5: migration 3 adds the files folder's bookkeeping (§3.1); the files folder (§6) and the full export and import (§7). Proposed, with ADR-0021. |

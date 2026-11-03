@@ -28,3 +28,7 @@ other.
 | [0018](0018-e2e-harness-and-ui-budgets.md)      | The end-to-end harness and the UI budgets                    | Accepted |
 | [0019](0019-mind-map.md)                        | The mind map                                                 | Proposed |
 | [0020](0020-search-and-query.md)                | Search, the query DSL and saved views                        | Proposed |
+| [0022](0022-markdown-parser.md)                 | The Markdown parser for the files folder                     | Proposed |
+| [0023](0023-yaml-frontmatter.md)                | The YAML crate for frontmatter                               | Proposed |
+| [0024](0024-file-watcher.md)                    | The file watcher                                             | Proposed |
+| [0025](0025-three-way-merge.md)                 | The three-way merge inside a block                           | Proposed |

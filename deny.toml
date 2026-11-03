@@ -32,7 +32,10 @@ allow = [
   "Zlib",
 ]
 confidence-threshold = 0.93
-exceptions = []
+# notify, the file watcher behind the files folder (ADR-0006), is CC0-1.0: a public-domain
+# dedication, not OSI-approved, so ADR-0024 justifies it and ADR-0009's table has its row. The
+# exception is per crate so CC0-1.0 stays off the general allow-list; the crate is desktop only.
+exceptions = [{ crate = "notify", allow = ["CC0-1.0"] }]
 # The list mirrors scripts/license-policy.json, so some entries are unused on the Rust side.
 unused-allowed-license = "allow"
 
