@@ -244,12 +244,16 @@ pub(crate) fn status_of(vault: &Vault, running: Option<&Running>) -> Reply<Mirro
 }
 
 /// The `seq` of the vault's newest op, or 0.
-fn latest_seq(vault: &Vault) -> Reply<i64> {
+pub(crate) fn latest_seq(vault: &Vault) -> Reply<i64> {
     Ok(vault.read().history(1)?.first().map_or(0, |r| r.seq))
 }
 
 /// One `vault-changed` record for an inbound batch: the ops it appended, as one step.
-fn inbound_committed(vault: &Vault, before: i64, inbound: &Inbound) -> Reply<Option<Committed>> {
+pub(crate) fn inbound_committed(
+    vault: &Vault,
+    before: i64,
+    inbound: &Inbound,
+) -> Reply<Option<Committed>> {
     let newest = vault.read().history(1)?;
     let Some(last) = newest.first().filter(|r| r.seq > before) else {
         return Ok(None);
@@ -335,6 +339,30 @@ impl Session {
             Some(running) => {
                 let before = latest_seq(vault)?;
                 let inbound = running.engine.pump_in(vault, events)?;
+                // The drop zone's handoff (ADR-0021 note, M6): a file that is not Markdown is
+                // now an object with the file attached; the matching importer adds what it can
+                // extract. A failure there leaves the plain object, and is logged.
+                let importers = dbme_ingest::Importers::v0();
+                for id in &inbound.created {
+                    let Some(state) = vault.mirror_state(*id)? else {
+                        continue;
+                    };
+                    if state.state != MirrorFileState::Excluded || state.rel_path.starts_with(".dbme/")
+                    {
+                        continue;
+                    }
+                    let path = running.folder.join(&state.rel_path);
+                    match dbme_ingest::folders::enrich_object(vault, *id, &path, &importers) {
+                        Ok(warnings) => {
+                            for warning in warnings {
+                                tracing::info!(%warning, "files folder: a dropped file's extraction");
+                            }
+                        }
+                        Err(error) => {
+                            tracing::warn!(%error, "files folder: a dropped file could not be extracted");
+                        }
+                    }
+                }
                 let committed = inbound_committed(vault, before, &inbound)?;
                 Ok(Some((inbound, committed)))
             }

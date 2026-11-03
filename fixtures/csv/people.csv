@@ -1,0 +1,5 @@
+Name,Email,Website,Joined,Active,Score,Notes
+Ada Lovelace,ada@example.org,https://example.org/ada,2025-01-15,true,9.5,"Likes ""engines""
+and poetry"
+Bob,bob@example.org,,2025-02-01,false,7,
+Cy,not-an-email,https://example.org/cy,2025-02-30,yes,n/a,Joined date is wrong

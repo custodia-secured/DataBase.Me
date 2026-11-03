@@ -1,0 +1,4 @@
+Name,Note,Amount
+Ada,"=HYPERLINK(""http://x"",""go"")",=1+1
+Bob,@SUM(A1:A2),+cmd|' /C calc'!A0
+Cy,-2+3,-5

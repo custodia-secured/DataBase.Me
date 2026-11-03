@@ -59,6 +59,9 @@ const COMMANDS: &[&str] = &[
     "conflict_resolve",
     "mirror_hold_decide",
     "export_run",
+    "import_plan",
+    "import_apply",
+    "provenance_list",
 ];
 
 /// The Windows application manifest. tauri-build links its copy into the app binary only, so the

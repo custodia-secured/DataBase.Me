@@ -3,7 +3,7 @@
 //! desktop shell's wrapper would. A test in the desktop crate checks that every command in its
 //! `build.rs` has an arm here.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use dbme_api::{self as api, IpcError, IpcErrorKind, Reply};
@@ -39,13 +39,36 @@ fn options(session: &TestSession) -> Reply<VaultOptions> {
     Ok(VaultOptions { identity, clock })
 }
 
+/// A path without Windows' verbatim prefix: the session's folder is canonical and carries `\\?\`
+/// there, while a path a test typed into the UI does not.
+fn plain(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) => PathBuf::from(rest),
+        None => path.to_path_buf(),
+    }
+}
+
+/// Whether `path` is inside `dir`, with no `..` in it. Windows paths compare without case.
+fn is_inside(dir: &Path, path: &Path) -> bool {
+    if path
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return false;
+    }
+    let (dir, path) = (plain(dir), plain(path));
+    if cfg!(windows) {
+        let lower = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
+        lower(&path).starts_with(lower(&dir))
+    } else {
+        path.starts_with(&dir)
+    }
+}
+
 /// A vault path the UI sent, which must be inside the session's own folder.
 fn vault_path(session: &TestSession, path: &str) -> Reply<String> {
-    let inside = Path::new(path).starts_with(&session.dir)
-        && !Path::new(path)
-            .components()
-            .any(|c| matches!(c, std::path::Component::ParentDir));
-    if inside {
+    if is_inside(&session.dir, Path::new(path)) {
         Ok(path.to_owned())
     } else {
         Err(IpcError::new(
@@ -196,6 +219,43 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
             let dir = vault_path(session, &arg::<String>(args, "dir")?)?;
             ok(api::export_run(s, dir, arg(args, "full")?))
         }
+        "import_plan" => {
+            let sources: Vec<String> = arg(args, "sources")?;
+            let sources = sources
+                .iter()
+                .map(|path| vault_path(session, path))
+                .collect::<Reply<Vec<String>>>()?;
+            ok(api::import_plan(s, sources, arg(args, "options")?))
+        }
+        "import_apply" => ok(api::import_apply(s, arg(args, "plan")?)),
+        "provenance_list" => ok(api::provenance_list(s, arg(args, "objectId")?)),
         _ => Err(invalid(format!("unknown command {cmd:?}"))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_session_folder_check_sees_through_the_verbatim_prefix_and_refuses_dot_dot() {
+        let dir = if cfg!(windows) {
+            Path::new(r"\\?\C:\data\t-1")
+        } else {
+            Path::new("/data/t-1")
+        };
+        let inside = if cfg!(windows) {
+            r"c:\data\t-1\drop\a.csv"
+        } else {
+            "/data/t-1/drop/a.csv"
+        };
+        assert!(is_inside(dir, Path::new(inside)));
+        assert!(!is_inside(dir, Path::new("/data/t-2/a.csv")));
+        let escape = if cfg!(windows) {
+            r"C:\data\t-1\..\t-2\a.csv"
+        } else {
+            "/data/t-1/../t-2/a.csv"
+        };
+        assert!(!is_inside(dir, Path::new(escape)));
     }
 }

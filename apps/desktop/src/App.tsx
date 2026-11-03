@@ -5,6 +5,7 @@
  */
 import {
   commands,
+  events,
   startLiveRefresh,
   unwrap,
   useAncestors,
@@ -20,6 +21,7 @@ import {
   Button,
   Columns2,
   Dialog,
+  FolderInput,
   FolderSync,
   IconButton,
   PanelLeft,
@@ -35,6 +37,7 @@ import {
   CommandPalette,
   FilesDialog,
   HoldBanner,
+  ImportDialog,
   onActionError,
   ResultsView,
   Sidebar,
@@ -49,6 +52,8 @@ import { useShell } from "./store";
 
 const WIDE = "(min-width: 768px)";
 const SPLIT = "(min-width: 1100px)";
+/** One empty list, so a closed Import dialog's props do not change between renders. */
+const NO_PATHS: readonly string[] = [];
 
 export function App() {
   const client = useQueryClient();
@@ -123,12 +128,32 @@ function Shell() {
     setPalette,
     files,
     setFiles,
+    importing,
+    setImporting,
     results,
     showResults,
     setView,
   } = useShell();
   const topLevel = usePage({ kind: "children", parent: null }, MANUAL, 0, 1);
   const savedViews = useViews();
+
+  // Files dropped on the window open the Import dialog with their paths (M6 Decision 9).
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    void events.importDropped
+      .listen((event) => {
+        setImporting(event.payload);
+      })
+      .then((unlisten) => {
+        if (cancelled) unlisten();
+        else stop = unlisten;
+      });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, [setImporting]);
 
   // Open the first page when nothing is open yet.
   const first = topLevel.data?.[0]?.object.id ?? null;
@@ -176,6 +201,13 @@ function Shell() {
       label: "Files folder",
       run: () => {
         setFiles(true);
+      },
+    },
+    {
+      id: "import",
+      label: "Import files",
+      run: () => {
+        setImporting([]);
       },
     },
     ...(splitFits
@@ -231,6 +263,13 @@ function Shell() {
             }}
           />
         ) : null}
+        <IconButton
+          label="Import"
+          icon={FolderInput}
+          onClick={() => {
+            setImporting([]);
+          }}
+        />
         <FilesButton
           onClick={() => {
             setFiles(true);
@@ -298,6 +337,15 @@ function Shell() {
         open={files}
         onClose={() => {
           setFiles(false);
+        }}
+        onOpen={select}
+      />
+      <ImportDialog
+        open={importing !== null}
+        paths={importing ?? NO_PATHS}
+        parent={selected}
+        onClose={() => {
+          setImporting(null);
         }}
         onOpen={select}
       />

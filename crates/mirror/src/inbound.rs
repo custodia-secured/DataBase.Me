@@ -50,6 +50,168 @@ pub struct Inbound {
     pub conflicts: Vec<Id>,
     /// The `bulk_change_hold` entry, when the batch was held and nothing applied.
     pub held: Option<Id>,
+    /// In an import (`Mirror::import_from`): what would have been inbox entries, as text.
+    pub warnings: Vec<String>,
+    /// In an import: every object a file was taken into, with the file's path in the folder.
+    pub files: Vec<(Id, String)>,
+}
+
+/// The state of a folder import (`Mirror::import_from`, M6): the import's own rows, which are
+/// dropped when it ends, the parent its top-level files land under, and the inbox entries as
+/// warnings.
+#[derive(Debug, Default)]
+pub struct ImportMode {
+    parent: Option<Id>,
+    states: HashMap<Id, MirrorState>,
+    by_key: HashMap<String, Id>,
+    warnings: Vec<String>,
+}
+
+/// One transaction: an ordinary undo step while importing, the files folder's external one
+/// otherwise (M5 Decisions 1 and 2).
+fn write<T>(
+    importing: bool,
+    vault: &mut Vault,
+    change: impl FnOnce(&mut dbme_store::Txn<'_>) -> dbme_store::Result<T>,
+) -> dbme_store::Result<(T, Option<dbme_store::Committed>)> {
+    if importing {
+        vault.transact(change)
+    } else {
+        vault.transact_external(change)
+    }
+}
+
+impl<F: Fs> Mirror<F> {
+    /// Imports the folder into the vault (M6, ADR-0026): every file is taken in as the files
+    /// folder would take it, with the guard off, the top-level files under `parent`, and the
+    /// vault's own files folder untouched: the bookkeeping rows live only for the run and no
+    /// `.md` is ever written back to `self.fs`. A file whose `id:` the vault already has updates
+    /// that object (M5 Decision 13); every write is an ordinary undo step; what would have been
+    /// an inbox entry is a warning on the report. `only` limits the run to those paths.
+    pub fn import_from(
+        &mut self,
+        vault: &mut Vault,
+        parent: Option<Id>,
+        only: Option<&[String]>,
+    ) -> Result<Inbound> {
+        if let Some(parent) = parent {
+            let live = vault
+                .read()
+                .object(parent)
+                .map(|o| o.deleted_at.is_none())
+                .unwrap_or(false);
+            if !live {
+                return Err(StoreError::Rule(format!("{parent} is not a live object")).into());
+            }
+        }
+        self.import = Some(ImportMode {
+            parent,
+            ..ImportMode::default()
+        });
+        let result = (|| {
+            if let Ok(bytes) = self.fs.read(crate::SCHEMA_FILE)
+                && let Ok(json) = serde_json::from_slice::<Value>(&bytes)
+                && let Ok(schema) = Schema::from_json(&json)
+            {
+                self.adopt_schema(vault, &schema)?;
+            }
+            let events: Vec<FileEvent> = self
+                .fs
+                .list()
+                .map_err(|e| MirrorError::io("listing", "", e))?
+                .into_iter()
+                .filter(|e| !ignored(&e.rel_path))
+                .filter(|e| only.is_none_or(|paths| paths.contains(&e.rel_path)))
+                .map(|e| FileEvent::Created(e.rel_path))
+                .collect();
+            self.skip_guard = true;
+            let result = self.pump_in(vault, events);
+            self.skip_guard = false;
+            result
+        })();
+        let mode = self.import.take().unwrap_or_default();
+        let mut report = result?;
+        report.warnings = mode.warnings;
+        let mut files: Vec<(Id, String)> = mode
+            .states
+            .into_values()
+            .map(|s| (s.object_id, s.rel_path))
+            .collect();
+        files.sort_by(|a, b| a.1.cmp(&b.1));
+        report.files = files;
+        Ok(report)
+    }
+
+    fn importing(&self) -> bool {
+        self.import.is_some()
+    }
+
+    /// Every bookkeeping row: the import's own while importing, the vault's otherwise.
+    fn states_all(&self, vault: &Vault) -> Result<Vec<MirrorState>> {
+        match &self.import {
+            Some(mode) => Ok(mode.states.values().cloned().collect()),
+            None => Ok(vault.mirror_states(None)?),
+        }
+    }
+
+    fn state_of(&self, vault: &Vault, object_id: Id) -> Result<Option<MirrorState>> {
+        match &self.import {
+            Some(mode) => Ok(mode.states.get(&object_id).cloned()),
+            None => Ok(vault.mirror_state(object_id)?),
+        }
+    }
+
+    fn state_by_key(&self, vault: &Vault, key: &str) -> Result<Option<MirrorState>> {
+        match &self.import {
+            Some(mode) => Ok(mode
+                .by_key
+                .get(key)
+                .and_then(|id| mode.states.get(id))
+                .cloned()),
+            None => Ok(vault.mirror_state_by_path_key(key)?),
+        }
+    }
+
+    fn state_set(&mut self, vault: &mut Vault, state: &MirrorState) -> Result<()> {
+        match &mut self.import {
+            Some(mode) => {
+                if let Some(old) = mode.states.insert(state.object_id, state.clone()) {
+                    mode.by_key.remove(&old.path_key);
+                }
+                mode.by_key.insert(state.path_key.clone(), state.object_id);
+                Ok(())
+            }
+            None => Ok(vault.mirror_state_set(state)?),
+        }
+    }
+
+    fn state_remove(&mut self, vault: &mut Vault, object_id: Id) -> Result<bool> {
+        match &mut self.import {
+            Some(mode) => Ok(mode.states.remove(&object_id).is_some_and(|old| {
+                mode.by_key.remove(&old.path_key);
+                true
+            })),
+            None => Ok(vault.mirror_state_remove(object_id)?),
+        }
+    }
+
+    /// An inbox entry, or, while importing, a warning (the entry's id is then a fresh one that
+    /// names nothing in the inbox).
+    fn conflict(&mut self, vault: &mut Vault, new: NewConflict) -> Result<Id> {
+        let now = self.clock.now_ms();
+        match &mut self.import {
+            Some(mode) => {
+                let kind = new
+                    .kind
+                    .map_or("conflict".to_owned(), |k| k.as_str().to_owned());
+                let path = new.rel_path.as_deref().unwrap_or("");
+                mode.warnings
+                    .push(format!("{path}: {kind}: {}", new.details));
+                Ok(self.ids.next(now)?)
+            }
+            None => Ok(vault.conflict_add(new)?),
+        }
+    }
 }
 
 /// Where a file's identity came from.
@@ -109,7 +271,7 @@ impl<F: Fs> Mirror<F> {
         removed.retain(|p| !changed.contains(p) && self.fs.stat(p).ok().flatten().is_none());
         changed.retain(|p| self.fs.stat(p).ok().flatten().is_some_and(|s| !s.is_dir));
 
-        let states = vault.mirror_states(None)?;
+        let states = self.states_all(vault)?;
         let tracked: HashMap<String, MirrorState> = states
             .iter()
             .filter(|s| has_file(s))
@@ -176,7 +338,7 @@ impl<F: Fs> Mirror<F> {
             let title = stem_of(rel_path);
             let parent = self.parent_for(vault, rel_path, &tracked)?;
             let created = parsed.doc.front.created;
-            vault.transact_external(|txn| {
+            write(self.importing(), vault, |txn| {
                 txn.create_object(dbme_store::NewObject {
                     id: Some(id),
                     created_at: created,
@@ -286,7 +448,7 @@ impl<F: Fs> Mirror<F> {
             if state.state == MirrorFileState::Held {
                 state.state = MirrorFileState::Synced;
             }
-            vault.mirror_state_set(&state)?;
+            self.state_set(vault, &state)?;
             report.echoes.push(rel_path.to_owned());
             return Ok(());
         }
@@ -295,12 +457,15 @@ impl<F: Fs> Mirror<F> {
         if at_path.is_none()
             && let Some(found) = self.cloud_conflict_of(rel_path)
         {
-            let id = vault.conflict_add(NewConflict {
-                rel_path: Some(rel_path.to_owned()),
-                kind: Some(ConflictKind::CloudConflictFile),
-                details: serde_json::to_value(&found).unwrap_or(Value::Null),
-                ..NewConflict::default()
-            })?;
+            let id = self.conflict(
+                vault,
+                NewConflict {
+                    rel_path: Some(rel_path.to_owned()),
+                    kind: Some(ConflictKind::CloudConflictFile),
+                    details: serde_json::to_value(&found).unwrap_or(Value::Null),
+                    ..NewConflict::default()
+                },
+            )?;
             report.conflicts.push(id);
             return Ok(());
         }
@@ -332,7 +497,7 @@ impl<F: Fs> Mirror<F> {
         let identity = match parsed.doc.front.id {
             Some(id) => match vault.read().object(id) {
                 Ok(row) => {
-                    let own = vault.mirror_state(id)?;
+                    let own = self.state_of(vault, id)?;
                     let other_live_file = own.as_ref().is_some_and(|s| {
                         s.path_key != key
                             && matches!(
@@ -346,19 +511,22 @@ impl<F: Fs> Mirror<F> {
                     });
                     if other_live_file && row.deleted_at.is_none() {
                         // Two live files claim one object: the newcomer is re-issued.
-                        let conflict = vault.conflict_add(NewConflict {
-                            object_id: Some(id),
-                            rel_path: Some(rel_path.to_owned()),
-                            kind: Some(ConflictKind::DuplicateId),
-                            details: json!({"also_at": own.as_ref().map(|s| &s.rel_path)}),
-                            ..NewConflict::default()
-                        })?;
+                        let conflict = self.conflict(
+                            vault,
+                            NewConflict {
+                                object_id: Some(id),
+                                rel_path: Some(rel_path.to_owned()),
+                                kind: Some(ConflictKind::DuplicateId),
+                                details: json!({"also_at": own.as_ref().map(|s| &s.rel_path)}),
+                                ..NewConflict::default()
+                            },
+                        )?;
                         report.conflicts.push(conflict);
                         from_state = None;
                         Identity::New
                     } else {
                         if row.deleted_at.is_some() {
-                            vault.transact_external(|txn| txn.restore_object(id))?;
+                            write(self.importing(), vault, |txn| txn.restore_object(id))?;
                         }
                         if let Some(s) = own.as_ref().filter(|s| s.path_key != key) {
                             // The file moved: the old path is this object's no more.
@@ -423,7 +591,9 @@ impl<F: Fs> Mirror<F> {
                     None => FileDoc::default(),
                 };
                 let ours = doc_of(&vault.read(), &row, schema, resolver)?;
-                if !self.adopted.contains(&id) {
+                // An import takes the file as it is: the folder is the source, not a second
+                // editor to merge with (M6 Decision 16).
+                if !self.adopted.contains(&id) && !self.importing() {
                     // `created` and `updated` are informational on the way in (FORMAT.md §6.2):
                     // the sides are aligned so a timestamp never counts as a conflict.
                     let mut base = base;
@@ -454,7 +624,7 @@ impl<F: Fs> Mirror<F> {
                 };
                 let doc = theirs.clone();
                 let tags = tags.clone();
-                let (applied, _) = vault.transact_external(|txn| {
+                let (applied, _) = write(self.importing(), vault, |txn| {
                     apply::apply_doc(txn, id, &placement, &doc, &tags, schema)
                 })?;
                 rejected = self.note_invalid(vault, rel_path, Some(id), &applied, report)?;
@@ -494,7 +664,7 @@ impl<F: Fs> Mirror<F> {
                 let doc = theirs.clone();
                 let tags = tags.clone();
                 let stem = stem.clone();
-                let ((id, applied), _) = vault.transact_external(|txn| {
+                let ((id, applied), _) = write(self.importing(), vault, |txn| {
                     apply::create_from_doc(txn, adopt, &stem, parent, &doc, &tags, schema)
                 })?;
                 rejected = self.note_invalid(vault, rel_path, Some(id), &applied, report)?;
@@ -509,28 +679,34 @@ impl<F: Fs> Mirror<F> {
                 self.conflict_copy(vault, object_id, &stem, &bytes, &file_doc, &tags, schema)?;
             // Made by an external transaction, so nothing marked it: the copy needs its own file.
             vault.mirror_dirty_mark(&[copy])?;
-            let id = vault.conflict_add(NewConflict {
-                object_id: Some(object_id),
-                rel_path: Some(rel_path.to_owned()),
-                kind: Some(ConflictKind::EditEdit),
-                details: json!({
-                    "sites": conflicts.iter().map(|c| json!({
-                        "site": format!("{:?}", c.site),
-                        "base": c.base, "ours": c.ours, "theirs": c.theirs, "diff3": c.diff3,
-                    })).collect::<Vec<_>>(),
-                }),
-                conflict_copy_id: Some(copy),
-            })?;
+            let id = self.conflict(
+                vault,
+                NewConflict {
+                    object_id: Some(object_id),
+                    rel_path: Some(rel_path.to_owned()),
+                    kind: Some(ConflictKind::EditEdit),
+                    details: json!({
+                        "sites": conflicts.iter().map(|c| json!({
+                            "site": format!("{:?}", c.site),
+                            "base": c.base, "ours": c.ours, "theirs": c.theirs, "diff3": c.diff3,
+                        })).collect::<Vec<_>>(),
+                    }),
+                    conflict_copy_id: Some(copy),
+                },
+            )?;
             report.conflicts.push(id);
         }
         if missing_id {
-            let id = vault.conflict_add(NewConflict {
-                object_id: Some(object_id),
-                rel_path: Some(rel_path.to_owned()),
-                kind: Some(ConflictKind::MissingId),
-                details: json!({"written_back": true}),
-                ..NewConflict::default()
-            })?;
+            let id = self.conflict(
+                vault,
+                NewConflict {
+                    object_id: Some(object_id),
+                    rel_path: Some(rel_path.to_owned()),
+                    kind: Some(ConflictKind::MissingId),
+                    details: json!({"written_back": true}),
+                    ..NewConflict::default()
+                },
+            )?;
             report.conflicts.push(id);
         }
 
@@ -540,20 +716,23 @@ impl<F: Fs> Mirror<F> {
         let write_back = missing_id || ids_assigned || rejected || !conflicts.is_empty();
         if let Some(old) = from_state.as_ref().filter(|s| s.path_key != key) {
             resolver.forget(old.object_id);
-            let _ = vault.mirror_state_remove(old.object_id);
+            let _ = self.state_remove(vault, old.object_id);
         }
-        vault.mirror_state_set(&MirrorState {
-            object_id,
-            rel_path: rel_path.to_owned(),
-            path_key: key,
-            last_hash: Some(hash),
-            base_text: Some(text.to_owned()),
-            synced_seq: Some(latest_seq(vault)?),
-            synced_at: Some(now),
-            file_size: stat.map(|s| s.size as i64),
-            file_mtime_ms: stat.map(|s| s.mtime_ms),
-            state: MirrorFileState::Synced,
-        })?;
+        self.state_set(
+            vault,
+            &MirrorState {
+                object_id,
+                rel_path: rel_path.to_owned(),
+                path_key: key,
+                last_hash: Some(hash),
+                base_text: Some(text.to_owned()),
+                synced_seq: Some(latest_seq(vault)?),
+                synced_at: Some(now),
+                file_size: stat.map(|s| s.size as i64),
+                file_mtime_ms: stat.map(|s| s.mtime_ms),
+                state: MirrorFileState::Synced,
+            },
+        )?;
         resolver.add(object_id, rel_path);
         if write_back {
             vault.mirror_dirty_mark(&[object_id])?;
@@ -576,7 +755,7 @@ impl<F: Fs> Mirror<F> {
             let key = path_key(&format!("{d}.md"));
             let owner = match tracked.get(&key) {
                 Some(state) => Some(state.clone()),
-                None => vault.mirror_state_by_path_key(&key)?,
+                None => self.state_by_key(vault, &key)?,
             };
             if let Some(state) = owner {
                 let live = vault
@@ -590,7 +769,8 @@ impl<F: Fs> Mirror<F> {
             }
             dir = d.rsplit_once('/').map(|(up, _)| up);
         }
-        Ok(None)
+        // The top level: the vault's, or the import's parent.
+        Ok(self.import.as_ref().and_then(|mode| mode.parent))
     }
 
     /// The cloud drive's conflict this file's name shows, when its original sits beside it.
@@ -614,7 +794,7 @@ impl<F: Fs> Mirror<F> {
 
     /// A file that could not be read: an inbox entry, and the object's writes are held.
     fn parse_error(
-        &self,
+        &mut self,
         vault: &mut Vault,
         rel_path: &str,
         state: Option<&MirrorState>,
@@ -625,28 +805,31 @@ impl<F: Fs> Mirror<F> {
         if let Some(state) = state {
             let mut held = state.clone();
             held.state = MirrorFileState::Held;
-            vault.mirror_state_set(&held)?;
+            self.state_set(vault, &held)?;
         }
         // A file with no row is reported again by every rescan: one open entry per path.
-        if let Some(open) = vault
-            .conflicts(true)?
-            .into_iter()
-            .find(|c| c.kind == ConflictKind::ParseError && c.rel_path.as_deref() == Some(rel_path))
+        if !self.importing()
+            && let Some(open) = vault.conflicts(true)?.into_iter().find(|c| {
+                c.kind == ConflictKind::ParseError && c.rel_path.as_deref() == Some(rel_path)
+            })
         {
             return Ok(open.id);
         }
-        Ok(vault.conflict_add(NewConflict {
-            object_id: state.map(|s| s.object_id),
-            rel_path: Some(rel_path.to_owned()),
-            kind: Some(ConflictKind::ParseError),
-            details: json!({"line": line, "col": col, "message": message}),
-            ..NewConflict::default()
-        })?)
+        self.conflict(
+            vault,
+            NewConflict {
+                object_id: state.map(|s| s.object_id),
+                rel_path: Some(rel_path.to_owned()),
+                kind: Some(ConflictKind::ParseError),
+                details: json!({"line": line, "col": col, "message": message}),
+                ..NewConflict::default()
+            },
+        )
     }
 
     /// Inbox entries for values the file held that do not fit. Returns whether there were any.
     fn note_invalid(
-        &self,
+        &mut self,
         vault: &mut Vault,
         rel_path: &str,
         object_id: Option<Id>,
@@ -673,13 +856,16 @@ impl<F: Fs> Mirror<F> {
         if details.is_empty() {
             return Ok(false);
         }
-        let id = vault.conflict_add(NewConflict {
-            object_id,
-            rel_path: Some(rel_path.to_owned()),
-            kind: Some(ConflictKind::InvalidValue),
-            details: Value::Array(details),
-            ..NewConflict::default()
-        })?;
+        let id = self.conflict(
+            vault,
+            NewConflict {
+                object_id,
+                rel_path: Some(rel_path.to_owned()),
+                kind: Some(ConflictKind::InvalidValue),
+                details: Value::Array(details),
+                ..NewConflict::default()
+            },
+        )?;
         report.conflicts.push(id);
         Ok(true)
     }
@@ -709,7 +895,7 @@ impl<F: Fs> Mirror<F> {
         let mut next = || self.ids.next(now).unwrap_or_else(|_| Id::from_parts(0, 0));
         files::assign_ids(&mut doc, &mut next);
         let hash = blob.hash.clone();
-        let ((copy, _), _) = vault.transact_external(|txn| {
+        let ((copy, _), _) = write(self.importing(), vault, |txn| {
             let (copy, applied) =
                 apply::create_from_doc(txn, None, &title, parent, &doc, tags, schema)?;
             txn.attach(NewAttachment {
@@ -736,7 +922,7 @@ impl<F: Fs> Mirror<F> {
         let row = match vault.read().object(id) {
             Ok(row) => row,
             Err(StoreError::NotFound { .. }) => {
-                vault.mirror_state_remove(id)?;
+                self.state_remove(vault, id)?;
                 return Ok(());
             }
             Err(e) => return Err(e.into()),
@@ -750,7 +936,7 @@ impl<F: Fs> Mirror<F> {
                 .collect();
             let grandparent = row.parent_id;
             let moved = children.clone();
-            vault.transact_external(|txn| {
+            write(self.importing(), vault, |txn| {
                 for child in children {
                     txn.move_object(child, grandparent, Position::Last)?;
                 }
@@ -761,12 +947,15 @@ impl<F: Fs> Mirror<F> {
             vault.mirror_dirty_mark(&moved)?;
         }
         let target = format!("{TRASH_DIR}/{id}.md");
-        vault.mirror_state_set(&MirrorState {
-            rel_path: target.clone(),
-            path_key: path_key(&target),
-            state: MirrorFileState::Trashed,
-            ..state.clone()
-        })?;
+        self.state_set(
+            vault,
+            &MirrorState {
+                rel_path: target.clone(),
+                path_key: path_key(&target),
+                state: MirrorFileState::Trashed,
+                ..state.clone()
+            },
+        )?;
         // The children's files now sit in a folder named after a trashed object; they are dirty
         // from the move and `pump_out` relocates them.
         report.trashed.push(id);
@@ -891,7 +1080,7 @@ impl<F: Fs> Mirror<F> {
         if missing_types.is_empty() && missing_fields.is_empty() {
             return Ok(());
         }
-        vault.transact_external(|txn| {
+        write(self.importing(), vault, |txn| {
             for entry in missing_types {
                 let type_id = txn.create_type(dbme_store::NewType {
                     name: entry.ty.name.clone(),
@@ -958,7 +1147,7 @@ impl<F: Fs> Mirror<F> {
                 let attachments = vault.read().attachments(id)?;
                 let blocks = vault.read().blocks(id)?;
                 let new_hash = blob.hash.clone();
-                vault.transact_external(|txn| {
+                write(self.importing(), vault, |txn| {
                     for a in attachments {
                         if a.role == AttachmentRole::Original {
                             txn.detach(id, a.blob_hash, AttachmentRole::Original)?;
@@ -989,7 +1178,7 @@ impl<F: Fs> Mirror<F> {
                     .map(|t| t.id);
                 let new_hash = blob.hash.clone();
                 let alt = title.clone();
-                let (id, _) = vault.transact_external(|txn| {
+                let (id, _) = write(self.importing(), vault, |txn| {
                     let id = txn.create_object(dbme_store::NewObject {
                         title: title.clone(),
                         parent_id: parent,
@@ -1019,19 +1208,22 @@ impl<F: Fs> Mirror<F> {
                 id
             }
         };
-        vault.mirror_state_set(&MirrorState {
-            object_id,
-            rel_path: rel_path.to_owned(),
-            path_key: path_key(rel_path),
-            last_hash: Some(hash),
-            base_text: None,
-            synced_seq: Some(latest_seq(vault)?),
-            synced_at: Some(now),
-            file_size: stat.map(|s| s.size as i64),
-            file_mtime_ms: stat.map(|s| s.mtime_ms),
-            // Excluded with a real path: the file is the object's own, and no `.md` is written.
-            state: MirrorFileState::Excluded,
-        })?;
+        self.state_set(
+            vault,
+            &MirrorState {
+                object_id,
+                rel_path: rel_path.to_owned(),
+                path_key: path_key(rel_path),
+                last_hash: Some(hash),
+                base_text: None,
+                synced_seq: Some(latest_seq(vault)?),
+                synced_at: Some(now),
+                file_size: stat.map(|s| s.size as i64),
+                file_mtime_ms: stat.map(|s| s.mtime_ms),
+                // Excluded with a real path: the file is the object's own, and no `.md` is written.
+                state: MirrorFileState::Excluded,
+            },
+        )?;
         if at_path.is_some() {
             report.applied.push(object_id);
         }

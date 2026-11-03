@@ -4,8 +4,10 @@ import {
   commands,
   keys,
   unwrap,
+  useAttachments,
   useBacklinks,
   useObject,
+  useProvenance,
   useSummary,
   useTypes,
   type FieldRow,
@@ -19,6 +21,7 @@ import { useId, useState, type KeyboardEvent } from "react";
 import { actions, attempt } from "../actions";
 import { BlockEditor } from "../editor/BlockEditor";
 import { FieldEditor } from "../fields";
+import { originLine, sizeOf } from "../import/origin";
 import type { ViewProps } from "../registry";
 import { displayValue, isEditable } from "../values";
 
@@ -32,6 +35,7 @@ export function DocumentView({ objectId, onOpen }: ViewProps) {
     <article className="dbme-document" aria-label={title}>
       <TitleField object={object.data} />
       <TypesLine objectId={objectId} />
+      <Origin objectId={objectId} />
       <Properties object={object.data} />
       <BlockEditor objectId={objectId} onOpen={onOpen} label={`Text of ${title}`} />
       <Backlinks objectId={objectId} onOpen={onOpen} />
@@ -126,6 +130,40 @@ function TypesLine({ objectId }: { objectId: Id }) {
             </option>
           ))}
       </select>
+    </div>
+  );
+}
+
+/**
+ * Where the object came from (M6): one line per provenance row, and the files it carries. An
+ * object made in the app has neither, and shows nothing here.
+ */
+function Origin({ objectId }: { objectId: Id }) {
+  const provenance = useProvenance(objectId);
+  const attachments = useAttachments(objectId);
+  const rows = provenance.data ?? [];
+  const files = attachments.data ?? [];
+  if (rows.length === 0 && files.length === 0) return null;
+  return (
+    <div className="dbme-origin">
+      {rows.map((row) => (
+        <p key={row.id} className="dbme-origin__line dbme-muted">
+          {originLine(row)}
+        </p>
+      ))}
+      {files.length > 0 ? (
+        <ul className="dbme-origin__files" aria-label="Attachments">
+          {files.map((file) => (
+            <li key={`${file.blob_hash}-${file.role}`} className="dbme-chip">
+              <span>{file.filename ?? file.blob_hash.slice(0, 8)}</span>
+              <span className="dbme-muted">
+                {file.role === "original" ? "" : `${file.role}, `}
+                {sizeOf(file.blob_size)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

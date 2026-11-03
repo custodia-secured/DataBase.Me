@@ -15,7 +15,7 @@ use dbme_core::block::{self, MENTIONS};
 use dbme_core::chain::OpEntry;
 use dbme_core::model::{
     AttachmentRole, AttachmentRow, BlockRow, FieldKind, FieldRow, ObjectRow, ObjectTypeRow, Props,
-    RelationRow, Sensitivity, TypeRow, ViewRow,
+    ProvenanceRow, RelationRow, Sensitivity, TypeRow, ViewRow,
 };
 use dbme_core::op::{Action, Entity, Op, OpBody, OpKind, Row, RowKey};
 use dbme_core::query::Query;
@@ -171,6 +171,27 @@ pub struct NewAttachment {
     pub filename: Option<String>,
     #[serde(default)]
     pub mime: Option<String>,
+}
+
+/// Where an object came from: the columns of `provenance` the caller supplies (ADR-0026). The
+/// row's `id` and `created_at` are the transaction's.
+#[allow(missing_docs, reason = "the columns of `provenance`")]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct NewProvenance {
+    pub object_id: Id,
+    pub source_kind: String,
+    #[serde(default)]
+    pub source_uri: Option<String>,
+    #[serde(default)]
+    pub import_run_id: Option<Id>,
+    #[serde(default)]
+    pub original_blob: Option<ContentHash>,
+    pub extractor: String,
+    pub extractor_version: String,
+    pub confidence: f64,
+    pub accepted: bool,
 }
 
 fn kind(entity: Entity, action: Action) -> Result<OpKind> {
@@ -331,7 +352,9 @@ impl<'v> Txn<'v> {
         let action = op.kind().action();
         match (entity, op.body()) {
             (Entity::Type | Entity::Field, _) => self.full_rewrite = true,
-            (Entity::View, _) => {}
+            // Neither is in a file: views are the app's, and the files folder carries no
+            // provenance (M5 Decision 1).
+            (Entity::View | Entity::Provenance, _) => {}
             (Entity::Object, _) => {
                 let id = op.key().target_id();
                 self.mirror_touched.insert(id);
@@ -790,6 +813,9 @@ impl<'v> Txn<'v> {
                 for relation in t.read().relations_touching(object.id)? {
                     t.apply(Op::delete(Row::Relation(relation)))?;
                 }
+                for provenance in t.read().provenance_of(object.id)? {
+                    t.apply(Op::delete(Row::Provenance(provenance)))?;
+                }
                 for attachment in t.read().attachments(object.id)? {
                     t.apply(Op::delete(Row::Attachment(attachment)))?;
                 }
@@ -1220,6 +1246,37 @@ impl<'v> Txn<'v> {
                 mime: new.mime,
                 blob_size: i64::try_from(size).map_err(|_| rule("the blob is too large"))?,
             })))
+        })
+    }
+
+    // Provenance.
+
+    /// Records where a live object came from (ADR-0026). `original_blob`, when given, must be in
+    /// the blob store, as an attachment's blob must. Returns the row's ID. The row is never
+    /// updated; it goes when its object is deleted for good, and with its own transaction's undo.
+    pub fn add_provenance(&mut self, new: NewProvenance) -> Result<Id> {
+        self.guard(|t| {
+            t.live_object(new.object_id)?;
+            if let Some(hash) = &new.original_blob
+                && t.ctx.blobs.size(hash)?.is_none()
+            {
+                return Err(StoreError::MissingBlob(hash.clone()));
+            }
+            let id = t.ctx.ids.next(t.ts)?;
+            t.apply(Op::create(Row::Provenance(ProvenanceRow {
+                id,
+                object_id: new.object_id,
+                source_kind: new.source_kind,
+                source_uri: new.source_uri,
+                import_run_id: new.import_run_id,
+                original_blob: new.original_blob,
+                extractor: new.extractor,
+                extractor_version: new.extractor_version,
+                confidence: new.confidence,
+                accepted: new.accepted,
+                created_at: t.ts,
+            })))?;
+            Ok(id)
         })
     }
 

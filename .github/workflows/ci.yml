@@ -5,18 +5,20 @@
 #   licences  cargo-deny and the JS licence check (ADR-0009)
 #   desktop   on Windows, macOS and Linux: rustfmt, clippy -D warnings, cargo test, release build,
 #             then launch the built app and wait for its UI to render and pass its IPC checks
-#   coverage  at least 90% of lines in dbme-core, dbme-store, dbme-mirror and dbme-export are
-#             tested by their own tests (M1 acceptance; M5 Decision 24)
+#   coverage  at least 90% of lines in dbme-core, dbme-store, dbme-mirror, dbme-export and
+#             dbme-ingest are tested by their own tests (M1 acceptance; M5 Decision 24; M6 Task 3)
 #   mobile    dbme-core and dbme-store build for iOS and Android (M1 acceptance)
 #   budget    10,000 objects created, edited, deleted and undone in under 2 s, release build (M1);
 #             10,000 random interleavings of app and file edits lose nothing (M5)
 #   mirror    the files-folder budgets, release: an edit reaches its file and a file reaches the
 #   budget    app, each under 2 s with 10,000 pages; gated on Ubuntu, printed on macOS (M5)
 #   watcher   what `notify` reports on each OS, printed as the record; never blocks (M5)
+#   ingest    the import budgets, release, printed and not gated: 10,000 CSV rows, a 100-page
+#   budget    PDF, a 12-megapixel thumbnail (M6 Decision 10)
 #   e2e       every view in Edge (for WebView2) and WebKit, at desktop and phone sizes, with axe
 #             and the M2 budgets: a 100k-row table at 60 fps, typing under 16 ms (ADR-0018); the
 #             files folder both ways through "Sync now" (M5 Decision 25)
-# Nightly fuzzing of the parser is .github/workflows/fuzz.yml.
+# Nightly fuzzing of the parser and the CSV and PDF importers is .github/workflows/fuzz.yml.
 name: CI
 
 on:
@@ -166,7 +168,7 @@ jobs:
         run: node scripts/smoke-launch.mjs target/release/dbme-desktop
 
   coverage:
-    name: Coverage (core, store, mirror, export; 90% of lines)
+    name: Coverage (core, store, mirror, export, ingest; 90% of lines)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -195,6 +197,10 @@ jobs:
         run: >-
           cargo llvm-cov --locked -p dbme-export --summary-only --fail-under-lines 90
           --ignore-filename-regex 'crates/(core|store|mirror)/'
+      - name: dbme-ingest
+        run: >-
+          cargo llvm-cov --locked -p dbme-ingest --summary-only --fail-under-lines 90
+          --ignore-filename-regex 'crates/(core|store|mirror|export)/'
 
   mobile:
     name: Mobile build (${{ matrix.target }})
@@ -266,6 +272,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: An edit reaches its file, a file reaches the app, each under 2 s with 10,000 pages
         run: cargo test --locked --release -p dbme-mirror --test budget -- --nocapture
+
+  ingest-budget:
+    name: Import budgets (release, informational)
+    runs-on: ubuntu-latest
+    # The brief names no import budget (M6 Decision 10): the three figures are printed for the
+    # record and gate nothing; the test asserts what was made, not the time.
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: 10,000 CSV rows, a 100-page PDF, a 12-megapixel thumbnail
+        run: cargo test --locked --release -p dbme-ingest --test budget -- --nocapture
 
   watcher-probes:
     name: Watcher probes (${{ matrix.os }})

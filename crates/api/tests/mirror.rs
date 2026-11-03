@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use dbme_api::{self as api, HoldChoice, IpcErrorKind, MirrorStatus, Session};
+use dbme_core::model::AttachmentRole;
 use dbme_core::{Id, SystemClock};
 use dbme_store::{ConflictKind, Identity, NewObject, VaultOptions};
 
@@ -119,6 +120,30 @@ fn the_folder_is_enabled_synced_both_ways_and_disabled() {
     let export = dir.path().join("export");
     let report = api::export_run(&session, export.display().to_string(), true).unwrap();
     assert!(report.ops.is_some() && export.join("ops.jsonl").is_file());
+
+    // The drop zone's handoff (M6 Task 7): a photo copied into the folder becomes an object with
+    // the file attached, and the image importer adds its thumbnail and what the EXIF says.
+    let photo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/images/photo.jpg");
+    fs::copy(&photo, folder.join("photo.jpg")).unwrap();
+    let sync = api::mirror_sync_now(&session).unwrap();
+    assert_eq!(sync.created, 1, "{sync:?}");
+    let hits = api::object_search(&session, "photo", 5).unwrap();
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    let attachments = api::attachments_list(&session, hits[0].object.id).unwrap();
+    assert!(
+        attachments
+            .iter()
+            .any(|a| a.role == AttachmentRole::Original)
+            && attachments
+                .iter()
+                .any(|a| a.role != AttachmentRole::Original),
+        "the original and a derived thumbnail: {attachments:?}"
+    );
+    let object = api::object_get(&session, hits[0].object.id).unwrap();
+    assert!(
+        object.captured_at.is_some(),
+        "the EXIF date reached the object: {object:?}"
+    );
 
     // Off: the files stay, and the status says so.
     let status = api::mirror_disable(&session).unwrap();

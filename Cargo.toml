@@ -7,6 +7,7 @@ members = [
   "crates/core",
   "crates/e2e-server",
   "crates/export",
+  "crates/ingest",
   "crates/mirror",
   "crates/store",
 ]
@@ -24,22 +25,33 @@ publish = false
 dbme-api = { path = "crates/api" }
 dbme-core = { path = "crates/core" }
 dbme-export = { path = "crates/export" }
+dbme-ingest = { path = "crates/ingest" }
 dbme-mirror = { path = "crates/mirror" }
 dbme-store = { path = "crates/store" }
 
 base64 = "0.23"
 blake3 = "1.8"
+# The importers (ADR-0026): pure Rust parsers with no C and no platform code, so dbme-ingest can
+# follow dbme-core to iOS and Android (M14). calamine without `dates`, whose chrono reads the
+# system clock; image with the decoders the drop zone meets and without rayon, since a thumbnail
+# is one image at a time; kamadak-exif is used as `exif`.
+calamine = { version = "0.38", default-features = false }
 clap = { version = "4.6", features = ["derive"] }
+csv = "1.4"
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 # The files folder's format (ADR-0006): pure Rust with no C or platform code, since dbme-core
 # cross-compiles for iOS and Android. diffy merges inside one block; pulldown-cmark parses the
 # body without its getopts and HTML defaults; saphyr reads and writes the frontmatter.
 diffy = "0.5"
 getrandom = "0.4"
+image = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
+infer = "0.22"
+kamadak-exif = "0.6"
 # The watcher behind the files folder (ADR-0006). Desktop only, in crates/mirror, never in
 # dbme-core. notify is CC0-1.0: see the exception in deny.toml and the row in ADR-0009.
 notify = "8.2"
 notify-debouncer-full = "0.7"
+pdf-extract = "0.12"
 proptest = "1.12"
 pulldown-cmark = { version = "0.13", default-features = false }
 rusqlite = { version = "0.41", features = ["bundled"] }

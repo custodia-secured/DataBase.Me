@@ -6,6 +6,7 @@
  */
 import { keepPreviousData, useQuery, type QueryClient } from "@tanstack/react-query";
 import type {
+  AttachmentRow_Serialize,
   Backlink_Serialize,
   BlockRow_Serialize,
   Conflict_Serialize,
@@ -16,6 +17,7 @@ import type {
   ObjectRow_Serialize,
   ObjectSummary_Serialize,
   ObjectTree_Serialize,
+  ProvenanceRow_Serialize,
   Query_Deserialize,
   SearchHit_Serialize,
   Sort,
@@ -52,6 +54,8 @@ export const keys = {
   view: (id: Id) => [VAULT, "view", id] as const,
   mirror: () => [VAULT, "mirror"] as const,
   conflicts: (openOnly: boolean) => [VAULT, "conflicts", openOnly] as const,
+  provenance: (id: Id) => [VAULT, "provenance", id] as const,
+  attachments: (id: Id) => [VAULT, "attachments", id] as const,
 };
 
 /** Blobs never change, so their key is outside {@link VAULT} and no refresh reloads them. */
@@ -232,6 +236,24 @@ export function useConflicts(openOnly = true) {
   return useQuery<Conflict_Serialize[]>({
     queryKey: keys.conflicts(openOnly),
     queryFn: () => unwrap(commands.conflictsList(openOnly)),
+  });
+}
+
+/** Where an object came from (M6): its provenance rows, oldest first. */
+export function useProvenance(id: Id | null) {
+  return useQuery<ProvenanceRow_Serialize[]>({
+    queryKey: keys.provenance(id ?? ""),
+    queryFn: () => unwrap(commands.provenanceList(id ?? "")),
+    enabled: id !== null,
+  });
+}
+
+/** The files an object carries: its attachments, by role. */
+export function useAttachments(id: Id | null) {
+  return useQuery<AttachmentRow_Serialize[]>({
+    queryKey: keys.attachments(id ?? ""),
+    queryFn: () => unwrap(commands.attachmentsList(id ?? "")),
+    enabled: id !== null,
   });
 }
 

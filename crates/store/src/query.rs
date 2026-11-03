@@ -7,14 +7,18 @@ use std::collections::HashMap;
 use rusqlite::{Connection, OptionalExtension, params};
 
 use dbme_core::chain::OpRecord;
-use dbme_core::model::{AttachmentRow, BlockRow, FieldRow, ObjectRow, RelationRow, TypeRow};
+use dbme_core::model::{
+    AttachmentRole, AttachmentRow, BlockRow, FieldRow, ObjectRow, ProvenanceRow, RelationRow,
+    TypeRow,
+};
 use dbme_core::op::{Entity, Row, RowKey};
-use dbme_core::{Id, SortKey};
+use dbme_core::{ContentHash, Id, SortKey};
 
 use crate::log::op_columns;
 use crate::rows::{
     self, attachment_row, attachment_select, block_columns, block_row, field_columns, field_row,
-    object_columns, object_row, relation_columns, relation_row, type_columns, type_row,
+    object_columns, object_row, provenance_columns, provenance_row, relation_columns, relation_row,
+    type_columns, type_row,
 };
 use crate::sql::{self, to_json};
 use crate::vault::VaultMeta;
@@ -368,6 +372,47 @@ impl Reader<'_> {
             (a.role.as_str(), &a.blob_hash).cmp(&(b.role.as_str(), &b.blob_hash))
         });
         Ok(attachments)
+    }
+
+    /// The live objects that have `hash` attached with `role`, in id order: how an import tells
+    /// a file it has seen before (ADR-0026, dedupe by content hash).
+    pub fn objects_with_blob(&self, hash: &ContentHash, role: AttachmentRole) -> Result<Vec<Id>> {
+        let mut statement = self.conn.prepare_cached(
+            "SELECT a.object_id FROM attachments a JOIN objects o ON o.id = a.object_id \
+             WHERE a.blob_hash = ?1 AND a.role = ?2 AND o.deleted_at IS NULL ORDER BY a.object_id",
+        )?;
+        let ids = statement
+            .query_map(params![hash.as_str(), role.as_str()], |r| sql::id(r, 0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(ids)
+    }
+
+    /// Where an object came from: its provenance rows, oldest first (ADR-0026).
+    pub fn provenance_of(&self, object_id: Id) -> Result<Vec<ProvenanceRow>> {
+        collect(
+            self.conn,
+            concat!(
+                "SELECT ",
+                provenance_columns!(),
+                " FROM provenance WHERE object_id = ?1 ORDER BY created_at, id"
+            ),
+            [object_id.to_string()],
+            provenance_row,
+        )
+    }
+
+    /// Every provenance row an import run wrote, oldest first: the run's receipt (ADR-0026).
+    pub fn provenance_of_run(&self, import_run_id: Id) -> Result<Vec<ProvenanceRow>> {
+        collect(
+            self.conn,
+            concat!(
+                "SELECT ",
+                provenance_columns!(),
+                " FROM provenance WHERE import_run_id = ?1 ORDER BY created_at, id"
+            ),
+            [import_run_id.to_string()],
+            provenance_row,
+        )
     }
 
     /// The live objects under `parent` (`None`: the top level) with exactly this title, in order.

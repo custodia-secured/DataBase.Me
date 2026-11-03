@@ -47,3 +47,14 @@ iframe sandbox was escaped (CVE-2026-47901) because its Content Security Policy 
 - **Deno isolates.** Real permissions, but a large runtime to embed, and no iOS story.
 - **The WebAssembly component model (WASI preview 2).** Promising, and Extism or a successor may
   adopt it; we revisit at M10.
+
+## Later changes
+
+These notes record what later milestones did under this decision; the decision itself stands.
+
+- **M6 (2026-11-03):** the importers are in-process Rust (`dbme-ingest`, ADR-0026) behind an
+  `Importer` trait with a `Sniffed` and an `Extract` on each side, so a plugin importer in M10 is
+  one more implementation of that trait across the Extism boundary: it receives the sniff and the
+  bytes it asked for, and returns an `Extract`, which the host applies under the same caps,
+  dedupe and provenance (`extractor` names the plugin). Nothing in the pipeline is reached by the
+  importer but its own source.

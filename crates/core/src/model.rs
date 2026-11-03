@@ -297,6 +297,32 @@ pub struct AttachmentRow {
     pub blob_size: i64,
 }
 
+/// Where an object came from (ADR-0026, migration 4): one row per import or capture that made or
+/// updated it. `source_kind` is `manual`, `import:<importer>`, `clip`, `feed`, `file:external`,
+/// `ai:<model>` or `plugin:<id>`; `source_uri` is the file, page or address it came from, when
+/// there is one; `import_run_id` names the run, when one made it; `original_blob` is the source
+/// file as attached. A row is never updated: `accepted` is set when it is written.
+#[allow(
+    missing_docs,
+    reason = "columns are documented in FORMAT.md §3.1 and §5"
+)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct ProvenanceRow {
+    pub id: Id,
+    pub object_id: Id,
+    pub source_kind: String,
+    pub source_uri: Option<String>,
+    pub import_run_id: Option<Id>,
+    pub original_blob: Option<ContentHash>,
+    pub extractor: String,
+    pub extractor_version: String,
+    pub confidence: f64,
+    pub accepted: bool,
+    pub created_at: i64,
+}
+
 /// A saved view: a query, the renderer that shows its results and that renderer's settings
 /// (ADR-0020).
 #[allow(missing_docs, reason = "columns are documented in FORMAT.md §3.1")]
@@ -526,6 +552,32 @@ impl AttachmentRow {
             )?;
         }
         Ok(())
+    }
+}
+
+impl ProvenanceRow {
+    /// Checks the row against the data model. `confidence` must be a number from 0 to 1: a NaN
+    /// or an infinity would be written as `null` and never read back (M6 gate 1e).
+    pub fn validate(&self) -> Result<(), CoreError> {
+        check(
+            !self.source_kind.trim().is_empty(),
+            "provenance source kind",
+            "must not be blank",
+        )?;
+        check_text(&self.source_kind, "provenance source kind", 200)?;
+        check_optional(self.source_uri.as_deref(), "provenance source", 4_096)?;
+        check(
+            !self.extractor.trim().is_empty(),
+            "provenance extractor",
+            "must not be blank",
+        )?;
+        check_text(&self.extractor, "provenance extractor", 200)?;
+        check_text(&self.extractor_version, "provenance extractor version", 64)?;
+        check(
+            self.confidence.is_finite() && (0.0..=1.0).contains(&self.confidence),
+            "provenance confidence",
+            "must be a number from 0 to 1",
+        )
     }
 }
 

@@ -43,29 +43,29 @@ Undo, history, provenance and later sync all come from the op log (ADR-0002).
 
 ## Code map
 
-| Path                         | Role                                                                                          | Milestone         |
-| ---------------------------- | --------------------------------------------------------------------------------------------- | ----------------- |
-| `apps/desktop/`              | Tauri 2 app: Rust shell (`src-tauri/`) and the React UI                                       | M0                |
-| `crates/core/` (`dbme-core`) | Domain: objects, types, relations, ops, query DSL, policies. No I/O.                          | M0, grows from M1 |
-| `crates/store/`              | SQLite schema, migrations, FTS, vectors, blob store, crypto. All SQL lives here.              | M1                |
-| `crates/api/` (`dbme-api`)   | The commands the UI calls, as plain functions; the shell wraps them (ADR-0017)                | M2                |
-| `crates/e2e-server/`         | Test only: serves the e2e UI build and runs `dbme-api` on real vaults (ADR-0018)              | M2                |
-| `crates/mirror/`             | Two-way files folder engine over an `Fs` seam, the watcher, `mirror-check` (ADR-0021)         | M5                |
-| `crates/ingest/`             | `Importer` trait, built-in importers, sidecar manager                                         | M6                |
-| `crates/export/`             | JSON/CSV export, full export and import (ADR-0021)                                            | M5                |
-| `fuzz/`                      | cargo-fuzz targets for the file format's parser, outside the workspace; run nightly           | M5                |
-| `crates/plugins/`            | `PluginRuntime` trait and the Extism host                                                     | M10               |
-| `crates/ai/`                 | Provider adapters, policy gate, audit                                                         | M11               |
-| `crates/mcp/`                | MCP server and client                                                                         | M11               |
-| `crates/sync/`               | `SyncAdapter` and the Loro implementation                                                     | M13               |
-| `crates/cli/` (`dbme`)       | Command-line tool: import, export, verify, query, mirror-check                                | M0, grows         |
-| `apps/clipper/`              | Browser extension (web clipper)                                                               | M9                |
-| `apps/relay/`                | Self-hostable end-to-end-encrypted sync relay                                                 | M13               |
-| `packages/client/`           | Generated bindings, vault queries and the change listener (ADR-0014, ADR-0017)                | M2                |
-| `packages/ui/`               | Design system: tokens, themes, shared components                                              | M0, grows         |
-| `packages/views/`            | Renderer registry and every view, all responsive and touch-ready; `mindmap/` M3, `search/` M4 | M2                |
-| `packages/recommender/`      | View and chart recommendation rules                                                           | M8                |
-| `packages/sdk/`              | Plugin SDK (Apache-2.0)                                                                       | M10               |
+| Path                         | Role                                                                                                              | Milestone         |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `apps/desktop/`              | Tauri 2 app: Rust shell (`src-tauri/`) and the React UI                                                           | M0                |
+| `crates/core/` (`dbme-core`) | Domain: objects, types, relations, ops, query DSL, policies. No I/O.                                              | M0, grows from M1 |
+| `crates/store/`              | SQLite schema, migrations, FTS, vectors, blob store, crypto. All SQL lives here.                                  | M1                |
+| `crates/api/` (`dbme-api`)   | The commands the UI calls, as plain functions; the shell wraps them (ADR-0017)                                    | M2                |
+| `crates/e2e-server/`         | Test only: serves the e2e UI build and runs `dbme-api` on real vaults (ADR-0018)                                  | M2                |
+| `crates/mirror/`             | Two-way files folder engine over an `Fs` seam, the watcher, `mirror-check` (ADR-0021)                             | M5                |
+| `crates/ingest/`             | `Importer` trait, the plan and the apply, the v0 importers, provenance (ADR-0026); sidecars M12                   | M6                |
+| `crates/export/`             | JSON/CSV export, full export and import (ADR-0021)                                                                | M5                |
+| `fuzz/`                      | cargo-fuzz targets for the file format's parser and the CSV and PDF importers, outside the workspace; run nightly | M5, M6            |
+| `crates/plugins/`            | `PluginRuntime` trait and the Extism host                                                                         | M10               |
+| `crates/ai/`                 | Provider adapters, policy gate, audit                                                                             | M11               |
+| `crates/mcp/`                | MCP server and client                                                                                             | M11               |
+| `crates/sync/`               | `SyncAdapter` and the Loro implementation                                                                         | M13               |
+| `crates/cli/` (`dbme`)       | Command-line tool: import, export, verify, query, mirror-check                                                    | M0, grows         |
+| `apps/clipper/`              | Browser extension (web clipper)                                                                                   | M9                |
+| `apps/relay/`                | Self-hostable end-to-end-encrypted sync relay                                                                     | M13               |
+| `packages/client/`           | Generated bindings, vault queries and the change listener (ADR-0014, ADR-0017)                                    | M2                |
+| `packages/ui/`               | Design system: tokens, themes, shared components                                                                  | M0, grows         |
+| `packages/views/`            | Renderer registry and every view, all responsive and touch-ready; `mindmap/` M3, `search/` M4                     | M2                |
+| `packages/recommender/`      | View and chart recommendation rules                                                                               | M8                |
+| `packages/sdk/`              | Plugin SDK (Apache-2.0)                                                                                           | M10               |
 
 Crates and packages are created when their milestone starts, not before.
 

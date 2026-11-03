@@ -18,8 +18,8 @@ use dbme_core::query::Query;
 use dbme_core::{Clock, ContentHash, Id, ManualClock};
 use dbme_export::{ExportError, OPS_FILE, SCHEMA_FILE, export, import, is_export};
 use dbme_store::{
-    Identity, NewAttachment, NewBlock, NewField, NewObject, NewRelation, NewType, NewView,
-    Position, Vault, VaultOptions,
+    Identity, NewAttachment, NewBlock, NewField, NewObject, NewProvenance, NewRelation, NewType,
+    NewView, Position, Vault, VaultOptions,
 };
 use serde_json::json;
 
@@ -97,6 +97,17 @@ fn populated(path: &Path) -> (Vault, Id, Id, ContentHash) {
                 filename: Some("picture.png".into()),
                 mime: Some("image/png".into()),
             })?;
+            txn.add_provenance(NewProvenance {
+                object_id: a,
+                source_kind: "import:image".into(),
+                source_uri: Some("C:/pictures/picture.png".into()),
+                import_run_id: Some(Id::from_parts(9, 9)),
+                original_blob: Some(hash.clone()),
+                extractor: "dbme-ingest".into(),
+                extractor_version: "0.0.0".into(),
+                confidence: 1.0,
+                accepted: true,
+            })?;
             txn.create_view(NewView {
                 name: "Everything".into(),
                 renderer: "list".into(),
@@ -145,6 +156,7 @@ fn snapshot(vault: &Vault, a: Id, b: Id) -> String {
     out.push_str(&format!("{:?}\n", read.blocks(a).unwrap()));
     out.push_str(&format!("{:?}\n", read.relations_from(b).unwrap()));
     out.push_str(&format!("{:?}\n", read.attachments(a).unwrap()));
+    out.push_str(&format!("{:?}\n", read.provenance_of(a).unwrap()));
     out.push_str(&format!("{:?}\n", read.views().unwrap()));
     out
 }

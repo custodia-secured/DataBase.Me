@@ -71,3 +71,15 @@ same vault.
   people, and two devices would share one stack. History is still in the log; restoring old
   versions is a separate, explicit feature.
 - **Last-writer-wins undo** (always reverse, overwriting newer edits). Simple, but it loses data.
+
+## Later changes
+
+These notes record what later milestones did under this decision; the decision itself stands.
+
+- **M6 (2026-11-03):** a ninth entity, `provenance`, with `create` and `delete` only, like
+  `attachment` (ADR-0026). Its row key is the row's id and its object id, and its `target_id` is
+  the object, so an object's history and change events name the object a row describes. The
+  payload is the whole row, hashed as stored bytes like every other kind; gate 1e found that
+  serde_json writes a NaN confidence as `null`, which would never replay, so the row's
+  validation bounds `confidence` to 0..=1 before any op is written. `original_blob` is not a
+  foreign key: a `blobs` row exists only once an attachment carries the blob's size.

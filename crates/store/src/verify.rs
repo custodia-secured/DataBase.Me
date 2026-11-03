@@ -20,7 +20,7 @@ use crate::query::count;
 use crate::{Result, Vault, migrate, rows, search, sql};
 
 /// The tables ops produce, with the columns that order their rows.
-const TABLES: [(&str, &str); 9] = [
+const TABLES: [(&str, &str); 10] = [
     ("types", "id"),
     ("fields", "id"),
     ("objects", "id"),
@@ -30,6 +30,7 @@ const TABLES: [(&str, &str); 9] = [
     ("blobs", "hash"),
     ("attachments", "object_id, blob_hash, role"),
     ("views", "id"),
+    ("provenance", "id"),
 ];
 
 /// What a check found.

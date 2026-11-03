@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use tauri::Manager;
+use tauri_specta::Event;
 use tracing_subscriber::EnvFilter;
 
 mod ipc;
@@ -123,6 +124,25 @@ pub fn run(started: Instant) -> Result<(), Box<dyn std::error::Error>> {
             let worker = dbme_api::spawn_mirror_worker(Arc::clone(&session));
             app.manage(session);
             app.manage(worker);
+            // Files dropped on the window go to the UI as paths; the Import dialog takes it from
+            // there (M6 Decision 9). Nothing is read here.
+            if let Some(window) = app.get_webview_window("main") {
+                let handle = app.handle().clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop {
+                        paths, ..
+                    }) = event
+                    {
+                        let paths: Vec<String> = paths
+                            .iter()
+                            .map(|p| p.to_string_lossy().into_owned())
+                            .collect();
+                        if let Err(error) = ipc::ImportDropped(paths).emit(&handle) {
+                            tracing::warn!(%error, "could not send import-dropped");
+                        }
+                    }
+                });
+            }
             Ok(())
         })
         .run(tauri::generate_context!())?;
