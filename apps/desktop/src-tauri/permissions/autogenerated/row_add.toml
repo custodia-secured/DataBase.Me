@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-row-add"
+description = "Enables the row_add command without any pre-configured scope."
+commands.allow = ["row_add"]
+
+[[permission]]
+identifier = "deny-row-add"
+description = "Denies the row_add command without any pre-configured scope."
+commands.deny = ["row_add"]

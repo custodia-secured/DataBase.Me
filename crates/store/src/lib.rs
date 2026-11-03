@@ -30,7 +30,9 @@ pub use blobs::{BlobStore, StoredBlob};
 pub use compile::{Compiled, Select, compile};
 pub use error::{Result, StoreError};
 pub use identity::{IDENTITY_FILE, Identity};
-pub use list::{Backlink, MAX_PAGE, ObjectSummary, ObjectTree, Sort, SortBy, Source, TreeNode};
+pub use list::{
+    Backlink, ColumnTarget, MAX_PAGE, ObjectSummary, ObjectTree, Sort, SortBy, Source, TreeNode,
+};
 pub use migrate::{APPLICATION_ID, SCHEMA_VERSION};
 pub use mirror::{
     Conflict, ConflictKind, FOLDER_ENABLED, FULL_REWRITE_NEEDED, LAST_RESCAN_AT, MirrorFileState,
@@ -40,8 +42,8 @@ pub use query::Reader;
 pub use results::FacetBucket;
 pub use search::{SearchHit, match_expression};
 pub use txn::{
-    NewAttachment, NewBlock, NewField, NewObject, NewProvenance, NewRelation, NewType, NewView,
-    Position, Txn,
+    NewAttachment, NewBlock, NewColumn, NewField, NewObject, NewProvenance, NewRelation, NewType,
+    NewView, Position, Txn,
 };
 pub use vault::{
     BLOBS_FOLDER, Committed, DATABASE_FILE, FORMAT_FILE, LOCK_FILE, VAULT_EXTENSION, Vault,

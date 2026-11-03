@@ -19,7 +19,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::io::Cursor;
 
 use calamine::{Data, Reader as _, Xlsx as Workbook, open_workbook_from_rs};
-use dbme_core::model::{FieldKind, FieldRow, Props};
+use dbme_core::model::{FieldKind, FieldRow, Props, key_from_label};
 use dbme_core::value::validate_field_value;
 use dbme_core::{ContentHash, Id};
 use serde_json::{Map, Value, json};
@@ -479,26 +479,7 @@ fn keys_for(header: &[String]) -> Vec<String> {
         .iter()
         .enumerate()
         .map(|(c, h)| {
-            let mut key = String::new();
-            let mut last_underscore = true;
-            for ch in h.trim().to_lowercase().chars() {
-                if ch.is_ascii_alphanumeric() {
-                    key.push(ch);
-                    last_underscore = false;
-                } else if !last_underscore {
-                    key.push('_');
-                    last_underscore = true;
-                }
-            }
-            let key = key.trim_end_matches('_').to_owned();
-            let mut key = if key.is_empty() {
-                format!("column_{}", c + 1)
-            } else if !key.starts_with(|ch: char| ch.is_ascii_lowercase()) {
-                format!("c_{key}")
-            } else {
-                key
-            };
-            key.truncate(60);
+            let mut key = key_from_label(h).unwrap_or_else(|| format!("column_{}", c + 1));
             let base = key.clone();
             let mut n = 2;
             while !taken.insert(key.clone()) {

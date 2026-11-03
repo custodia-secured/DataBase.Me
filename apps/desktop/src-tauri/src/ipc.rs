@@ -24,8 +24,8 @@ use dbme_core::model::{AttachmentRow, BlockRow, FieldRow, ObjectRow, TypeRow, Vi
 use dbme_core::query::Query;
 use dbme_core::{ContentHash, Id, SystemClock};
 use dbme_store::{
-    Backlink, Committed, Conflict, FacetBucket, Identity, NewField, NewObject, NewView,
-    ObjectSummary, ObjectTree, Position, SearchHit, Sort, Source, VaultOptions,
+    Backlink, ColumnTarget, Committed, Conflict, FacetBucket, Identity, NewColumn, NewField,
+    NewObject, NewView, ObjectSummary, ObjectTree, Position, SearchHit, Sort, Source, VaultOptions,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -242,6 +242,57 @@ pub(crate) async fn fields_list(
 #[specta::specta]
 pub(crate) async fn field_create(session: State<'_, Arc<Session>>, field: NewField) -> Reply<Id> {
     api::field_create(&session, field)
+}
+
+/// The type a new column of a Table showing `source` goes on (ADR-0030).
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn column_target(
+    session: State<'_, Arc<Session>>,
+    source: Source,
+) -> Reply<ColumnTarget> {
+    api::column_target(&session, source)
+}
+
+/// Adds a column to a Table showing `source`, in one undo step, and returns the field's ID.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn column_add(
+    session: State<'_, Arc<Session>>,
+    source: Source,
+    column: NewColumn,
+) -> Reply<Id> {
+    api::column_add(&session, source, column)
+}
+
+/// Renames a field. Returns `false` if it already had the label.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn field_rename(
+    session: State<'_, Arc<Session>>,
+    id: Id,
+    label: String,
+) -> Reply<bool> {
+    api::field_rename(&session, id, &label)
+}
+
+/// Deletes a field. Values objects hold for it stay in their properties.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn field_delete(session: State<'_, Arc<Session>>, id: Id) -> Reply<()> {
+    api::field_delete(&session, id)
+}
+
+/// Adds a row to a Table showing `source`: an empty object under `parent`, with the types a row
+/// there has. Returns its ID.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn row_add(
+    session: State<'_, Arc<Session>>,
+    source: Source,
+    parent: Id,
+) -> Reply<Id> {
+    api::row_add(&session, source, parent)
 }
 
 /// One object.
@@ -737,6 +788,11 @@ pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
             types_list,
             fields_list,
             field_create,
+            column_target,
+            column_add,
+            field_rename,
+            field_delete,
+            row_add,
             object_get,
             object_children,
             object_ancestors,
@@ -839,7 +895,7 @@ mod tests {
         let list = &build[build.find("const COMMANDS").unwrap()..];
         let list = &list[..list.find("];").unwrap()];
         let commands: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
-        assert_eq!(commands.len(), 59);
+        assert_eq!(commands.len(), 64);
         let capability = include_str!("../capabilities/default.json");
         let source = include_str!("ipc.rs");
         let registered = &source[source.find("collect_commands![").unwrap()..];

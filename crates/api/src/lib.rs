@@ -22,9 +22,9 @@ use dbme_core::model::{
 use dbme_core::query::Query;
 use dbme_core::{ContentHash, CoreError, Id};
 use dbme_store::{
-    Backlink, Committed, FacetBucket, NewAttachment, NewField, NewObject, NewRelation, NewView,
-    ObjectSummary, ObjectTree, Position, SearchHit, Sort, Source, StoreError, Txn, Vault,
-    VaultOptions,
+    Backlink, ColumnTarget, Committed, FacetBucket, NewAttachment, NewColumn, NewField, NewObject,
+    NewRelation, NewView, ObjectSummary, ObjectTree, Position, SearchHit, Sort, Source, StoreError,
+    Txn, Vault, VaultOptions,
 };
 
 mod blocks;
@@ -415,6 +415,26 @@ pub fn field_create(session: &Session, field: NewField) -> Reply<Id> {
     session.transact(|txn| txn.create_field(field))
 }
 
+/// The type a new column of a Table showing `source` goes on (ADR-0030).
+pub fn column_target(session: &Session, source: Source) -> Reply<ColumnTarget> {
+    session.with(|vault| vault.read().column_target(source))
+}
+
+/// Adds a column to a Table showing `source`, in one undo step, and returns the field's ID.
+pub fn column_add(session: &Session, source: Source, column: NewColumn) -> Reply<Id> {
+    session.transact(|txn| txn.add_column(source, column))
+}
+
+/// Renames a field. Returns `false` if it already had the label.
+pub fn field_rename(session: &Session, id: Id, label: &str) -> Reply<bool> {
+    session.transact(|txn| txn.rename_field(id, label))
+}
+
+/// Deletes a field. Values objects hold for it stay in their properties.
+pub fn field_delete(session: &Session, id: Id) -> Reply<()> {
+    session.transact(|txn| txn.delete_field(id))
+}
+
 // Reading objects.
 
 /// One object.
@@ -473,6 +493,16 @@ pub fn object_create(session: &Session, object: NewObject) -> Reply<Id> {
         let parent = object.parent_id;
         let id = txn.create_object(object)?;
         rebalance_objects_if_long(txn, id, parent)?;
+        Ok(id)
+    })
+}
+
+/// Adds a row to a Table showing `source`: an empty object under `parent`, with the types a row
+/// there has. Returns its ID.
+pub fn row_add(session: &Session, source: Source, parent: Id) -> Reply<Id> {
+    session.transact(|txn| {
+        let id = txn.add_row(source, parent)?;
+        rebalance_objects_if_long(txn, id, Some(parent))?;
         Ok(id)
     })
 }
