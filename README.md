@@ -8,10 +8,13 @@ look at the same information as a document, an outline, a mind map, a table, a c
 timeline, a map or a chart. Every object is also a plain Markdown file you can edit in any tool,
 and your edits flow back into the app.
 
-> **Status: pre-alpha, milestone M0 (foundations).** There is no usable app yet, only the shell,
-> the build and the project's ground rules. Progress is tracked milestone by milestone in
-> [docs/milestones/](docs/milestones/). The full plan is in
-> [DataBase.Me_Build_Plan.md](DataBase.Me_Build_Plan.md).
+> **Status: 0.1, the MVP (milestone M7).** Pages with a block editor; Document, Outline, Mind
+> map, Table and Gallery views; search and saved views; a two-way Markdown files folder that
+> opens in Obsidian; importing of Markdown folders, CSV, Excel, PDF and pictures; export; Simple
+> and Organizer modes; light and dark themes; installers for Windows, macOS and Linux. Progress is
+> tracked milestone by milestone in [docs/milestones/](docs/milestones/); the full plan is in
+> [DataBase.Me_Build_Plan.md](DataBase.Me_Build_Plan.md). Canvas, graph, timeline, map and chart
+> views, encryption, plugins, AI and sync are later milestones.
 
 ## What it promises
 
@@ -26,6 +29,35 @@ and your edits flow back into the app.
 - **Sandboxed plugins.** Plugins get only the access you grant them.
 - **For everyone.** Simple mode feels like a plain notes app; more power appears when you want it.
   Accessible (WCAG 2.2 AA) and built for phones as well as desktops.
+
+## Install
+
+Download the installer for your system from the
+[releases page](https://github.com/custodia-secured/DataBase.Me/releases): `DataBase.Me_<version>_x64-setup.exe`
+or the `.msi` for Windows, `DataBase.Me_<version>_aarch64.dmg` (Apple Silicon) or `_x64.dmg`
+(Intel) for macOS, and the `.AppImage`, `.deb` or `.rpm` for Linux. Every release carries a
+`SHA256SUMS.txt` to check a download against. The
+[getting started](docs/user-guide/getting-started.md) page walks through the first launch, and
+says what each system warns about an installer that is not yet signed and how to proceed.
+
+The app makes no network request: there is nothing to sign up for, and nothing phones home. The
+[privacy](docs/user-guide/privacy.md) page says how that is tested on every change, and how to
+check it on your own machine.
+
+## Screenshots
+
+|                                  Light                                   |                                  Dark                                  |
+| :----------------------------------------------------------------------: | :--------------------------------------------------------------------: |
+| ![The Document view, light](docs/screenshots/desktop-light-document.png) | ![The Document view, dark](docs/screenshots/desktop-dark-document.png) |
+|    ![The Mind map, light](docs/screenshots/desktop-light-mindmap.png)    |    ![The Table view, dark](docs/screenshots/desktop-dark-table.png)    |
+|     ![On a phone, light](docs/screenshots/phone-light-document.png)      |     ![On a phone, dark](docs/screenshots/phone-dark-document.png)      |
+
+## Documentation
+
+The [user guide](docs/index.md) covers installing, the first ten minutes, the vault, pages and
+views, the files folder and Obsidian, importing, settings, keyboard and accessibility, privacy and
+how to report a problem. [FORMAT.md](docs/FORMAT.md) documents every byte the app writes, so a
+vault can be read without it.
 
 ## Build from source
 
@@ -61,9 +93,9 @@ pnpm --filter @databaseme/desktop tauri build   # build an installer for your OS
 | `fixtures/`     | Sample vaults and test files, including deliberately broken ones  |
 | `scripts/`      | CI helpers: DCO check, licence check, launch test                 |
 
-More crates and packages (`store`, `mirror`, `ingest`, `export`, `views`, `recommender`, ...)
-arrive with the milestones that need them; [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the
-whole map.
+The other crates (`store`, `api`, `mirror`, `export`, `ingest`, `e2e-server`) and packages
+(`client`, `views`) are described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), which has the
+whole map; later milestones add more.
 
 ## Contributing
 

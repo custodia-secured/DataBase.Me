@@ -34,4 +34,6 @@ other.
 | [0024](0024-file-watcher.md)                         | The file watcher                                             | Proposed |
 | [0025](0025-three-way-merge.md)                      | The three-way merge inside a block                           | Proposed |
 | [0026](0026-ingestion-v0.md)                         | Ingestion v0: the importers, the run and provenance          | Proposed |
+| [0027](0027-settings-modes-and-themes.md)            | Settings, modes and themes                                   | Proposed |
 | [0028](0028-onboarding-and-the-network-guarantee.md) | Onboarding and the network guarantee                         | Proposed |
+| [0029](0029-the-release.md)                          | The release                                                  | Proposed |
