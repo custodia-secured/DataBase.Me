@@ -8,6 +8,7 @@ export { JOURNAL_TITLE, showsTypes, todayTitle, useMode, type Mode } from "./mod
 export { MoveDialog } from "./sidebar/MoveDialog";
 export { Onboarding, type OnboardingProps } from "./onboarding/Onboarding";
 export { vaultIn } from "./onboarding/paths";
+export { SettingsDialog, type SettingsDialogProps } from "./settings/SettingsDialog";
 export { Sidebar, type SidebarProps } from "./sidebar/Sidebar";
 export {
   VIEWS,

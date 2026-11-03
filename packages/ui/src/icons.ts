@@ -61,6 +61,7 @@ export {
   Plus,
   Redo2,
   Search,
+  Settings as SettingsIcon,
   SquareCode,
   Table2,
   TextQuote,

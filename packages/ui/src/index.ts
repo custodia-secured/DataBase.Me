@@ -14,6 +14,7 @@ export {
   type MenuProps,
 } from "./components";
 export * from "./icons";
+export { copyText } from "./clipboard";
 export { useMediaQuery } from "./media";
 export {
   applyTheme,

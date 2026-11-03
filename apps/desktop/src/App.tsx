@@ -6,6 +6,7 @@
 import {
   commands,
   events,
+  forgetVault,
   startLiveRefresh,
   unwrap,
   useAncestors,
@@ -32,6 +33,7 @@ import {
   PanelLeft,
   Redo2,
   Search,
+  SettingsIcon,
   StatusMessage,
   Undo2,
   useMediaQuery,
@@ -47,6 +49,7 @@ import {
   Onboarding,
   onActionError,
   reportError,
+  SettingsDialog,
   ResultsView,
   Sidebar,
   useMode,
@@ -66,6 +69,11 @@ const WIDE = "(min-width: 768px)";
 const SPLIT = "(min-width: 1100px)";
 /** One empty list, so a closed Import dialog's props do not change between renders. */
 const NO_PATHS: readonly string[] = [];
+/** Where Help points, as text to copy: the app opens no browser and makes no request (M7). */
+const LINKS = {
+  docs: "https://custodia-secured.github.io/DataBase.Me/",
+  issues: "https://github.com/custodia-secured/DataBase.Me/issues",
+};
 
 export function App() {
   const client = useQueryClient();
@@ -123,6 +131,11 @@ export function App() {
   });
   const setupAgain = useShell((state) => state.setupAgain);
   const setSetupAgain = useShell((state) => state.setSetupAgain);
+  // Another vault means nothing of the last one stays selected (M7).
+  const vaultId = vault.data?.vault?.id;
+  useEffect(() => {
+    useShell.getState().select(null);
+  }, [vaultId]);
 
   if (vault.isError) {
     return (
@@ -156,7 +169,8 @@ export function App() {
       />
     );
   }
-  return <Shell />;
+  // Another vault is another shell: its panes, drawer and selection start afresh.
+  return <Shell key={vault.data.vault.id} />;
 }
 
 /** What the first query settles: the vault to show, or none and onboarding's default path. */
@@ -189,12 +203,19 @@ function Shell() {
     importing,
     setImporting,
     setSetupAgain,
+    settingsOpen,
+    setSettingsOpen,
     results,
     showResults,
     setView,
   } = useShell();
   const topLevel = usePage({ kind: "children", parent: null }, MANUAL, 0, 1);
   const savedViews = useViews();
+  const about = useQuery({
+    queryKey: ["app-info"],
+    queryFn: () => commands.appInfo(),
+    staleTime: Infinity,
+  });
 
   // Files dropped on the window open the Import dialog with their paths (M6 Decision 9).
   useEffect(() => {
@@ -226,7 +247,8 @@ function Shell() {
   };
 
   // Open the first page when nothing is open yet.
-  const first = topLevel.data?.[0]?.object.id ?? null;
+  // Placeholder data is the previous vault's while another loads (M7): never open from it.
+  const first = topLevel.isPlaceholderData ? null : (topLevel.data?.[0]?.object.id ?? null);
   useEffect(() => {
     if (selected === null && first !== null) select(first);
   }, [selected, first, select]);
@@ -289,6 +311,13 @@ function Shell() {
       label: "Mode: Organizer",
       run: () => {
         chooseMode("organizer");
+      },
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      run: () => {
+        setSettingsOpen(true);
       },
     },
     {
@@ -400,6 +429,13 @@ function Shell() {
             setFiles(true);
           }}
         />
+        <IconButton
+          label="Settings"
+          icon={SettingsIcon}
+          onClick={() => {
+            setSettingsOpen(true);
+          }}
+        />
         <HistoryButtons />
       </header>
       <HoldBanner
@@ -473,6 +509,30 @@ function Shell() {
           setImporting(null);
         }}
         onOpen={select}
+      />
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => {
+          setSettingsOpen(false);
+        }}
+        about={
+          about.data
+            ? { version: about.data.version, formatVersion: about.data.format_version }
+            : null
+        }
+        links={LINKS}
+        onOpenFiles={() => {
+          setFiles(true);
+        }}
+        onSetupAgain={() => {
+          setSetupAgain(true);
+        }}
+        onVaultChanged={() => {
+          select(null);
+          forgetVault(client);
+          void client.invalidateQueries({ queryKey: ["bootstrap"] });
+        }}
+        pickFolder={isTauri() ? pickFolder : undefined}
       />
       <Errors />
     </div>

@@ -31,10 +31,12 @@ interface Violation {
  * and carries no sample; anything else, from a select or not, still fails the test (ADR-0018).
  */
 function isWebKitSelectQuirk(violation: Violation, browserName: string): boolean {
+  // The target is "" when the select had already left the document, as when the shell remounts
+  // for another vault (M7) while the Document view's type picker is torn down.
   return (
     browserName === "webkit" &&
     violation.directive === "style-src-attr" &&
-    violation.target === "select" &&
+    (violation.target === "select" || violation.target === "") &&
     violation.sample === ""
   );
 }
