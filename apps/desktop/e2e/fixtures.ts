@@ -31,10 +31,12 @@ interface Violation {
  * and carries no sample; anything else, from a select or not, still fails the test (ADR-0018).
  */
 function isWebKitSelectQuirk(violation: Violation, browserName: string): boolean {
+  // The target is "" when the select had already left the document, as when the shell remounts
+  // for another vault (M7) while the Document view's type picker is torn down.
   return (
     browserName === "webkit" &&
     violation.directive === "style-src-attr" &&
-    violation.target === "select" &&
+    (violation.target === "select" || violation.target === "") &&
     violation.sample === ""
   );
 }
@@ -49,6 +51,17 @@ function isWebKitResizeObserverReport(message: string, browserName: string): boo
     browserName === "webkit" &&
     message === "ResizeObserver loop completed with undelivered notifications."
   );
+}
+
+/**
+ * Playwright's WebKit reports a request to the e2e server that the page cancelled by leaving (a
+ * reload in a test) as an error on the page, with this message, under load now and then. The
+ * rejection reaches the query that asked and is handled there like any failed read; nothing of
+ * the app sees it. Only a test whose page navigated again is allowed the report; on one page it
+ * is a request to explain (ADR-0018).
+ */
+function isWebKitCancelledRequestReport(message: string, browserName: string): boolean {
+  return browserName === "webkit" && message.endsWith("/ipc due to access control checks.");
 }
 
 /** The part of the editor that TipTap leaves on its element, as `caretToEnd` reads it. */
@@ -75,9 +88,22 @@ export class App {
     readonly phone: boolean,
   ) {}
 
-  /** Loads the app and waits until it shows a page or offers to make the first one. */
-  async open(): Promise<void> {
+  /**
+   * Loads the app and waits until it shows a page or offers to make the first one. The tests
+   * were written with everything shown, so the session is put in Organizer mode first (M7); a
+   * test of Simple mode asks for it.
+   */
+  async open(options: { mode?: "simple" | "organizer"; onboarding?: boolean } = {}): Promise<void> {
+    await this.ipc("settings_set", {
+      patch: { mode: options.mode ?? "organizer", onboarded: options.onboarding !== true },
+    });
     await this.page.goto(`/?session=${this.session}`);
+    if (options.onboarding === true) {
+      await expect(
+        this.page.getByRole("heading", { name: "Welcome to DataBase.Me" }),
+      ).toBeVisible();
+      return;
+    }
     await expect(
       this.page
         .getByRole("tablist", { name: "Views" })
@@ -257,7 +283,7 @@ export const test = base.extend<Fixtures>({
     });
   },
 
-  page: async ({ page, browserName }, use) => {
+  page: async ({ page, browserName, baseURL }, use) => {
     await page.addInitScript(() => {
       // As Tauri does in the app (tauri.conf.json, freezePrototype): before any of the page's code,
       // so that a dependency that can't load this way fails here too.
@@ -274,9 +300,23 @@ export const test = base.extend<Fixtures>({
       });
     });
     const problems: string[] = [];
+    let navigations = 0;
+    page.on("framenavigated", (frame) => {
+      if (frame === page.mainFrame() && frame.url() !== "about:blank") navigations += 1;
+    });
     page.on("pageerror", (error) => {
       if (isWebKitResizeObserverReport(error.message, browserName)) return;
       problems.push(`uncaught: ${error.message}`);
+    });
+    // Zero network requests (M7, ADR-0028): the page may ask the e2e server, which stands in for
+    // the app's bridge, and nothing else. A `fetch` or an asset from anywhere else fails the test
+    // the day it is written. `data:` and `blob:` are the page's own bytes, not requests.
+    const origin = new URL(baseURL ?? "http://127.0.0.1").origin;
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (/^(https?|wss?):$/.test(url.protocol) && url.origin !== origin) {
+        problems.push(`request outside the e2e server: ${request.method()} ${request.url()}`);
+      }
     });
     page.on("response", (response) => {
       // The server answers failed commands with 200 and an error; a 4xx or 5xx is a fault. The
@@ -305,7 +345,10 @@ export const test = base.extend<Fixtures>({
       violations.filter((violation) => !isWebKitSelectQuirk(violation, browserName)),
       "Content-Security-Policy violations",
     ).toEqual([]);
-    expect(problems, "errors in the page").toEqual([]);
+    const errors = problems.filter(
+      (problem) => !(navigations > 1 && isWebKitCancelledRequestReport(problem, browserName)),
+    );
+    expect(errors, "errors in the page").toEqual([]);
   },
 
   app: async ({ page, session, isMobile }, use) => {

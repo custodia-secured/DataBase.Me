@@ -1527,3 +1527,179 @@ li.ProseMirror-selectednode::after {
   gap: var(--dbme-space-1);
   font-size: 0.8125rem;
 }
+
+/* --- Onboarding (M7) ---------------------------------------------------------------------- */
+
+.dbme-onboarding {
+  box-sizing: border-box;
+  max-width: 40rem;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: var(--dbme-space-6) var(--dbme-space-4) var(--dbme-space-8);
+}
+
+.dbme-onboarding h1 {
+  margin: 0 0 var(--dbme-space-1);
+  font-size: 1.75rem;
+  color: var(--dbme-color-accent);
+}
+
+.dbme-onboarding__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-3);
+  margin: var(--dbme-space-4) 0;
+}
+
+.dbme-onboarding__body p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.dbme-onboarding code {
+  overflow-wrap: anywhere;
+}
+
+.dbme-onboarding__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+  margin: 0;
+  padding: var(--dbme-space-3);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-onboarding__choices legend {
+  padding: 0 var(--dbme-space-1);
+  font-weight: 600;
+}
+
+.dbme-onboarding__choice {
+  display: flex;
+  gap: var(--dbme-space-2);
+  align-items: baseline;
+  min-height: var(--dbme-target);
+  cursor: pointer;
+}
+
+.dbme-onboarding__folder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-1);
+}
+
+.dbme-onboarding__folder-row {
+  display: flex;
+  gap: var(--dbme-space-2);
+}
+
+.dbme-onboarding__folder-row .dbme-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dbme-onboarding__controls {
+  display: flex;
+  gap: var(--dbme-space-2);
+  justify-content: flex-end;
+  margin-top: var(--dbme-space-4);
+}
+
+/* --- Settings and Help (M7) --------------------------------------------------------------- */
+
+.dbme-settings .dbme-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-4);
+  max-width: 40rem;
+}
+
+.dbme-settings section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+}
+
+.dbme-settings h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dbme-settings__path,
+.dbme-settings__about {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dbme-settings__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-1);
+}
+
+.dbme-settings__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-2);
+}
+
+.dbme-settings__row .dbme-input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.dbme-settings__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-2) var(--dbme-space-4);
+  margin: 0;
+  padding: var(--dbme-space-2) var(--dbme-space-3);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-settings__choices legend {
+  padding: 0 var(--dbme-space-1);
+  font-weight: 600;
+}
+
+.dbme-settings__choice {
+  display: flex;
+  gap: var(--dbme-space-2);
+  align-items: baseline;
+  min-height: var(--dbme-target);
+  cursor: pointer;
+}
+
+.dbme-settings__links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-1);
+  margin: 0;
+}
+
+.dbme-settings__links dt {
+  font-weight: 600;
+}
+
+.dbme-settings__links dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-2);
+  align-items: center;
+  margin: 0;
+}
+
+.dbme-settings__links code {
+  overflow-wrap: anywhere;
+}
+
+.dbme-settings__shown {
+  font-family: var(--dbme-font-mono);
+  font-size: 0.8125rem;
+}
+
+.dbme-settings__footer {
+  justify-content: flex-end;
+}

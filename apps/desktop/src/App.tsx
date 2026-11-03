@@ -6,18 +6,24 @@
 import {
   commands,
   events,
+  forgetVault,
   startLiveRefresh,
   unwrap,
   useAncestors,
   useObject,
   useMirrorStatus,
   usePage,
+  useSettings,
   useVaultInfo,
   useViews,
   MANUAL,
+  SETTINGS_KEY,
+  setSettings,
   type Id,
+  type VaultInfo,
 } from "@databaseme/client";
 import {
+  applyTheme,
   Button,
   Columns2,
   Dialog,
@@ -27,25 +33,35 @@ import {
   PanelLeft,
   Redo2,
   Search,
+  SettingsIcon,
   StatusMessage,
   Undo2,
   useMediaQuery,
   X,
+  type ThemeChoice,
 } from "@databaseme/ui";
 import {
   actions,
   CommandPalette,
+  diagnosticReport,
   FilesDialog,
   HoldBanner,
   ImportDialog,
+  Onboarding,
   onActionError,
+  reportError,
+  SettingsDialog,
   ResultsView,
   Sidebar,
-  VIEWS,
+  useMode,
   viewById,
+  visibleViews,
+  type Mode,
   type PaletteCommand,
 } from "@databaseme/views";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { isTauri } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { notifyReady } from "./ipc";
 import { useShell } from "./store";
@@ -54,6 +70,11 @@ const WIDE = "(min-width: 768px)";
 const SPLIT = "(min-width: 1100px)";
 /** One empty list, so a closed Import dialog's props do not change between renders. */
 const NO_PATHS: readonly string[] = [];
+/** Where Help points, as text to copy: the app opens no browser and makes no request (M7). */
+const LINKS = {
+  docs: "https://custodia-secured.github.io/DataBase.Me/",
+  issues: "https://github.com/custodia-secured/DataBase.Me/issues",
+};
 
 export function App() {
   const client = useQueryClient();
@@ -82,15 +103,40 @@ export function App() {
     };
   }, [client]);
 
-  // The shell keeps one default vault (ADR-0017); vault choice arrives with Settings.
+  // What to show first (M7): the vault already open; else onboarding, until it has run once;
+  // else the last vault, or the default one (ADR-0017).
   const vault = useQuery({
     queryKey: ["bootstrap"],
-    queryFn: async () =>
-      (await unwrap(commands.vaultInfo())) ?? (await unwrap(commands.vaultOpenDefault())),
+    queryFn: async (): Promise<Bootstrap> => {
+      const open = await unwrap(commands.vaultInfo());
+      const settings = await unwrap(commands.settingsGet());
+      client.setQueryData(SETTINGS_KEY, settings);
+      if (open) return { vault: open, defaultVault: null };
+      if (!settings.onboarded) {
+        const info = await commands.appInfo();
+        return { vault: null, defaultVault: info.default_vault };
+      }
+      let last: VaultInfo | null = null;
+      if (settings.last_vault !== null) {
+        last = await unwrap(commands.vaultOpen(settings.last_vault)).catch(() => null);
+      }
+      const opened = last ?? (await unwrap(commands.vaultOpenDefault()));
+      if (opened.path !== settings.last_vault) {
+        await setSettings(client, { last_vault: opened.path });
+      }
+      return { vault: opened, defaultVault: null };
+    },
     enabled: reported,
     staleTime: Infinity,
     retry: false,
   });
+  const setupAgain = useShell((state) => state.setupAgain);
+  const setSetupAgain = useShell((state) => state.setSetupAgain);
+  // Another vault means nothing of the last one stays selected (M7).
+  const vaultId = vault.data?.vault?.id;
+  useEffect(() => {
+    useShell.getState().select(null);
+  }, [vaultId]);
 
   if (vault.isError) {
     return (
@@ -111,10 +157,37 @@ export function App() {
       </main>
     );
   }
-  return <Shell />;
+  if (vault.data.vault === null || setupAgain) {
+    return (
+      <Onboarding
+        vaultPath={vault.data.vault?.path ?? null}
+        defaultVault={vault.data.defaultVault}
+        pickFolder={isTauri() ? pickFolder : undefined}
+        onDone={() => {
+          setSetupAgain(false);
+          void client.invalidateQueries({ queryKey: ["bootstrap"] });
+        }}
+      />
+    );
+  }
+  // Another vault is another shell: its panes, drawer and selection start afresh.
+  return <Shell key={vault.data.vault.id} />;
+}
+
+/** What the first query settles: the vault to show, or none and onboarding's default path. */
+interface Bootstrap {
+  vault: VaultInfo | null;
+  defaultVault: string | null;
+}
+
+/** The OS's folder picker, through the dialog plugin (M7 gate 1a); `null` when cancelled. */
+async function pickFolder(): Promise<string | null> {
+  const picked = await open({ directory: true, multiple: false });
+  return typeof picked === "string" ? picked : null;
 }
 
 function Shell() {
+  const client = useQueryClient();
   const wide = useMediaQuery(WIDE);
   const splitFits = useMediaQuery(SPLIT);
   const {
@@ -130,12 +203,23 @@ function Shell() {
     setFiles,
     importing,
     setImporting,
+    setSetupAgain,
+    settingsOpen,
+    setSettingsOpen,
     results,
     showResults,
     setView,
   } = useShell();
   const topLevel = usePage({ kind: "children", parent: null }, MANUAL, 0, 1);
   const savedViews = useViews();
+  const about = useQuery({
+    queryKey: ["app-info"],
+    queryFn: () => commands.appInfo(),
+    staleTime: Infinity,
+  });
+  const aboutInfo = about.data
+    ? { version: about.data.version, formatVersion: about.data.format_version }
+    : null;
 
   // Files dropped on the window open the Import dialog with their paths (M6 Decision 9).
   useEffect(() => {
@@ -155,8 +239,20 @@ function Shell() {
     };
   }, [setImporting]);
 
+  // The theme follows the settings (M7): the hint applied before the first paint is confirmed
+  // or corrected here, and every change goes through the same place.
+  const settings = useSettings();
+  const theme = settings.data?.theme;
+  useEffect(() => {
+    if (theme !== undefined) applyTheme(theme);
+  }, [theme]);
+  const chooseTheme = (next: ThemeChoice) => {
+    setSettings(client, { theme: next }).catch(reportError);
+  };
+
   // Open the first page when nothing is open yet.
-  const first = topLevel.data?.[0]?.object.id ?? null;
+  // Placeholder data is the previous vault's while another loads (M7): never open from it.
+  const first = topLevel.isPlaceholderData ? null : (topLevel.data?.[0]?.object.id ?? null);
   useEffect(() => {
     if (selected === null && first !== null) select(first);
   }, [selected, first, select]);
@@ -177,8 +273,12 @@ function Shell() {
     />
   );
   const panes = split && splitFits ? 2 : 1;
+  const mode = useMode();
+  const chooseMode = (next: Mode) => {
+    setSettings(client, { mode: next }).catch(reportError);
+  };
   const paletteCommands: PaletteCommand[] = [
-    ...VIEWS.map((view) => ({
+    ...visibleViews(mode).map((view) => ({
       id: `view-${view.id}`,
       label: `Switch to ${view.label}`,
       run: () => {
@@ -192,6 +292,43 @@ function Shell() {
         void actions.create({ title: "", parent_id: null, position: "last" }).then((id) => {
           if (id !== undefined) select(id);
         });
+      },
+    },
+    {
+      id: "today",
+      label: "Today",
+      run: () => {
+        void actions.today().then((id) => {
+          if (id !== undefined) select(id);
+        });
+      },
+    },
+    {
+      id: "mode-simple",
+      label: "Mode: Simple",
+      run: () => {
+        chooseMode("simple");
+      },
+    },
+    {
+      id: "mode-organizer",
+      label: "Mode: Organizer",
+      run: () => {
+        chooseMode("organizer");
+      },
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      run: () => {
+        setSettingsOpen(true);
+      },
+    },
+    {
+      id: "setup-again",
+      label: "Set up again",
+      run: () => {
+        setSetupAgain(true);
       },
     },
     { id: "undo", label: "Undo", run: () => void actions.undo() },
@@ -208,6 +345,27 @@ function Shell() {
       label: "Import files",
       run: () => {
         setImporting([]);
+      },
+    },
+    {
+      id: "theme-system",
+      label: "Theme: follow the system",
+      run: () => {
+        chooseTheme("system");
+      },
+    },
+    {
+      id: "theme-light",
+      label: "Theme: light",
+      run: () => {
+        chooseTheme("light");
+      },
+    },
+    {
+      id: "theme-dark",
+      label: "Theme: dark",
+      run: () => {
+        chooseTheme("dark");
       },
     },
     ...(splitFits
@@ -273,6 +431,13 @@ function Shell() {
         <FilesButton
           onClick={() => {
             setFiles(true);
+          }}
+        />
+        <IconButton
+          label="Settings"
+          icon={SettingsIcon}
+          onClick={() => {
+            setSettingsOpen(true);
           }}
         />
         <HistoryButtons />
@@ -348,6 +513,27 @@ function Shell() {
           setImporting(null);
         }}
         onOpen={select}
+      />
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => {
+          setSettingsOpen(false);
+        }}
+        about={aboutInfo}
+        report={() => diagnosticReport(client, aboutInfo)}
+        links={LINKS}
+        onOpenFiles={() => {
+          setFiles(true);
+        }}
+        onSetupAgain={() => {
+          setSetupAgain(true);
+        }}
+        onVaultChanged={() => {
+          select(null);
+          forgetVault(client);
+          void client.invalidateQueries({ queryKey: ["bootstrap"] });
+        }}
+        pickFolder={isTauri() ? pickFolder : undefined}
       />
       <Errors />
     </div>
@@ -462,24 +648,29 @@ function Pane({
   objectId: Id;
   onOpen: (id: Id) => void;
 }) {
-  const viewId = useShell((state) => state.views[index]);
+  const chosenId = useShell((state) => state.views[index]);
   const setView = useShell((state) => state.setView);
   const object = useObject(objectId);
   const base = useId();
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
-  const view = viewById(viewId);
+  // The mode decides which views are offered (M7); a chosen view the mode hides shows as the
+  // first one, and the choice itself is kept for when the mode shows it again.
+  const views = visibleViews(useMode());
+  const view =
+    views.find((candidate) => candidate.id === chosenId) ?? views[0] ?? viewById("document");
+  const viewId = view.id;
   const View = view.component;
 
   const onKeyDown = (event: KeyboardEvent) => {
-    const at = VIEWS.findIndex((candidate) => candidate.id === viewId);
+    const at = views.findIndex((candidate) => candidate.id === viewId);
     const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
     let next = at + step;
     if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = VIEWS.length - 1;
+    else if (event.key === "End") next = views.length - 1;
     else if (step === 0) return;
     event.preventDefault();
-    next = (next + VIEWS.length) % VIEWS.length;
-    const target = VIEWS[next];
+    next = (next + views.length) % views.length;
+    const target = views[next];
     if (!target) return;
     setView(index, target.id);
     tabs.current[next]?.focus();
@@ -488,7 +679,7 @@ function Pane({
   return (
     <section className="pane" aria-label={index === 0 ? "Main pane" : "Second pane"}>
       <div className="pane__tabs" role="tablist" aria-label="Views" onKeyDown={onKeyDown}>
-        {VIEWS.map((candidate, i) => {
+        {views.map((candidate, i) => {
           const Icon = candidate.icon;
           const chosen = candidate.id === viewId;
           return (

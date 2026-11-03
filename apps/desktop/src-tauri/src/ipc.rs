@@ -62,6 +62,9 @@ pub struct AppInfo {
     pub format_version: u32,
     /// In smoke-test mode, where the launch test should create its vault.
     pub smoke_vault: Option<String>,
+    /// Where `vault_open_default` keeps the default vault, for onboarding to show (M7); `None`
+    /// when the app's data folder cannot be found.
+    pub default_vault: Option<String>,
 }
 
 /// The session of the main window: its vault, its files folder, and the `vault-changed` and
@@ -118,7 +121,7 @@ fn options(app: &AppHandle, startup: &Startup) -> Reply<VaultOptions> {
 /// Product, release and format versions, and smoke-test settings.
 #[tauri::command]
 #[specta::specta]
-pub(crate) fn app_info(startup: State<'_, Startup>) -> AppInfo {
+pub(crate) fn app_info(app: AppHandle, startup: State<'_, Startup>) -> AppInfo {
     AppInfo {
         product: dbme_core::PRODUCT_NAME.to_owned(),
         version: dbme_core::VERSION.to_owned(),
@@ -127,6 +130,9 @@ pub(crate) fn app_info(startup: State<'_, Startup>) -> AppInfo {
             .smoke_dir
             .as_ref()
             .map(|dir| dir.join("Smoke.dbme").display().to_string()),
+        default_vault: app_dir(&app, &startup, false)
+            .ok()
+            .map(|dir| dir.join("vaults").join(DEFAULT_VAULT).display().to_string()),
     }
 }
 
@@ -139,8 +145,9 @@ pub(crate) fn app_ready(
     startup: State<'_, Startup>,
     session: State<'_, Arc<Session>>,
     error: Option<String>,
+    notes: Vec<String>,
 ) {
-    crate::ready(&app, &startup, error, || session.close());
+    crate::ready(&app, &startup, error, &notes, || session.close());
 }
 
 /// Creates a vault at `path` (a folder named `<name>.dbme`) and opens it.
@@ -665,6 +672,55 @@ pub(crate) async fn provenance_list(
     api::provenance_list(&session, object_id)
 }
 
+/// The person's settings (M7).
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn settings_get(session: State<'_, Arc<Session>>) -> Reply<api::Settings> {
+    api::settings_get(&session)
+}
+
+/// Changes the settings `patch` names and returns them all as they are now.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn settings_set(
+    session: State<'_, Arc<Session>>,
+    patch: api::SettingsPatch,
+) -> Reply<api::Settings> {
+    api::settings_set(&session, patch)
+}
+
+/// What the diagnostic report says about this machine (M7): the OS and architecture, the
+/// webview and its version, and the vault's counts. No path, no title, no content.
+#[derive(Clone, Debug, Serialize, Deserialize, specta::Type)]
+pub struct Diagnostics {
+    /// `std::env::consts::OS`.
+    pub os: String,
+    /// `std::env::consts::ARCH`.
+    pub arch: String,
+    /// The webview and its version, as Tauri reports it.
+    pub webview: String,
+    /// The open vault's counts, or `None`.
+    pub counts: Option<api::VaultCounts>,
+}
+
+/// The machine's part of the diagnostic report.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn app_diagnostics(session: State<'_, Arc<Session>>) -> Reply<Diagnostics> {
+    let engine = match std::env::consts::OS {
+        "windows" => "WebView2",
+        "macos" | "ios" => "WKWebView",
+        _ => "WebKitGTK",
+    };
+    let version = tauri::webview_version().unwrap_or_else(|_| "unknown version".to_owned());
+    Ok(Diagnostics {
+        os: std::env::consts::OS.to_owned(),
+        arch: std::env::consts::ARCH.to_owned(),
+        webview: format!("{engine} {version}"),
+        counts: api::vault_counts(&session)?,
+    })
+}
+
 /// The commands and events, for Tauri and for generating the TypeScript bindings.
 pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new()
@@ -725,6 +781,9 @@ pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
             import_plan,
             import_apply,
             provenance_list,
+            settings_get,
+            settings_set,
+            app_diagnostics,
         ])
         .events(tauri_specta::collect_events![
             VaultChanged,
@@ -780,7 +839,7 @@ mod tests {
         let list = &build[build.find("const COMMANDS").unwrap()..];
         let list = &list[..list.find("];").unwrap()];
         let commands: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
-        assert_eq!(commands.len(), 56);
+        assert_eq!(commands.len(), 59);
         let capability = include_str!("../capabilities/default.json");
         let source = include_str!("ipc.rs");
         let registered = &source[source.find("collect_commands![").unwrap()..];

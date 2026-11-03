@@ -44,9 +44,19 @@ pub(crate) struct Startup {
     reported: AtomicBool,
 }
 
+/// Line prefix printed to stdout in smoke-test mode for each note the UI's checks made (what the
+/// webview's clipboard did, M7 gate 1c); the record, not a verdict.
+pub const SMOKE_NOTE_MARKER: &str = "DBME_SMOKE_NOTE";
+
 /// Handles `app_ready`. Only the first call counts; React's StrictMode can call it twice in
 /// development. `close` closes the vault before a smoke-test exit.
-fn ready(app: &tauri::AppHandle, startup: &Startup, error: Option<String>, close: impl FnOnce()) {
+fn ready(
+    app: &tauri::AppHandle,
+    startup: &Startup,
+    error: Option<String>,
+    notes: &[String],
+    close: impl FnOnce(),
+) {
     if startup.reported.swap(true, Ordering::SeqCst) {
         return;
     }
@@ -58,6 +68,9 @@ fn ready(app: &tauri::AppHandle, startup: &Startup, error: Option<String>, close
         }
     }
     if startup.smoke_dir.is_some() {
+        for note in notes {
+            println!("{SMOKE_NOTE_MARKER} {}", note.replace('\n', " "));
+        }
         close();
         // Remove the temporary folder now: exiting does not run destructors.
         drop(
@@ -110,6 +123,9 @@ pub fn run(started: Instant) -> Result<(), Box<dyn std::error::Error>> {
     };
     let builder = ipc::builder();
     tauri::Builder::default()
+        // The native folder picker for onboarding and Settings (M7 gate 1a); the capability
+        // grants only `dialog:allow-open`.
+        .plugin(tauri_plugin_dialog::init())
         .manage(startup)
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {

@@ -25,6 +25,7 @@ import { Button, StatusMessage, TypeIcon } from "@databaseme/ui";
 import { useQueries } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { actions } from "../actions";
+import { showsTypes, useMode } from "../mode";
 
 /** What the surface shows: a saved view, or a query that is not saved yet. */
 export type ResultsSource = { kind: "view"; id: Id } | { kind: "search"; query: Query_Deserialize };
@@ -83,6 +84,7 @@ export function ResultsView({ source, onOpen, onClose, onSaved }: ResultsViewPro
   const results = useQueryResults(query);
   const count = useQueryCount(query);
   const types = useTypes();
+  const typed = showsTypes(useMode());
   const typeFacet = useFacets(query, TYPE_FACET);
   const typeIds = (typeFacet.data ?? []).map((bucket) => text(bucket.value));
   const fieldLists = useQueries({
@@ -246,7 +248,7 @@ export function ResultsView({ source, onOpen, onClose, onSaved }: ResultsViewPro
       ) : null}
       {query ? (
         <div className="dbme-results__facets" role="group" aria-label="Narrow the results">
-          {(typeFacet.data ?? []).map((bucket: FacetBucket) => {
+          {(typed ? (typeFacet.data ?? []) : []).map((bucket: FacetBucket) => {
             const id = text(bucket.value);
             const { name: label, icon } = typeName(id);
             const pressed = (query.from?.types ?? []).includes(id);
@@ -308,7 +310,7 @@ export function ResultsView({ source, onOpen, onClose, onSaved }: ResultsViewPro
                 <span className="dbme-results__row-title">
                   {summary.object.title || "Untitled"}
                 </span>{" "}
-                <span className="dbme-results__row-type">{label}</span>
+                {typed ? <span className="dbme-results__row-type">{label}</span> : null}
               </button>
             </li>
           );

@@ -2,9 +2,11 @@
 
 # DataBase.Me vault format
 
-**Status: draft 6, 2026-11-03. Format version 0.** Nothing here is stable until FORMAT.md v0.1
-ships with the MVP (M7). Each section says whether it is **Decided** (fixed by an accepted ADR),
-**Draft** (proposed, to be confirmed in the milestone named) or **Open** (not designed yet).
+**Status: v0.1, 2026-11-03, published with DataBase.Me 0.1. Format version 0.** Each section
+says whether it is **Decided** (fixed by an accepted ADR), **Draft** (proposed with the ADR or
+milestone named, and in use; a change before it is decided comes with a migration and a row in
+§10) or **Open** (not designed yet). The app writes this document into every vault it makes, so
+the copy in a vault is the copy that was published with the version that made it.
 
 This specification is licensed under the Apache License 2.0 (see `packages/sdk/LICENSE` in the
 DataBase.Me repository), unlike the application, so that anyone can write a reader, a converter or
@@ -28,7 +30,7 @@ MyVault.dbme/
   files/                two-way Markdown replica (optional; location configurable)
   export/               JSON and CSV exports (export-only)
   plugins/              installed plugins (M10)
-  themes/               user themes (M7)
+  themes/               user themes (reserved; 0.1 ships two built-in palettes, ADR-0027)
   logs/ai-audit.jsonl   record of every AI call (M11)
   FORMAT.md             a copy of this specification, written by the app
 ```
@@ -339,7 +341,7 @@ exactly as stored, so a reader never re-encodes JSON. `seq` and `signature` are 
   to an empty database gives exactly the tables of §3.1; and every blob in `blobs` exists in the
   blob store with the recorded size (and, in a deep verification, the recorded hash).
 
-## 6. The files folder (Proposed, M5; rules in ADR-0006 and ADR-0021)
+## 6. The files folder (Draft, M5; rules in ADR-0006 and ADR-0021)
 
 The files folder is a replica of the database that any Markdown tool can edit. It is designed to
 open as an Obsidian vault. The reader and writer live in `dbme-core` (`files`), whose module
@@ -440,7 +442,7 @@ exported as read-only JSON.
 - `mirror_state.last_hash` is the hash of the bytes last written or read. A file whose bytes hash
   to it is the folder's own write, whatever event reported it, and is never applied.
 
-## 7. Export folder (Proposed, M5)
+## 7. Export folder (Draft, M5, ADR-0021)
 
 - `export/schema/types.json`: every type with its fields.
 - `export/views/<view-id>.json`: one file per saved view.
@@ -468,8 +470,10 @@ export followed by an import therefore reproduces every table and the chain (M5 
 
 ## 9. Versioning
 
-- `FORMAT_VERSION` is an integer that increases with every incompatible change. This draft is
-  version 0.
+- `FORMAT_VERSION` is an integer that increases with every incompatible change. Version 0.1 of
+  this document describes format version 0, the one DataBase.Me 0.1 reads and writes. The
+  document's own version (v0.1, v0.2, …) counts its editions; the format version counts
+  incompatible changes to the bytes, and is what `vault_meta.format_version` records.
 - Database changes happen only through numbered migrations, and every migration updates this
   document. Each migration runs in its own transaction and sets `user_version` to its number, so a
   vault is never left half-migrated.
@@ -478,12 +482,13 @@ export followed by an import therefore reproduces every table and the chain (M5 
 
 ## 10. Changes to this document
 
-| Version | Date       | Change                                                                                                                                              |
-| ------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Draft 0 | 2026-10-25 | First draft (M0).                                                                                                                                   |
-| Draft 1 | 2026-10-25 | M1: vault lock and creation (§1), sort keys (§2.1), the tables of migration 1 (§3), field values (§3.3) and the op log (§5) are decided.            |
-| Draft 2 | 2026-10-25 | M2: block content and mentions (§3.5) are decided.                                                                                                  |
-| Draft 3 | 2026-11-01 | M3: `related` is the `rel_type` of a relation drawn on the mind map; it has no `field_id` or `src_block_id` (§3.1).                                 |
-| Draft 4 | 2026-11-02 | M4: migration 2 adds `views` and the derived search tables (§3.1), and the `view` entity (§5.2). Proposed, with ADR-0020.                           |
-| Draft 5 | 2026-11-02 | M5: migration 3 adds the files folder's bookkeeping (§3.1); the files folder (§6) and the full export and import (§7). Proposed, with ADR-0021.     |
-| Draft 6 | 2026-11-03 | M6: migration 4 adds `provenance` (§3.1) and the `provenance` entity, created and deleted only, targeting its object (§5). Proposed, with ADR-0026. |
+| Version | Date       | Change                                                                                                                                                                                               |
+| ------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Draft 0 | 2026-10-25 | First draft (M0).                                                                                                                                                                                    |
+| Draft 1 | 2026-10-25 | M1: vault lock and creation (§1), sort keys (§2.1), the tables of migration 1 (§3), field values (§3.3) and the op log (§5) are decided.                                                             |
+| Draft 2 | 2026-10-25 | M2: block content and mentions (§3.5) are decided.                                                                                                                                                   |
+| Draft 3 | 2026-11-01 | M3: `related` is the `rel_type` of a relation drawn on the mind map; it has no `field_id` or `src_block_id` (§3.1).                                                                                  |
+| Draft 4 | 2026-11-02 | M4: migration 2 adds `views` and the derived search tables (§3.1), and the `view` entity (§5.2). Proposed, with ADR-0020.                                                                            |
+| Draft 5 | 2026-11-02 | M5: migration 3 adds the files folder's bookkeeping (§3.1); the files folder (§6) and the full export and import (§7). Proposed, with ADR-0021.                                                      |
+| Draft 6 | 2026-11-03 | M6: migration 4 adds `provenance` (§3.1) and the `provenance` entity, created and deleted only, targeting its object (§5). Proposed, with ADR-0026.                                                  |
+| v0.1    | 2026-11-03 | M7: published with DataBase.Me 0.1. No change to the bytes: §1 to §3.3, §3.5, §4 and §5 are Decided; §3.4, §6, §7 and §8 are Draft with their ADR or milestone; `themes/` stays reserved (ADR-0027). |

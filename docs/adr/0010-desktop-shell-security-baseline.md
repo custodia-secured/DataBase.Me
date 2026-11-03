@@ -58,3 +58,9 @@ These notes record what later milestones did under this decision; the decision i
   `relation_trash`. This corrects the M2 note above, which says 31: the file granted 33 then.
 - **M4 (2026-11-02):** 45 commands, with `search`, `objects_query`, `objects_query_count`,
   `facets`, `views_list`, `view_get`, `view_save`, `view_update` and `view_delete` (ADR-0020).
+- **M7 (2026-11-03):** 59 commands (M5 added eight, M6 three, M7 `settings_get`, `settings_set`
+  and `app_diagnostics`), and the first plugin permission: `dialog:allow-open` for the native folder
+  picker (`tauri-plugin-dialog`, admitted at M7 gate 1a), nothing else of the plugin. The network
+  test this ADR deferred to M7 ran: the release app under `strace` on Linux made no internet socket
+  call on first launch with the defaults, and the gate is blocking in CI (ADR-0028). The webview
+  made no request on its own there; Windows and macOS are checked by hand per release.

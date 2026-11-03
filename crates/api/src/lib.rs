@@ -30,6 +30,7 @@ use dbme_store::{
 mod blocks;
 mod import;
 mod mirror;
+mod settings;
 
 pub use blocks::BlockChange;
 pub use dbme_ingest::{ImportOptions, ImportPlan, ImportRun};
@@ -38,6 +39,10 @@ pub use mirror::{
     DEFAULT_FOLDER, ExportReport, HoldChoice, MirrorStatus, MirrorSync, MirrorWorker,
     OVERRIDES_DIR, conflict_resolve, conflicts_list, export_run, mirror_disable, mirror_enable,
     mirror_hold_decide, mirror_status, mirror_sync_now, spawn_mirror_worker,
+};
+pub use settings::{
+    Mode, SETTINGS_FILE, SETTINGS_VERSION, Settings, SettingsPatch, Theme, settings_get,
+    settings_set,
 };
 
 /// What went wrong, in a form the UI can act on.
@@ -153,6 +158,8 @@ pub struct Session {
     config_dir: Option<PathBuf>,
     /// The worker's wake-up channel, once one runs.
     waker: Mutex<Option<Sender<mirror::Wake>>>,
+    /// The person's settings, read from the config folder on first use (M7).
+    settings: Mutex<Option<Settings>>,
 }
 
 impl Session {
@@ -165,6 +172,7 @@ impl Session {
             mirror_notify: Box::new(|_| {}),
             config_dir: None,
             waker: Mutex::new(None),
+            settings: Mutex::new(None),
         }
     }
 
@@ -203,6 +211,20 @@ impl Session {
         self.waker
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn lock_settings(&self) -> MutexGuard<'_, Option<Settings>> {
+        self.settings
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// The settings, read from the config folder the first time they are asked for.
+    fn settings(&self) -> Settings {
+        let mut guard = self.lock_settings();
+        guard
+            .get_or_insert_with(|| settings::load(self.config_dir.as_deref()))
+            .clone()
     }
 
     /// Wakes the worker, if one runs, so it writes what the last commit changed.
@@ -309,12 +331,50 @@ fn invalid(message: impl Into<String>) -> IpcError {
 
 /// Creates a vault at `path` (a folder named `<name>.dbme`) and opens it.
 pub fn vault_create(session: &Session, path: &str, options: VaultOptions) -> Reply<VaultInfo> {
+    // A folder typed into onboarding may not exist yet (M7); the vault's parents are made first.
+    if let Some(parent) = Path::new(path)
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            IpcError::new(
+                IpcErrorKind::Storage,
+                format!("cannot create {}: {e}", parent.display()),
+            )
+        })?;
+    }
     replace(session, || Vault::create(Path::new(path), options))
 }
 
 /// Opens the vault at `path`.
 pub fn vault_open(session: &Session, path: &str, options: VaultOptions) -> Reply<VaultInfo> {
     replace(session, || Vault::open(Path::new(path), options))
+}
+
+/// What the diagnostic report says about the vault (M7): numbers, never content.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct VaultCounts {
+    /// Objects, the Trash included.
+    pub objects: u64,
+    /// Blobs in the store.
+    pub blobs: u64,
+    /// The schema version the vault is at.
+    pub schema_version: u32,
+}
+
+/// The open vault's counts, or `None` when no vault is open.
+pub fn vault_counts(session: &Session) -> Reply<Option<VaultCounts>> {
+    let guard = session.lock();
+    let Some(vault) = guard.as_ref() else {
+        return Ok(None);
+    };
+    let read = vault.read();
+    Ok(Some(VaultCounts {
+        objects: read.object_count()?,
+        blobs: read.blob_count()?,
+        schema_version: dbme_store::SCHEMA_VERSION,
+    }))
 }
 
 /// Closes the open vault, if any.

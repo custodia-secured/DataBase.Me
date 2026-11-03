@@ -40,10 +40,47 @@ async function syncNow(app: App, dialog: ReturnType<App["page"]["getByRole"]>) {
   await expect(button).toBeEnabled();
 }
 
+async function runCommand(app: App, label: string) {
+  if (app.phone) await app.press(app.page.getByRole("button", { name: "Search", exact: true }));
+  else await app.page.keyboard.press("Control+k");
+  const box = app.page.getByRole("combobox", { name: "Search or type > for a command" });
+  await expect(box).toBeFocused();
+  await box.fill(`> ${label}`);
+  const option = app.page.getByRole("option", { name: label, exact: true });
+  await expect(option).toBeVisible();
+  await app.press(option);
+}
+
 test.beforeEach(async ({ seed, app }) => {
   test.skip(!process.env.DBME_SCREENSHOTS, "set DBME_SCREENSHOTS=1 to take the screenshots");
   await seed(workspace());
   await app.open();
+});
+
+test("M7: the Document, Mind map and Table views in light and in dark", async ({ app }) => {
+  await app.openPage("Home", "Alpha");
+  const close = app.page.getByRole("button", { name: "Close pages" });
+  if (await close.isVisible()) await app.press(close);
+  await expect(app.pane().getByRole("button", { name: "Status: Doing" })).toBeVisible();
+  await shot(app, "m7", "light-document");
+  await app.openPage("Home");
+  if (await close.isVisible()) await app.press(close);
+  await app.view("Mind map");
+  await expect(
+    app.pane().getByRole("tree", { name: "Mind map" }).getByRole("treeitem"),
+  ).toHaveCount(5);
+  await shot(app, "m7", "light-mindmap");
+
+  await runCommand(app, "Theme: dark");
+  await expect(app.page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await app.view("Table");
+  await expect(app.pane().getByText("3 rows")).toBeVisible();
+  await shot(app, "m7", "dark-table");
+  await app.openPage("Home", "Alpha");
+  if (await close.isVisible()) await app.press(close);
+  await app.view("Document");
+  await expect(app.pane().getByRole("button", { name: "Status: Doing" })).toBeVisible();
+  await shot(app, "m7", "dark-document");
 });
 
 test("the files folder: off, on and synced, a conflict, and a hold", async ({ app, session }) => {

@@ -14,7 +14,7 @@ export const commands = {
 	 *  Called by the UI after its first render, with `error` set if its launch checks failed. Logs how
 	 *  long startup took and, in smoke-test mode, closes the vault and exits.
 	 */
-	appReady: (error: string | null) => __TAURI_INVOKE<void>("app_ready", { error }),
+	appReady: (error: string | null, notes: string[]) => __TAURI_INVOKE<void>("app_ready", { error, notes }),
 	/**  Creates a vault at `path` (a folder named `<name>.dbme`) and opens it. */
 	vaultCreate: (path: string) => typedError<VaultInfo, IpcError>(__TAURI_INVOKE("vault_create", { path })),
 	/**  Opens the vault at `path`. */
@@ -132,6 +132,12 @@ export const commands = {
 	importApply: (plan: ImportPlan_Deserialize) => typedError<ImportRun_Serialize, IpcError>(__TAURI_INVOKE("import_apply", { plan })),
 	/**  Where an object came from. */
 	provenanceList: (objectId: Id) => typedError<ProvenanceRow_Serialize[], IpcError>(__TAURI_INVOKE("provenance_list", { objectId })),
+	/**  The person's settings (M7). */
+	settingsGet: () => typedError<Settings_Serialize, IpcError>(__TAURI_INVOKE("settings_get")),
+	/**  Changes the settings `patch` names and returns them all as they are now. */
+	settingsSet: (patch: SettingsPatch_Deserialize) => typedError<Settings_Serialize, IpcError>(__TAURI_INVOKE("settings_set", { patch })),
+	/**  The machine's part of the diagnostic report. */
+	appDiagnostics: () => typedError<Diagnostics_Serialize, IpcError>(__TAURI_INVOKE("app_diagnostics")),
 };
 
 /** Events */
@@ -155,6 +161,11 @@ export type AppInfo_Deserialize = {
 	format_version: number,
 	/**  In smoke-test mode, where the launch test should create its vault. */
 	smoke_vault?: string | null,
+	/**
+	 *  Where `vault_open_default` keeps the default vault, for onboarding to show (M7); `None`
+	 *  when the app's data folder cannot be found.
+	 */
+	default_vault?: string | null,
 };
 
 /**  About the running app. */
@@ -167,6 +178,11 @@ export type AppInfo_Serialize = {
 	format_version: number,
 	/**  In smoke-test mode, where the launch test should create its vault. */
 	smoke_vault: string | null,
+	/**
+	 *  Where `vault_open_default` keeps the default vault, for onboarding to show (M7); `None`
+	 *  when the app's data folder cannot be found.
+	 */
+	default_vault: string | null,
 };
 
 /**  A file to attach, by its bytes or by the source file it is. */
@@ -550,6 +566,42 @@ export type Conflict_Serialize = {
 
 /**  A hash with its algorithm, for example `blake3:af13…` (64 hex digits). */
 export type ContentHash = string;
+
+/**
+ *  What the diagnostic report says about this machine (M7): the OS and architecture, the
+ *  webview and its version, and the vault's counts. No path, no title, no content.
+ */
+export type Diagnostics = Diagnostics_Serialize | Diagnostics_Deserialize;
+
+/**
+ *  What the diagnostic report says about this machine (M7): the OS and architecture, the
+ *  webview and its version, and the vault's counts. No path, no title, no content.
+ */
+export type Diagnostics_Deserialize = {
+	/**  `std::env::consts::OS`. */
+	os: string,
+	/**  `std::env::consts::ARCH`. */
+	arch: string,
+	/**  The webview and its version, as Tauri reports it. */
+	webview: string,
+	/**  The open vault's counts, or `None`. */
+	counts?: VaultCounts | null,
+};
+
+/**
+ *  What the diagnostic report says about this machine (M7): the OS and architecture, the
+ *  webview and its version, and the vault's counts. No path, no title, no content.
+ */
+export type Diagnostics_Serialize = {
+	/**  `std::env::consts::OS`. */
+	os: string,
+	/**  `std::env::consts::ARCH`. */
+	arch: string,
+	/**  The webview and its version, as Tauri reports it. */
+	webview: string,
+	/**  The open vault's counts, or `None`. */
+	counts: VaultCounts | null,
+};
 
 /**  Which end of a relation the results are. */
 export type Direction = 
@@ -1112,6 +1164,17 @@ export type MirrorSync_Serialize = {
 	held: Id | null,
 };
 
+/**
+ *  A preset of what is shown (brief §2.9): Simple reads as a plain notes app and hides types,
+ *  fields and the Table view; Organizer shows everything. Researcher and Data/Power come with
+ *  later milestones.
+ */
+export type Mode = 
+/**  A plain notes app: pages, search, the mind map, the gallery, the files folder, import. */
+"simple" | 
+/**  Everything of M1 to M6: types, fields, the Table view, tags. */
+"organizer";
+
 /**  A new field of a type. */
 export type NewField = NewField_Serialize | NewField_Deserialize;
 
@@ -1551,6 +1614,80 @@ export type Sensitivity =
 /**  Redacted before anything leaves the device, and never sent to an AI provider. */
 "sensitive";
 
+/**  Everything the app remembers about the person's choices. */
+export type Settings = Settings_Serialize | Settings_Deserialize;
+
+/**  What a change sets: every key is optional, and only the keys given change. */
+export type SettingsPatch = SettingsPatch_Serialize | SettingsPatch_Deserialize;
+
+/**  What a change sets: every key is optional, and only the keys given change. */
+export type SettingsPatch_Deserialize = {
+	/**  A new mode. */
+	mode?: Mode | null,
+	/**  A new theme. */
+	theme?: Theme | null,
+	/**  Whether update checks are wanted. */
+	update_checks?: boolean | null,
+	/**  The vault to open next time. */
+	last_vault?: string | null,
+	/**  Whether onboarding ran to its end. */
+	onboarded?: boolean | null,
+};
+
+/**  What a change sets: every key is optional, and only the keys given change. */
+export type SettingsPatch_Serialize = {
+	/**  A new mode. */
+	mode: Mode | null,
+	/**  A new theme. */
+	theme: Theme | null,
+	/**  Whether update checks are wanted. */
+	update_checks: boolean | null,
+	/**  The vault to open next time. */
+	last_vault: string | null,
+	/**  Whether onboarding ran to its end. */
+	onboarded: boolean | null,
+};
+
+/**  Everything the app remembers about the person's choices. */
+export type Settings_Deserialize = {
+	/**  The file's version, [`SETTINGS_VERSION`] when this app wrote it. */
+	version?: number,
+	/**  Which preset of features is shown. */
+	mode?: Mode,
+	/**  The colours. */
+	theme?: Theme,
+	/**
+	 *  Whether the person agreed to update checks. Off by default (brief §2.2); 0.1 has no
+	 *  updater, so the choice is recorded for the first version that does, and neither answer
+	 *  causes a request (ADR-0010).
+	 */
+	update_checks?: boolean,
+	/**  The vault opened last, to open again at the next start. */
+	last_vault?: string | null,
+	/**  Whether onboarding has run to its end. */
+	onboarded?: boolean,
+};
+
+/**  Everything the app remembers about the person's choices. */
+export type Settings_Serialize = {
+	/**  The file's version, [`SETTINGS_VERSION`] when this app wrote it. */
+	version: number,
+	/**  Which preset of features is shown. */
+	mode: Mode,
+	/**  The colours. */
+	theme: Theme,
+	/**
+	 *  Whether the person agreed to update checks. Off by default (brief §2.2); 0.1 has no
+	 *  updater, so the choice is recorded for the first version that does, and neither answer
+	 *  causes a request (ADR-0010).
+	 */
+	update_checks: boolean,
+	/**  The vault opened last, to open again at the next start. */
+	last_vault: string | null,
+	/**  Whether onboarding has run to its end. */
+	onboarded: boolean,
+};
+
 /**  A file as seen before any importer reads it. */
 export type Sniffed = Sniffed_Serialize | Sniffed_Deserialize;
 
@@ -1654,6 +1791,15 @@ parent: Id | null } |
 /**  The type. */
 type_id: Id };
 
+/**  The colours: the OS's choice, or light or dark regardless. */
+export type Theme = 
+/**  Whatever the OS asks for. */
+"system" | 
+/**  Light colours regardless of the OS. */
+"light" | 
+/**  Dark colours regardless of the OS. */
+"dark";
+
 /**  One object of an [`ObjectTree`]. */
 export type TreeNode = TreeNode_Serialize | TreeNode_Deserialize;
 
@@ -1750,6 +1896,16 @@ export type VaultChanged_Deserialize = Committed_Deserialize;
  *  folder commits a batch of outside changes.
  */
 export type VaultChanged_Serialize = Committed_Serialize;
+
+/**  What the diagnostic report says about the vault (M7): numbers, never content. */
+export type VaultCounts = {
+	/**  Objects, the Trash included. */
+	objects: number,
+	/**  Blobs in the store. */
+	blobs: number,
+	/**  The schema version the vault is at. */
+	schema_version: number,
+};
 
 /**  About the open vault. */
 export type VaultInfo = {

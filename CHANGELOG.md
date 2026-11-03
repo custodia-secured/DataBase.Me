@@ -6,8 +6,30 @@ All notable changes to DataBase.Me are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-03
+
+The MVP: everything below, from the foundations to the release. The app makes no network request
+on its own, and 0.1 has no updater; the setting that will govern one is recorded and off.
+
 ### Added
 
+- M7 MVP release 0.1: Simple and Organizer modes (a filter on what is shown, never a change to
+  the vault; "Today" opens the day's page under Journal); settings in the app's configuration
+  folder (`settings.json`: mode, theme, update checks, the last vault, onboarding); light and dark
+  themes from a setting, with no flash of the wrong one; onboarding on the first launch (where the
+  vault goes, the files folder, the mode, the theme, update checks, off and explained); a Settings
+  and Help dialog (the vault, open another or make a new one, export to a folder, the files folder,
+  the mode, the theme, update checks, "Set up again", the version, the documentation and issue
+  addresses as text, and _Copy diagnostic report_, which names versions, counts and the last
+  failures' kinds and never a path or a title); the zero-network gate in CI (the release app under
+  `strace` on Linux, blocking) and an origin check on every end-to-end test, with the by-hand
+  procedure for Windows and macOS in the user guide; the usability scenario as an end-to-end test
+  on the four browser projects; the user guide and the documentation site (GitHub Pages from
+  `docs/`); FORMAT.md v0.1; installers for Windows (MSI, NSIS), macOS (Apple Silicon and Intel)
+  and Linux (AppImage, deb, rpm) from one tag, with SHA-256 sums and a draft release, signed when
+  the certificates exist and said plainly when they do not. Three new commands (`settings_get`,
+  `settings_set`, `app_diagnostics`) and the dialog plugin for the folder picker. ADR-0027 to
+  ADR-0029.
 - M0 foundations: the monorepo (Rust workspace and pnpm workspace), the Tauri 2 desktop shell,
   CI on Windows, macOS and Linux (formatting, linting, type checks, tests, builds, a launch test,
   dependency licence checks and the DCO sign-off check), the licences, governance, contribution,

@@ -380,7 +380,7 @@ fn run(command: Command, config: &Path, out: &mut impl Write) -> Result<ExitCode
 
 fn info() -> String {
     format!(
-        "{} {}\nvault format: {} (draft)\n",
+        "{} {}\nvault format: {} (FORMAT.md v0.1)\n",
         dbme_core::PRODUCT_NAME,
         dbme_core::VERSION,
         dbme_core::FORMAT_VERSION

@@ -1,0 +1,11 @@
+# The documentation site (M7, ADR-0029): GitHub Pages renders this folder as it is. The theme is
+# one GitHub's Jekyll ships; relative links between Markdown files are rewritten to the pages they
+# become (jekyll-relative-links is on by default on Pages). Nothing is excluded: FORMAT.md,
+# ARCHITECTURE.md, the ADRs and the milestone notes are published with the user guide.
+title: DataBase.Me
+description: A free, open-source, local-first lifetime information repository.
+theme: jekyll-theme-primer
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false

@@ -14,4 +14,12 @@ export {
   type MenuProps,
 } from "./components";
 export * from "./icons";
+export { copyText } from "./clipboard";
 export { useMediaQuery } from "./media";
+export {
+  applyTheme,
+  effectiveTheme,
+  readThemeHint,
+  THEME_HINT_KEY,
+  type ThemeChoice,
+} from "./theme";

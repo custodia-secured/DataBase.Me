@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 export type * from "./bindings";
-export { CommandError, commands, events, unwrap } from "./ipc";
+export { CommandError, commands, events, recentErrors, unwrap, type RecentError } from "./ipc";
 export { onVaultChanged, startLiveRefresh } from "./live";
 export {
   blobKey,
@@ -9,6 +9,8 @@ export {
   forgetVault,
   keys,
   MANUAL,
+  SETTINGS_KEY,
+  setSettings,
   TREE_LIMIT,
   TYPE_FACET,
   useAncestors,
@@ -28,6 +30,7 @@ export {
   useQueryCount,
   useQueryResults,
   useSearch,
+  useSettings,
   useSummary,
   useTree,
   useTypes,

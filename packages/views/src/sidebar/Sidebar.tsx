@@ -20,6 +20,7 @@ import {
 } from "@databaseme/client";
 import {
   Ellipsis,
+  CalendarDays,
   FolderInput,
   IconButton,
   Menu,
@@ -255,6 +256,15 @@ export function Sidebar({ selected, onSelect, openView = null, onOpenView }: Sid
       <div className="dbme-sidebar__bar">
         <h2 className="dbme-sidebar__heading">Pages</h2>
         <IconButton label="New page" icon={Plus} onClick={() => void newPage(null)} />
+        <IconButton
+          label="Today"
+          icon={CalendarDays}
+          onClick={() =>
+            void actions.today().then((id) => {
+              if (id !== undefined) onSelect(id);
+            })
+          }
+        />
         <Menu
           label={current ? `Actions for ${current.summary.object.title || "Untitled"}` : "Actions"}
           icon={Ellipsis}

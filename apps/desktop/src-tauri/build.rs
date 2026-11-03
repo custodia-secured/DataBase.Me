@@ -62,6 +62,9 @@ const COMMANDS: &[&str] = &[
     "import_plan",
     "import_apply",
     "provenance_list",
+    "settings_get",
+    "settings_set",
+    "app_diagnostics",
 ];
 
 /// The Windows application manifest. tauri-build links its copy into the app binary only, so the

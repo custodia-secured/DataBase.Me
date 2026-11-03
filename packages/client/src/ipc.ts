@@ -19,11 +19,32 @@ export class CommandError extends Error {
   }
 }
 
+/**
+ * A failure the diagnostic report lists (M7): when, and what kind. Never the message, since a
+ * message can carry a path or a title.
+ */
+export interface RecentError {
+  at: number;
+  kind: IpcError["kind"];
+}
+
+const RECENT = 20;
+const recent: RecentError[] = [];
+
+/** The last {@link RECENT} failures, newest first. */
+export function recentErrors(): readonly RecentError[] {
+  return recent;
+}
+
 /** Returns a command's data, or throws its error as a {@link CommandError}. */
 export async function unwrap<T>(
   result: Promise<{ status: "ok"; data: T } | { status: "error"; error: IpcError }>,
 ): Promise<T> {
   const settled = await result;
-  if (settled.status === "error") throw new CommandError(settled.error);
+  if (settled.status === "error") {
+    recent.unshift({ at: Date.now(), kind: settled.error.kind });
+    if (recent.length > RECENT) recent.length = RECENT;
+    throw new CommandError(settled.error);
+  }
   return settled.data;
 }
