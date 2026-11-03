@@ -8,18 +8,26 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+base64.workspace = true
 calamine.workspace = true
 csv.workspace = true
+dbme-core.workspace = true
+dbme-store.workspace = true
 image.workspace = true
 infer.workspace = true
 kamadak-exif.workspace = true
 pdf-extract.workspace = true
-
-[dev-dependencies]
-dbme-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+specta = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[dev-dependencies]
 tempfile.workspace = true
+
+[features]
+# Derives specta::Type on the plan and the run, for the desktop app's bindings (ADR-0014).
+specta = ["dep:specta", "dbme-core/specta", "dbme-store/specta"]
 
 [lints]
 workspace = true

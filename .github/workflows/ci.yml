@@ -5,8 +5,8 @@
 #   licences  cargo-deny and the JS licence check (ADR-0009)
 #   desktop   on Windows, macOS and Linux: rustfmt, clippy -D warnings, cargo test, release build,
 #             then launch the built app and wait for its UI to render and pass its IPC checks
-#   coverage  at least 90% of lines in dbme-core, dbme-store, dbme-mirror and dbme-export are
-#             tested by their own tests (M1 acceptance; M5 Decision 24)
+#   coverage  at least 90% of lines in dbme-core, dbme-store, dbme-mirror, dbme-export and
+#             dbme-ingest are tested by their own tests (M1 acceptance; M5 Decision 24; M6 Task 3)
 #   mobile    dbme-core and dbme-store build for iOS and Android (M1 acceptance)
 #   budget    10,000 objects created, edited, deleted and undone in under 2 s, release build (M1);
 #             10,000 random interleavings of app and file edits lose nothing (M5)
@@ -195,6 +195,10 @@ jobs:
         run: >-
           cargo llvm-cov --locked -p dbme-export --summary-only --fail-under-lines 90
           --ignore-filename-regex 'crates/(core|store|mirror)/'
+      - name: dbme-ingest
+        run: >-
+          cargo llvm-cov --locked -p dbme-ingest --summary-only --fail-under-lines 90
+          --ignore-filename-regex 'crates/(core|store|mirror|export)/'
 
   mobile:
     name: Mobile build (${{ matrix.target }})

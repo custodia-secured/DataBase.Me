@@ -1394,3 +1394,53 @@ fn tree_and_list_reads_keep_the_order_their_sql_defines() {
     assert!(read.block_subtree(Id::from_parts(9, 9)).unwrap().is_empty());
     t.assert_verifies();
 }
+
+// An import tells a file it has seen before by the objects that hold its hash as an original
+// (ADR-0026): live objects only, by role.
+#[test]
+fn objects_with_a_blob_are_found_by_hash_and_role_while_live() {
+    let mut t = new_vault();
+    let blob = t.vault.blobs().put(b"the same file").unwrap();
+    let mut ids = Vec::new();
+    for title in ["First", "Second"] {
+        t.tick();
+        let (id, _) = t
+            .vault
+            .transact(|txn| {
+                let id = txn.create_object(NewObject {
+                    title: title.into(),
+                    ..NewObject::default()
+                })?;
+                txn.attach(NewAttachment {
+                    object_id: id,
+                    blob_hash: blob.hash.clone(),
+                    role: dbme_core::model::AttachmentRole::Original,
+                    filename: None,
+                    mime: None,
+                })?;
+                Ok(id)
+            })
+            .unwrap();
+        ids.push(id);
+    }
+    let read = t.vault.read();
+    let role = dbme_core::model::AttachmentRole::Original;
+    assert_eq!(read.objects_with_blob(&blob.hash, role).unwrap(), ids);
+    assert!(
+        read.objects_with_blob(&blob.hash, dbme_core::model::AttachmentRole::Thumbnail)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        read.objects_with_blob(&dbme_core::ContentHash::of(b"other"), role)
+            .unwrap()
+            .is_empty()
+    );
+    t.tick();
+    t.vault.transact(|txn| txn.trash_object(ids[0])).unwrap();
+    assert_eq!(
+        t.vault.read().objects_with_blob(&blob.hash, role).unwrap(),
+        [ids[1]],
+        "a trashed object no longer counts"
+    );
+}

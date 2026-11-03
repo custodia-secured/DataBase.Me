@@ -1,11 +1,42 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Ingestion (ADR-0026, M6): importers that turn files into objects with provenance.
 //!
-//! M6 Task 1 lays down the crate and the parsers the gates probe (`tests/gate_*.rs`); the
-//! importer contract, the plan and the apply follow in Task 3.
+//! A run is a [`plan`] and then an [`apply`]. The plan reads every source, lets the importer that
+//! accepts it say what it would make ([`Extract`]), finds duplicates by content hash, and writes
+//! nothing: it is the dry run and the preview. The apply writes the plan to the vault in one
+//! transaction (several, past [`TRANSACTION_OBJECTS`] objects), which is the undo step, and puts
+//! a [`dbme_core::model::ProvenanceRow`] on every object it makes. Imports land under the parent
+//! the caller names, or under a new "Import <date>" note that holds the run's receipt.
+//!
+//! The importers of v0 are the [`generic`] one (any file becomes a `Document` or `Media` with the
+//! file attached) and, in later tasks, tables, PDFs, images and Markdown folders. Every importer
+//! is pure Rust and reads nothing but its source.
+
+pub mod apply;
+pub mod generic;
+pub mod importer;
+pub mod plan;
+pub mod sniff;
+pub mod source;
+
+mod error;
+
+pub use apply::{ImportRun, apply};
+pub use error::IngestError;
+pub use importer::{Ctx, Importer, Importers};
+pub use plan::{DuplicatePolicy, ImportOptions, ImportPlan, PlanEntry, plan};
+pub use sniff::Sniffed;
+pub use source::{Source, SourceKind};
 
 /// The `extractor` written into every provenance row this crate makes.
 pub const EXTRACTOR: &str = "dbme-ingest";
 
 /// The `extractor_version` beside it: this crate's version.
 pub const EXTRACTOR_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// A source larger than this is refused before it is read (M6.md Design, caps).
+pub const MAX_SOURCE_BYTES: u64 = 256 << 20;
+
+/// How many objects one transaction holds; a larger run is split into several undo steps, and
+/// the plan says so (M6 Decision 7).
+pub const TRANSACTION_OBJECTS: usize = 10_000;

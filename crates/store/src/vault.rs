@@ -398,8 +398,10 @@ impl Vault {
         &self.conn
     }
 
-    /// The current time, for bookkeeping rows written outside a transaction.
-    pub(crate) fn now_ms(&self) -> i64 {
+    /// The time by the vault's clock, in milliseconds since the Unix epoch: what the next
+    /// transaction's `ts` will be. Bookkeeping rows written outside a transaction use it, and an
+    /// import names its run by it before it writes anything.
+    pub fn now_ms(&self) -> i64 {
         self.ctx.clock.now_ms()
     }
 
