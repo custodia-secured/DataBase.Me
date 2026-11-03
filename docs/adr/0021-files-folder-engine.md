@@ -151,3 +151,17 @@ between the two; an open vault is `StoreError::Locked`.
   in step with the watcher.
 - **Writing over an unread file and relying on the rescan to merge afterwards.** The rescan cannot
   merge what the write destroyed; the deferral costs one `stat` per dirty object.
+
+## Later changes
+
+These notes record what later milestones did under this decision; the decision itself stands.
+
+- **M6 (2026-11-03):** the drop zone's handoff (ADR-0026). A file that is not Markdown still
+  becomes the engine's plain object with the file attached; the worker's inbound pass then hands
+  every such object to the matching importer (`dbme_ingest::folders::enrich_object`), which adds
+  the fields, the blocks the object lacks, the derived attachments (a thumbnail, extracted text),
+  when and where, and a provenance row as `import:<importer>`; its warnings are logged. The
+  engine itself is unchanged. The engine also gained an import mode, `Mirror::import_from`, for
+  importing a Markdown or Obsidian folder that is not the vault's files folder: the bookkeeping
+  rows are scratch and dropped at the end, every write is an ordinary `transact`, an inbox entry
+  is a warning, and nothing is written back to the folder.

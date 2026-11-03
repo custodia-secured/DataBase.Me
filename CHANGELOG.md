@@ -56,3 +56,19 @@ All notable changes to DataBase.Me are recorded here. The format follows
   `dbme-core`. CI gains the 10,000-interleavings property, the files-folder budgets, the watcher
   probes on three systems, nightly fuzzing of the parser, and the export crate in the coverage
   gate. FORMAT.md §3.1 (migration 3), §6 and §7; ADR-0021 to ADR-0025.
+- M6 ingestion v0: importing a Markdown or Obsidian folder (through the files folder's engine,
+  links, frontmatter, tags and pictures kept), CSV and Excel tables (one object per row, under a
+  Dataset holding the file, with the fields' kinds inferred and misfits kept as text), PDF text
+  (a heading and paragraphs per page, the title, author and page count), pictures (EXIF date and
+  place, camera, a thumbnail) and any other file as an attachment; a dry-run preview that writes
+  nothing, duplicates found by content hash and skipped or linked, a receipt note, and one undo
+  step per 10,000 objects. Every imported object carries provenance: a new op-logged entity
+  (migration 4) that undoes, replays and exports with it, shown in the Document view with the
+  object's files. An Import dialog from the header, the palette or a drop on the window; files
+  dropped into the files folder are now extracted too. The CLI's `import` takes several sources,
+  `--into` and `--dry-run`. Hostile files (malformed PDFs, a PNG bomb, formula cells, a sheet
+  named like a path, a nested zip) are contained; the PDF parser's panics are caught per page.
+  Three new commands and an `import-dropped` event. New crate `dbme-ingest`, in the coverage
+  gate; proptest layers and nightly fuzzing for the CSV and PDF importers; the import budgets
+  printed. FORMAT.md §3.1 (migration 4), §3.4 and §5; ADR-0026 and notes on ADR-0005, ADR-0012
+  and ADR-0021.

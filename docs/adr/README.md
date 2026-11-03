@@ -33,3 +33,4 @@ other.
 | [0023](0023-yaml-frontmatter.md)                | The YAML crate for frontmatter                               | Proposed |
 | [0024](0024-file-watcher.md)                    | The file watcher                                             | Proposed |
 | [0025](0025-three-way-merge.md)                 | The three-way merge inside a block                           | Proposed |
+| [0026](0026-ingestion-v0.md)                    | Ingestion v0: the importers, the run and provenance          | Proposed |
