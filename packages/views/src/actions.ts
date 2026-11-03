@@ -7,9 +7,11 @@ import {
   commands,
   unwrap,
   type Id,
+  type NewColumn_Deserialize,
   type NewObject_Deserialize,
   type NewView_Deserialize,
   type Position,
+  type Source,
   type Value,
 } from "@databaseme/client";
 import { JOURNAL_TITLE, todayTitle } from "./mode";
@@ -64,6 +66,18 @@ export const actions = {
   },
   create(object: NewObject_Deserialize) {
     return attempt(() => unwrap(commands.objectCreate(object)));
+  },
+  addRow(source: Source, parent: Id) {
+    return attempt(() => unwrap(commands.rowAdd(source, parent)));
+  },
+  addColumn(source: Source, column: NewColumn_Deserialize) {
+    return attempt(() => unwrap(commands.columnAdd(source, column)));
+  },
+  renameField(id: Id, label: string) {
+    return attempt(() => unwrap(commands.fieldRename(id, label)));
+  },
+  deleteField(id: Id) {
+    return attempt(() => unwrap(commands.fieldDelete(id)));
   },
   /**
    * The daily journal (M7): today's page under the top-level "Journal" page, made when missing,

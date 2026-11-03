@@ -18,6 +18,7 @@ export {
   useBacklinks,
   useBlobUrl,
   useBlocks,
+  useColumnTarget,
   useConflicts,
   useCount,
   useFacets,
