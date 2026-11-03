@@ -54,9 +54,12 @@ function TitleField({ object }: { object: ObjectRow_Serialize }) {
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      const editor = event.currentTarget
-        .closest("article")
-        ?.querySelector<HTMLElement>(".dbme-editor");
+      // Saving is the blur's job, so blur first: moving focus into the editor used to be the
+      // only trigger, and when the editor was not mounted yet (a page just opened, a slow
+      // machine) nothing took focus, nothing blurred and the title was never saved.
+      const field = event.currentTarget;
+      const editor = field.closest("article")?.querySelector<HTMLElement>(".dbme-editor");
+      field.blur();
       editor?.focus();
     } else if (event.key === "Escape") {
       setDraft(object.title);
