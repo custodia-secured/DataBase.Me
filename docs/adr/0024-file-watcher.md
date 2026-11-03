@@ -125,3 +125,8 @@ These notes record what the build found under this decision; the decision itself
   The engine relies on none of the kind names: a batch is reduced to a set of changed and removed
   paths, and `rescan()` derives what a watcher missed. The file→app budget passed through this
   watcher on both systems (358 ms on Ubuntu, 342 ms on macOS, 300 ms of it the debounce).
+  Since the record was read (2026-11-03), the probes are no longer `ignore`d off Windows: every
+  shape goes through `expect`, which asserts on Windows and prints "as on Windows" or "differs
+  from Windows" elsewhere, so the `watcher-probes` job records on Linux and macOS instead of
+  failing by design, and `--include-ignored` is gone. The job stays advisory for the runners'
+  timing alone; the engine's `watcher.rs` asserts on all three systems in the desktop jobs.
