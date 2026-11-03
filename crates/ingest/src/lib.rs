@@ -18,13 +18,14 @@ pub mod importer;
 pub mod plan;
 pub mod sniff;
 pub mod source;
+pub mod tables;
 
 mod error;
 
-pub use apply::{ImportRun, apply};
+pub use apply::{ImportRun, apply, date_of, datetime_of};
 pub use error::IngestError;
-pub use importer::{Ctx, Importer, Importers};
-pub use plan::{DuplicatePolicy, ImportOptions, ImportPlan, PlanEntry, plan};
+pub use importer::{Ctx, Extract, ExtractedObject, Importer, Importers, TypeDraft};
+pub use plan::{Duplicate, DuplicatePolicy, ImportOptions, ImportPlan, PlanEntry, Refused, plan};
 pub use sniff::Sniffed;
 pub use source::{Source, SourceKind};
 

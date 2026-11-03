@@ -279,6 +279,7 @@ fn duplicates_are_reported_and_skipped_or_attached() {
     let options = ImportOptions {
         parent: None,
         duplicates: DuplicatePolicy::Attach,
+        ..ImportOptions::default()
     };
     let third = plan(&vault, &[a], options, &Importers::v0()).unwrap();
     assert!(third.is_empty(), "nothing new to make");
@@ -395,6 +396,7 @@ impl Importer for Many {
             })
             .collect();
         Ok(Extract {
+            types: Vec::new(),
             objects: vec![root],
             warnings: vec![format!("{n} items")],
         })
@@ -409,7 +411,7 @@ fn a_large_run_is_split_into_transactions_of_ten_thousand_objects() {
     let two = file(dir.path(), "two.many", b"5999");
     let bad = file(dir.path(), "bad.many", b"not a number");
     let importers = Importers::v0().with_first(Box::new(Many));
-    assert_eq!(importers.ids(), ["many", "file"]);
+    assert_eq!(importers.ids(), ["many", "csv", "xlsx", "file"]);
     let plan = plan(
         &vault,
         &[one, two, bad.clone()],
@@ -461,6 +463,7 @@ fn a_plan_naming_an_unknown_type_writes_nothing() {
         }
         fn plan(&self, source: &Source, _ctx: &Ctx<'_>) -> Result<Extract, IngestError> {
             Ok(Extract {
+                types: Vec::new(),
                 objects: vec![ExtractedObject::new(
                     "x",
                     "Starship",

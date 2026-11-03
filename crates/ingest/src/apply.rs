@@ -5,13 +5,14 @@
 
 use dbme_core::Id;
 use dbme_store::{
-    NewAttachment, NewBlock, NewObject, NewProvenance, NewRelation, Position, Txn, Vault,
+    NewAttachment, NewBlock, NewField, NewObject, NewProvenance, NewRelation, NewType, Position,
+    Txn, Vault,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::importer::{AttachmentDraft, BlockDraft, ExtractedObject, type_named};
-use crate::plan::{DuplicatePolicy, ImportPlan, PlanEntry};
-use crate::{EXTRACTOR, EXTRACTOR_VERSION, IngestError, TRANSACTION_OBJECTS};
+use crate::importer::{AttachmentDraft, BlockDraft, ExtractedObject, TypeDraft, type_named};
+use crate::plan::{DuplicatePolicy, ImportPlan, PlanEntry, batches};
+use crate::{EXTRACTOR, EXTRACTOR_VERSION, IngestError};
 
 /// What an apply did.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,10 +48,16 @@ pub fn apply(vault: &mut Vault, plan: &ImportPlan) -> Result<ImportRun, IngestEr
             return Err(IngestError::NoSuchParent(parent));
         }
     }
-    // Every type the plan names must exist before anything is written, so a bad plan writes
-    // nothing at all.
+    // Every type the plan names must exist, or be one the plan creates, before anything is
+    // written, so a bad plan writes nothing at all.
     for entry in &plan.entries {
-        check_types(&read, &entry.extract.objects)?;
+        let drafted: Vec<&str> = entry
+            .extract
+            .types
+            .iter()
+            .map(|t| t.name.as_str())
+            .collect();
+        check_types(&read, &drafted, &entry.extract.objects)?;
     }
 
     let mut run = ImportRun {
@@ -63,18 +70,10 @@ pub fn apply(vault: &mut Vault, plan: &ImportPlan) -> Result<ImportRun, IngestEr
         attached: Vec::new(),
     };
 
-    let mut batches: Vec<Vec<&PlanEntry>> = vec![Vec::new()];
-    let mut in_batch = 0;
-    for entry in &plan.entries {
-        if in_batch > 0 && in_batch + entry.objects > TRANSACTION_OBJECTS {
-            batches.push(Vec::new());
-            in_batch = 0;
-        }
-        if let Some(batch) = batches.last_mut() {
-            batch.push(entry);
-        }
-        in_batch += entry.objects;
-    }
+    let batches: Vec<Vec<&PlanEntry>> = batches(&plan.entries)
+        .into_iter()
+        .map(|batch| batch.into_iter().map(|i| &plan.entries[i]).collect())
+        .collect();
 
     for (n, batch) in batches.iter().enumerate() {
         let first = n == 0;
@@ -94,6 +93,9 @@ pub fn apply(vault: &mut Vault, plan: &ImportPlan) -> Result<ImportRun, IngestEr
                 run.receipt = Some(receipt);
             }
             for entry in batch {
+                for draft in &entry.extract.types {
+                    ensure_type(txn, draft)?;
+                }
                 for object in &entry.extract.objects {
                     let id = write_object(txn, plan.run_id, run.parent, &entry.importer, object)
                         .map_err(store_error)?;
@@ -139,11 +141,50 @@ fn store_error(error: IngestError) -> dbme_store::StoreError {
 
 fn check_types(
     read: &dbme_store::Reader<'_>,
+    drafted: &[&str],
     objects: &[ExtractedObject],
 ) -> Result<(), IngestError> {
     for object in objects {
-        type_named(read, &object.type_name)?;
-        check_types(read, &object.children)?;
+        if !drafted.contains(&object.type_name.as_str()) {
+            type_named(read, &object.type_name)?;
+        }
+        check_types(read, drafted, &object.children)?;
+    }
+    Ok(())
+}
+
+/// Creates the drafted type, or adds the fields an existing type of that name lacks. An existing
+/// field keeps its kind (the importer planned around it).
+fn ensure_type(txn: &mut Txn<'_>, draft: &TypeDraft) -> dbme_store::Result<()> {
+    let existing = txn
+        .read()
+        .types()?
+        .into_iter()
+        .find(|t| t.name == draft.name);
+    let type_id = match existing {
+        Some(t) => t.id,
+        None => txn.create_type(NewType {
+            name: draft.name.clone(),
+            ..NewType::default()
+        })?,
+    };
+    let have: Vec<String> = txn
+        .read()
+        .fields(type_id)?
+        .into_iter()
+        .map(|f| f.key)
+        .collect();
+    for field in &draft.fields {
+        if !have.contains(&field.key) {
+            txn.create_field(NewField {
+                type_id,
+                key: field.key.clone(),
+                label: field.label.clone(),
+                kind: field.kind,
+                options: serde_json::json!({}),
+                required: false,
+            })?;
+        }
     }
     Ok(())
 }
@@ -328,9 +369,26 @@ pub fn date_of(ms: i64) -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
+/// `YYYY-MM-DDTHH:MM:SSZ` (with `.mmm` when the milliseconds are not zero) in UTC for a time in
+/// milliseconds since the epoch: the `datetime` field value (FORMAT.md §3.3).
+pub fn datetime_of(ms: i64) -> String {
+    let day_ms = ms.rem_euclid(86_400_000);
+    let (h, m, s, milli) = (
+        day_ms / 3_600_000,
+        day_ms / 60_000 % 60,
+        day_ms / 1_000 % 60,
+        day_ms % 1_000,
+    );
+    if milli == 0 {
+        format!("{}T{h:02}:{m:02}:{s:02}Z", date_of(ms))
+    } else {
+        format!("{}T{h:02}:{m:02}:{s:02}.{milli:03}Z", date_of(ms))
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{date_of, store_error};
+    use super::{date_of, datetime_of, store_error};
     use crate::IngestError;
 
     #[test]
@@ -358,5 +416,12 @@ mod tests {
         assert_eq!(date_of(951_782_400_000), "2000-02-29");
         assert_eq!(date_of(1_762_128_000_000), "2025-11-03");
         assert_eq!(date_of(1_762_127_999_999), "2025-11-02");
+        assert_eq!(datetime_of(0), "1970-01-01T00:00:00Z");
+        assert_eq!(datetime_of(1_762_127_999_999), "2025-11-02T23:59:59.999Z");
+        assert_eq!(
+            datetime_of(1_762_128_000_000 + 43_200_000),
+            "2025-11-03T12:00:00Z"
+        );
+        assert_eq!(datetime_of(-1_000), "1969-12-31T23:59:59Z");
     }
 }

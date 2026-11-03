@@ -34,6 +34,28 @@ pub struct ImportOptions {
     pub parent: Option<Id>,
     /// What to do with duplicates.
     pub duplicates: DuplicatePolicy,
+    /// For tables, the column whose cells are the objects' titles, by header or key; the first
+    /// column when `None`.
+    pub title_column: Option<String>,
+}
+
+/// How the entries fall into transactions: whole entries in order, a new transaction when the
+/// next entry would take the running count past [`TRANSACTION_OBJECTS`]. The plan and the apply
+/// count the same way.
+pub(crate) fn batches(entries: &[PlanEntry]) -> Vec<Vec<usize>> {
+    let mut batches: Vec<Vec<usize>> = vec![Vec::new()];
+    let mut in_batch = 0;
+    for (index, entry) in entries.iter().enumerate() {
+        if in_batch > 0 && in_batch + entry.objects > TRANSACTION_OBJECTS {
+            batches.push(Vec::new());
+            in_batch = 0;
+        }
+        if let Some(batch) = batches.last_mut() {
+            batch.push(index);
+        }
+        in_batch += entry.objects;
+    }
+    batches
 }
 
 /// One source in the plan.
@@ -123,7 +145,10 @@ pub fn plan(
             return Err(IngestError::NoSuchParent(parent));
         }
     }
-    let ctx = Ctx { read };
+    let ctx = Ctx {
+        read,
+        options: options.clone(),
+    };
     let run_id = IdGenerator::new().next(vault.now_ms())?;
     let mut plan = ImportPlan {
         run_id,
@@ -190,9 +215,11 @@ pub fn plan(
             objects,
         });
     }
-    plan.transactions = plan.objects.div_ceil(TRANSACTION_OBJECTS).max(usize::from(
-        !plan.entries.is_empty() || plan.options.parent.is_none() && !plan.duplicates.is_empty(),
-    ));
+    plan.transactions = if plan.entries.is_empty() {
+        usize::from(plan.options.parent.is_none())
+    } else {
+        batches(&plan.entries).len()
+    };
     Ok(plan)
 }
 

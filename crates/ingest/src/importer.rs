@@ -13,10 +13,12 @@ use serde_json::Value;
 
 use crate::{IngestError, Sniffed, Source};
 
-/// What an importer may look at while it plans: the vault, read only.
+/// What an importer may look at while it plans: the vault, read only, and the run's options.
 pub struct Ctx<'a> {
     /// The vault as it is now.
     pub read: Reader<'a>,
+    /// The options the run was asked for.
+    pub options: crate::ImportOptions,
 }
 
 /// One importer: a kind of file it knows how to turn into objects.
@@ -46,7 +48,11 @@ impl Importers {
     /// The importers of this version.
     pub fn v0() -> Self {
         Self {
-            importers: vec![Box::new(crate::generic::Generic)],
+            importers: vec![
+                Box::new(crate::tables::Csv),
+                Box::new(crate::tables::Xlsx),
+                Box::new(crate::generic::Generic),
+            ],
         }
     }
 
@@ -77,8 +83,35 @@ impl Importers {
 pub struct Extract {
     /// The objects, in order; each may have children.
     pub objects: Vec<ExtractedObject>,
+    /// Types the objects need that the vault may not have: created, or their missing fields
+    /// added, before the objects are written (a table's type, one field per column).
+    #[serde(default)]
+    pub types: Vec<TypeDraft>,
     /// Things the person should know: a page that gave no text, a cell that did not fit.
     pub warnings: Vec<String>,
+}
+
+/// A type an import needs, by name. An existing type of that name is reused and only the fields
+/// it lacks are added; the kinds of the fields it has rule (M6 Task 4).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct TypeDraft {
+    /// The type's name.
+    pub name: String,
+    /// Its fields, in column order.
+    pub fields: Vec<FieldDraft>,
+}
+
+/// A field of a drafted type.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct FieldDraft {
+    /// The key, an identifier.
+    pub key: String,
+    /// The label, the column's header as written.
+    pub label: String,
+    /// The kind inferred from the column.
+    pub kind: dbme_core::model::FieldKind,
 }
 
 /// One object to make.
@@ -337,7 +370,7 @@ mod tests {
         root.children.push(child);
         assert_eq!(root.count(), 3);
         let registry = Importers::default();
-        assert_eq!(registry.ids(), ["file"]);
+        assert_eq!(registry.ids(), ["csv", "xlsx", "file"]);
         let sniffed = Sniffed::from_parts(Path::new("x.bin"), 0, b"");
         assert_eq!(registry.choose(&sniffed).id(), "file");
     }
