@@ -20,6 +20,8 @@ import type {
   ProvenanceRow_Serialize,
   Query_Deserialize,
   SearchHit_Serialize,
+  Settings,
+  SettingsPatch,
   Sort,
   Source,
   TypeRow_Serialize,
@@ -255,6 +257,24 @@ export function useAttachments(id: Id | null) {
     queryFn: () => unwrap(commands.attachmentsList(id ?? "")),
     enabled: id !== null,
   });
+}
+
+/** The person's settings (M7): outside {@link VAULT}, since no vault change touches them. */
+export const SETTINGS_KEY = ["settings"] as const;
+
+export function useSettings() {
+  return useQuery<Settings>({
+    queryKey: SETTINGS_KEY,
+    queryFn: () => unwrap(commands.settingsGet()),
+    staleTime: Infinity,
+  });
+}
+
+/** Changes the settings `patch` names and puts the result in the cache at once. */
+export async function setSettings(client: QueryClient, patch: SettingsPatch): Promise<Settings> {
+  const settings = await unwrap(commands.settingsSet(patch));
+  client.setQueryData(SETTINGS_KEY, settings);
+  return settings;
 }
 
 /**

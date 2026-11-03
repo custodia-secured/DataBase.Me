@@ -30,6 +30,7 @@ use dbme_store::{
 mod blocks;
 mod import;
 mod mirror;
+mod settings;
 
 pub use blocks::BlockChange;
 pub use dbme_ingest::{ImportOptions, ImportPlan, ImportRun};
@@ -38,6 +39,10 @@ pub use mirror::{
     DEFAULT_FOLDER, ExportReport, HoldChoice, MirrorStatus, MirrorSync, MirrorWorker,
     OVERRIDES_DIR, conflict_resolve, conflicts_list, export_run, mirror_disable, mirror_enable,
     mirror_hold_decide, mirror_status, mirror_sync_now, spawn_mirror_worker,
+};
+pub use settings::{
+    Mode, SETTINGS_FILE, SETTINGS_VERSION, Settings, SettingsPatch, Theme, settings_get,
+    settings_set,
 };
 
 /// What went wrong, in a form the UI can act on.
@@ -153,6 +158,8 @@ pub struct Session {
     config_dir: Option<PathBuf>,
     /// The worker's wake-up channel, once one runs.
     waker: Mutex<Option<Sender<mirror::Wake>>>,
+    /// The person's settings, read from the config folder on first use (M7).
+    settings: Mutex<Option<Settings>>,
 }
 
 impl Session {
@@ -165,6 +172,7 @@ impl Session {
             mirror_notify: Box::new(|_| {}),
             config_dir: None,
             waker: Mutex::new(None),
+            settings: Mutex::new(None),
         }
     }
 
@@ -203,6 +211,20 @@ impl Session {
         self.waker
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn lock_settings(&self) -> MutexGuard<'_, Option<Settings>> {
+        self.settings
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// The settings, read from the config folder the first time they are asked for.
+    fn settings(&self) -> Settings {
+        let mut guard = self.lock_settings();
+        guard
+            .get_or_insert_with(|| settings::load(self.config_dir.as_deref()))
+            .clone()
     }
 
     /// Wakes the worker, if one runs, so it writes what the last commit changed.

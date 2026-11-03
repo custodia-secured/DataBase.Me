@@ -61,6 +61,8 @@
     "allow-export-run",
     "allow-import-plan",
     "allow-import-apply",
-    "allow-provenance-list"
+    "allow-provenance-list",
+    "allow-settings-get",
+    "allow-settings-set"
   ]
 }

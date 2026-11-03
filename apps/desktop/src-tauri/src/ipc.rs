@@ -666,6 +666,23 @@ pub(crate) async fn provenance_list(
     api::provenance_list(&session, object_id)
 }
 
+/// The person's settings (M7).
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn settings_get(session: State<'_, Arc<Session>>) -> Reply<api::Settings> {
+    api::settings_get(&session)
+}
+
+/// Changes the settings `patch` names and returns them all as they are now.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn settings_set(
+    session: State<'_, Arc<Session>>,
+    patch: api::SettingsPatch,
+) -> Reply<api::Settings> {
+    api::settings_set(&session, patch)
+}
+
 /// The commands and events, for Tauri and for generating the TypeScript bindings.
 pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new()
@@ -726,6 +743,8 @@ pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
             import_plan,
             import_apply,
             provenance_list,
+            settings_get,
+            settings_set,
         ])
         .events(tauri_specta::collect_events![
             VaultChanged,
@@ -781,7 +800,7 @@ mod tests {
         let list = &build[build.find("const COMMANDS").unwrap()..];
         let list = &list[..list.find("];").unwrap()];
         let commands: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
-        assert_eq!(commands.len(), 56);
+        assert_eq!(commands.len(), 58);
         let capability = include_str!("../capabilities/default.json");
         let source = include_str!("ipc.rs");
         let registered = &source[source.find("collect_commands![").unwrap()..];

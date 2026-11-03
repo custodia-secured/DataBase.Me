@@ -229,6 +229,8 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
         }
         "import_apply" => ok(api::import_apply(s, arg(args, "plan")?)),
         "provenance_list" => ok(api::provenance_list(s, arg(args, "objectId")?)),
+        "settings_get" => ok(api::settings_get(s)),
+        "settings_set" => ok(api::settings_set(s, arg(args, "patch")?)),
         _ => Err(invalid(format!("unknown command {cmd:?}"))),
     }
 }

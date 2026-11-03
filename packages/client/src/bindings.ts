@@ -132,6 +132,10 @@ export const commands = {
 	importApply: (plan: ImportPlan_Deserialize) => typedError<ImportRun_Serialize, IpcError>(__TAURI_INVOKE("import_apply", { plan })),
 	/**  Where an object came from. */
 	provenanceList: (objectId: Id) => typedError<ProvenanceRow_Serialize[], IpcError>(__TAURI_INVOKE("provenance_list", { objectId })),
+	/**  The person's settings (M7). */
+	settingsGet: () => typedError<Settings_Serialize, IpcError>(__TAURI_INVOKE("settings_get")),
+	/**  Changes the settings `patch` names and returns them all as they are now. */
+	settingsSet: (patch: SettingsPatch_Deserialize) => typedError<Settings_Serialize, IpcError>(__TAURI_INVOKE("settings_set", { patch })),
 };
 
 /** Events */
@@ -1112,6 +1116,13 @@ export type MirrorSync_Serialize = {
 	held: Id | null,
 };
 
+/**
+ *  A preset of what is shown (brief §2.9): Simple reads as a plain notes app and hides types,
+ *  fields and the Table view; Organizer shows everything. Researcher and Data/Power come with
+ *  later milestones.
+ */
+export type Mode = "simple" | "organizer";
+
 /**  A new field of a type. */
 export type NewField = NewField_Serialize | NewField_Deserialize;
 
@@ -1551,6 +1562,66 @@ export type Sensitivity =
 /**  Redacted before anything leaves the device, and never sent to an AI provider. */
 "sensitive";
 
+/**  Everything the app remembers about the person's choices. */
+export type Settings = Settings_Serialize | Settings_Deserialize;
+
+/**  What a change sets: every key is optional, and only the keys given change. */
+export type SettingsPatch = SettingsPatch_Serialize | SettingsPatch_Deserialize;
+
+/**  What a change sets: every key is optional, and only the keys given change. */
+export type SettingsPatch_Deserialize = {
+	mode?: Mode | null,
+	theme?: Theme | null,
+	update_checks?: boolean | null,
+	last_vault?: string | null,
+	onboarded?: boolean | null,
+};
+
+/**  What a change sets: every key is optional, and only the keys given change. */
+export type SettingsPatch_Serialize = {
+	mode: Mode | null,
+	theme: Theme | null,
+	update_checks: boolean | null,
+	last_vault: string | null,
+	onboarded: boolean | null,
+};
+
+/**  Everything the app remembers about the person's choices. */
+export type Settings_Deserialize = {
+	/**  The file's version, [`SETTINGS_VERSION`] when this app wrote it. */
+	version?: number,
+	mode?: Mode,
+	theme?: Theme,
+	/**
+	 *  Whether the person agreed to update checks. Off by default (brief §2.2); 0.1 has no
+	 *  updater, so the choice is recorded for the first version that does, and neither answer
+	 *  causes a request (ADR-0010).
+	 */
+	update_checks?: boolean,
+	/**  The vault opened last, to open again at the next start. */
+	last_vault?: string | null,
+	/**  Whether onboarding has run to its end. */
+	onboarded?: boolean,
+};
+
+/**  Everything the app remembers about the person's choices. */
+export type Settings_Serialize = {
+	/**  The file's version, [`SETTINGS_VERSION`] when this app wrote it. */
+	version: number,
+	mode: Mode,
+	theme: Theme,
+	/**
+	 *  Whether the person agreed to update checks. Off by default (brief §2.2); 0.1 has no
+	 *  updater, so the choice is recorded for the first version that does, and neither answer
+	 *  causes a request (ADR-0010).
+	 */
+	update_checks: boolean,
+	/**  The vault opened last, to open again at the next start. */
+	last_vault: string | null,
+	/**  Whether onboarding has run to its end. */
+	onboarded: boolean,
+};
+
 /**  A file as seen before any importer reads it. */
 export type Sniffed = Sniffed_Serialize | Sniffed_Deserialize;
 
@@ -1653,6 +1724,9 @@ parent: Id | null } |
 { kind: "type"; 
 /**  The type. */
 type_id: Id };
+
+/**  The colours: the OS's choice, or light or dark regardless. */
+export type Theme = "system" | "light" | "dark";
 
 /**  One object of an [`ObjectTree`]. */
 export type TreeNode = TreeNode_Serialize | TreeNode_Deserialize;
