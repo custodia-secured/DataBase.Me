@@ -31,3 +31,7 @@ fuzz/target/
 fuzz/corpus/
 fuzz/artifacts/
 fuzz/coverage/
+
+# The golden of the Obsidian round trip holds the folder's schema file under .dbme/, which the vault
+# pattern above would otherwise hide (fixtures/obsidian/README.md).
+!fixtures/obsidian-roundtrip/.dbme/

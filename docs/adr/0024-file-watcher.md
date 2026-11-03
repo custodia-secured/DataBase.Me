@@ -112,3 +112,16 @@ These notes record what the build found under this decision; the decision itself
   a batch is reduced to a set first, so any order of the same events reads the same. The budget
   with the real watcher, release, on the reference machine: a file edit reaches the app in 360 to
   370 ms with 10,000 pages, 300 ms of it the debounce.
+- **M5 close-out (2026-11-03):** the other two legs ran in CI (run 41575339235). **Linux**
+  (inotify): a new file is `Create(File)` between `Access(Open)` and `Access(Close(Write))`, an
+  in-place write `Modify(Data(Any))` between the same two, a removal `Remove(File)` or
+  `Remove(Folder)`; a same-folder rename, a case-only rename and a move across folders are each
+  one `Modify(Name(Both))` with both paths, so inotify stitches what NTFS does not; a new folder is
+  `Create(Folder)` and its files go unreported, which the engine's `DirCreated` listing covers.
+  **macOS** (FSEvents): a change's batch often also carries a `Create(Folder)` of the root; a new
+  file, a rename and an atomic replace arrive as `Modify(Name(Any))` or `Create(File)` without a
+  pair; one removal came as `Modify(Data(Content))` and one not at all; the temp file of an atomic
+  write is reported. On both, fifty deletes arrive once each and the folder removal is one event.
+  The engine relies on none of the kind names: a batch is reduced to a set of changed and removed
+  paths, and `rescan()` derives what a watcher missed. The file→app budget passed through this
+  watcher on both systems (358 ms on Ubuntu, 342 ms on macOS, 300 ms of it the debounce).
