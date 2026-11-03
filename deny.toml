@@ -11,6 +11,7 @@ yanked = "deny"
 ignore = [
   { id = "RUSTSEC-2024-0370", reason = "proc-macro-error is unmaintained (not a vulnerability). Build-time only, via glib-macros 0.18 in the Linux GTK3 bindings that Tauri 2 requires; goes away when Tauri moves off gtk3-rs." },
   { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained (not a vulnerability). Build-time proc-macro only, via specta 2.0.0-rc.26 for the typed IPC bindings (ADR-0014); reviewed when specta is upgraded." },
+  { id = "RUSTSEC-2026-0192", reason = "ttf-parser is unmaintained (not a vulnerability). Runtime, via lopdf 0.42 in pdf-extract 0.12, where it reads the fonts embedded in a PDF being imported (M6 gate 1c, ADR-0026). The crate forbids unsafe code, so a malformed font can at worst fail the import, and the PDF importer runs under a time cap and is fuzzed (M6 Task 9). Reviewed when pdf-extract moves to a lopdf that drops it; the fallback crate is pdf 0.10." },
 ]
 
 [licenses]
