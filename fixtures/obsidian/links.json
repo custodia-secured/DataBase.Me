@@ -1,0 +1,116 @@
+{
+  "_": "Every wikilink in this vault, what it points at, and what the files folder makes of it when the folder is read into a fresh vault (crates/mirror/tests/obsidian.rs). Ids are the notes' frontmatter ids.",
+  "links": [
+    {
+      "from": "Home.md",
+      "from_id": "01JB4F00000000000000H0ME01",
+      "link": "[[Projects/Alpha]]",
+      "to": "Projects/Alpha.md",
+      "to_id": "01JB4F00000000000000A1PH01",
+      "kind": "mention"
+    },
+    {
+      "from": "Home.md",
+      "from_id": "01JB4F00000000000000H0ME01",
+      "link": "[[Archive/Alpha]]",
+      "to": "Archive/Alpha.md",
+      "to_id": "01JB4F00000000000000A2PH01",
+      "kind": "mention"
+    },
+    {
+      "from": "Home.md",
+      "from_id": "01JB4F00000000000000H0ME01",
+      "link": "[[Alex Doe]]",
+      "to": "People/Alex Doe.md",
+      "to_id": "01JB4F00000000000000A1EX01",
+      "kind": "mention"
+    },
+    {
+      "from": "Home.md",
+      "from_id": "01JB4F00000000000000H0ME01",
+      "link": "[[Projects/Alpha|the project]]",
+      "to": "Projects/Alpha.md",
+      "to_id": "01JB4F00000000000000A1PH01",
+      "kind": "mention",
+      "shown": "the project"
+    },
+    {
+      "from": "Home.md",
+      "from_id": "01JB4F00000000000000H0ME01",
+      "link": "[[Projects/Alpha#^01JB4F00000000000000A1PHB1]]",
+      "to": "Projects/Alpha.md",
+      "to_id": "01JB4F00000000000000A1PH01",
+      "kind": "mention",
+      "block": "01JB4F00000000000000A1PHB1"
+    },
+    {
+      "from": "Home.md",
+      "from_id": "01JB4F00000000000000H0ME01",
+      "link": "![[Projects/Alpha#^01JB4F00000000000000A1PHB1]]",
+      "to": "Projects/Alpha.md",
+      "to_id": "01JB4F00000000000000A1PH01",
+      "kind": "embed",
+      "block": "01JB4F00000000000000A1PHB1"
+    },
+    {
+      "from": "Home.md",
+      "from_id": "01JB4F00000000000000H0ME01",
+      "link": "![[attachments/pixel.png]]",
+      "to": "attachments/pixel.png",
+      "kind": "attachment"
+    },
+    {
+      "from": "Home.md",
+      "from_id": "01JB4F00000000000000H0ME01",
+      "link": "[[People/Alex Doe]]",
+      "to": "People/Alex Doe.md",
+      "to_id": "01JB4F00000000000000A1EX01",
+      "kind": "relation",
+      "label": "owner"
+    },
+    {
+      "from": "Projects/Alpha.md",
+      "from_id": "01JB4F00000000000000A1PH01",
+      "link": "[[People/Alex Doe|Alex]]",
+      "to": "People/Alex Doe.md",
+      "to_id": "01JB4F00000000000000A1EX01",
+      "kind": "mention",
+      "shown": "Alex"
+    },
+    {
+      "from": "Projects/Alpha.md",
+      "from_id": "01JB4F00000000000000A1PH01",
+      "link": "[[Home]]",
+      "to": "Home.md",
+      "to_id": "01JB4F00000000000000H0ME01",
+      "kind": "mention"
+    },
+    {
+      "from": "Archive/Alpha.md",
+      "from_id": "01JB4F00000000000000A2PH01",
+      "link": "[[Projects/Alpha]]",
+      "to": "Projects/Alpha.md",
+      "to_id": "01JB4F00000000000000A1PH01",
+      "kind": "mention"
+    },
+    {
+      "from": "People/Alex Doe.md",
+      "from_id": "01JB4F00000000000000A1EX01",
+      "link": "[[Projects/Alpha]]",
+      "to": "Projects/Alpha.md",
+      "to_id": "01JB4F00000000000000A1PH01",
+      "kind": "mention"
+    }
+  ],
+  "tags": {
+    "home": ["Home.md", "People/Alex Doe.md"],
+    "home/sub": ["Home.md"],
+    "alpha": ["Projects/Alpha.md"],
+    "team": ["People/Alex Doe.md"]
+  },
+  "cloud_conflict_files": [
+    "Projects/Alpha (conflicted copy 2026-11-02).md",
+    "Projects/Alpha.sync-conflict-20261102-101500-ABCDEFG.md",
+    "Projects/Alpha (conflicted copy 2026-11-02 101500).md"
+  ]
+}

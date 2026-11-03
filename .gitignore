@@ -21,3 +21,6 @@ Thumbs.db
 # Logs and local vaults created while developing
 *.log
 *.dbme/
+
+# Fixture vaults at known schema versions are committed (fixtures/README.md).
+!fixtures/vaults/*.dbme/

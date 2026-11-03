@@ -148,7 +148,8 @@ impl<F: Fs> Mirror<F> {
         // between files of one batch (a rebuild, a folder dropped in) find their targets.
         self.adopted.clear();
         for rel_path in &changed {
-            if !rel_path.ends_with(".md") {
+            // A cloud drive's copy carries the original's id; it must not take the id's path.
+            if !rel_path.ends_with(".md") || self.is_cloud_conflict(rel_path) {
                 continue;
             }
             let Ok(bytes) = self.fs.read(rel_path) else {
@@ -163,6 +164,12 @@ impl<F: Fs> Mirror<F> {
             let Some(id) = parsed.doc.front.id else {
                 continue;
             };
+            // The resolver knows only paths with rows; a file of this batch that has none yet
+            // (a rebuild, a folder dropped in) is reachable by its path from the start, so a
+            // wikilink to a file processed later in the batch resolves too.
+            if dbme_core::files::LinkResolver::path_of(&resolver, id).is_none() {
+                resolver.add(id, rel_path);
+            }
             if !matches!(vault.read().object(id), Err(StoreError::NotFound { .. })) {
                 continue;
             }
@@ -285,18 +292,8 @@ impl<F: Fs> Mirror<F> {
         }
 
         // A cloud drive's conflicting copy is for the person, not an object (Decision 1i).
-        let name = rel_path.rsplit('/').next().unwrap_or(rel_path);
-        let dir = rel_path.rsplit_once('/').map_or("", |(d, _)| d);
-        let sibling_exists = |sibling: &str| -> bool {
-            let path = if dir.is_empty() {
-                sibling.to_owned()
-            } else {
-                format!("{dir}/{sibling}")
-            };
-            self.fs.stat(&path).ok().flatten().is_some()
-        };
         if at_path.is_none()
-            && let Some(found) = dbme_core::files::paths::cloud_conflict(name, &sibling_exists)
+            && let Some(found) = self.cloud_conflict_of(rel_path)
         {
             let id = vault.conflict_add(NewConflict {
                 rel_path: Some(rel_path.to_owned()),
@@ -594,6 +591,25 @@ impl<F: Fs> Mirror<F> {
             dir = d.rsplit_once('/').map(|(up, _)| up);
         }
         Ok(None)
+    }
+
+    /// The cloud drive's conflict this file's name shows, when its original sits beside it.
+    fn cloud_conflict_of(&self, rel_path: &str) -> Option<dbme_core::files::paths::CloudConflict> {
+        let name = rel_path.rsplit('/').next().unwrap_or(rel_path);
+        let dir = rel_path.rsplit_once('/').map_or("", |(d, _)| d);
+        let sibling_exists = |sibling: &str| -> bool {
+            let path = if dir.is_empty() {
+                sibling.to_owned()
+            } else {
+                format!("{dir}/{sibling}")
+            };
+            self.fs.stat(&path).ok().flatten().is_some()
+        };
+        dbme_core::files::paths::cloud_conflict(name, &sibling_exists)
+    }
+
+    fn is_cloud_conflict(&self, rel_path: &str) -> bool {
+        self.cloud_conflict_of(rel_path).is_some()
     }
 
     /// A file that could not be read: an inbox entry, and the object's writes are held.
