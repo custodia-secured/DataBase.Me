@@ -3,6 +3,10 @@
 //! property is the proptest layer's (`crates/ingest/tests/fuzz_pdf.rs`): it returns, always as
 //! one `Document` with the original attached, and never panics. The text budget is two seconds,
 //! under libFuzzer's own timeout of ten.
+//!
+//! This target is stricter than that layer: libfuzzer-sys's panic hook aborts before unwinding, so
+//! a panic in `pdf-extract` is a crash here even where the importer's `catch_unwind` contains it
+//! (M6 Decision 17).
 
 #![no_main]
 
