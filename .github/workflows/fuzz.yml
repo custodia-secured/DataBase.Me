@@ -5,6 +5,12 @@
 # toolchain, so the fuzz crate lives outside the workspace (fuzz/Cargo.toml). A crash is uploaded
 # as an artifact with the input that caused it; reproduce with
 # `cargo +nightly fuzz run <target> <file>`.
+#
+# Each target starts from the repository's own files of its kind (`seeds` below), named after the
+# writable corpus: libFuzzer adds what it finds to the first directory and only reads the rest, so
+# fixtures/ is left alone and fuzz/corpus/ stays ignored. A folder's files of another kind cost one
+# rejected execution each. From an empty corpus `pdf` reached 389 of 75,448 edges in 60 seconds (run
+# 41756169380), which says little about the PDF parser.
 name: Fuzz
 
 on:
@@ -27,7 +33,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [parse, csv, pdf]
+        include:
+          - target: parse
+            seeds: fixtures/obsidian fixtures/obsidian-roundtrip fixtures/obsidian-gate fixtures/malicious
+          - target: csv
+            seeds: fixtures/csv fixtures/malicious-import
+          - target: pdf
+            seeds: fixtures/pdf fixtures/malicious-import
     steps:
       - uses: actions/checkout@v5
       - name: Install a nightly toolchain beside the pinned one
@@ -47,9 +59,9 @@ jobs:
       - name: Fuzz ${{ matrix.target }}
         env:
           SECONDS_TO_FUZZ: ${{ inputs.seconds || '900' }}
-        run: >-
-          cargo +nightly fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.target }} --
-          -max_total_time="$SECONDS_TO_FUZZ" -max_len=65536 -timeout=10 -rss_limit_mb=2048
+        run: |
+          mkdir -p "fuzz/corpus/${{ matrix.target }}"
+          cargo +nightly fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.target }}             "fuzz/corpus/${{ matrix.target }}" ${{ matrix.seeds }} --             -max_total_time="$SECONDS_TO_FUZZ" -max_len=65536 -timeout=10 -rss_limit_mb=2048
       - name: Keep the crashing input
         if: failure()
         uses: actions/upload-artifact@v4
