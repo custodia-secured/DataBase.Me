@@ -4,9 +4,15 @@
 //! fields; the document's own title, when it names one, is the object's. A file the parser
 //! refuses, or one over [`MAX_PDF_BYTES`], is still imported, as the plain file with a warning
 //! and a lower confidence: never dropped. Extraction stops at [`PDF_BUDGET`], checked between
-//! pages, and says how many pages it reached.
+//! pages, and says how many pages it reached. The parser runs on a thread of its own, because it
+//! can get stuck inside one call on a hostile file, where that check never runs: past
+//! [`PARSER_GRACE`] more it is left behind and the file is attached without its text.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use dbme_core::ContentHash;
@@ -24,6 +30,100 @@ use crate::{IngestError, Sniffed, Source};
 pub const MAX_PDF_BYTES: u64 = 64 << 20;
 /// How long extraction may take; checked between pages.
 pub const PDF_BUDGET: Duration = Duration::from_secs(10);
+/// How long past the budget the parser may run before it is left behind: time to load the file,
+/// and to finish the page it is on when the budget runs out.
+pub const PARSER_GRACE: Duration = Duration::from_secs(10);
+/// How many parsers may be stuck before PDFs are attached without trying. A thread cannot be
+/// stopped from outside, so each one holds a core until the app closes, and a folder of hostile
+/// files must not take them all.
+const MAX_STUCK_PARSERS: usize = 2;
+/// The parser's stack: a Linux main thread's, more than a spawned thread gets by default, since a
+/// hostile file can nest deeply.
+const PARSER_STACK_BYTES: usize = 8 << 20;
+/// The parsers still running past their wait.
+static STUCK_PARSERS: AtomicUsize = AtomicUsize::new(0);
+
+/// What came of running a parser on its own thread.
+#[derive(Debug, PartialEq, Eq)]
+enum Bounded<T> {
+    /// It finished in time.
+    Done(T),
+    /// It is still running, and has been left behind.
+    Stuck,
+    /// Too many are stuck already, so it was not started.
+    Refused,
+    /// The thread could not start, or died without an answer.
+    Failed,
+}
+
+/// Runs `work` on its own thread and waits for it for `wait` at most. `stuck` counts the threads
+/// left behind, and each takes itself off the count if it ever finishes.
+fn bounded<T: Send + 'static>(
+    stuck: &'static AtomicUsize,
+    wait: Duration,
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Bounded<T> {
+    if stuck.load(Ordering::SeqCst) >= MAX_STUCK_PARSERS {
+        return Bounded::Refused;
+    }
+    let (sender, receiver) = mpsc::channel();
+    // Whichever side gets here second sees `true`: the wait running out and the work finishing
+    // can race, and the count must not move unless the wait ran out first.
+    let other_is_done = Arc::new(AtomicBool::new(false));
+    let worker_sees = Arc::clone(&other_is_done);
+    let spawned = thread::Builder::new()
+        .name("pdf-text".into())
+        .stack_size(PARSER_STACK_BYTES)
+        .spawn(move || {
+            // Nobody is listening once the wait has run out, and that is fine.
+            let _unheard = sender.send(work());
+            if worker_sees.swap(true, Ordering::SeqCst) {
+                stuck.fetch_sub(1, Ordering::SeqCst);
+            }
+        });
+    if spawned.is_err() {
+        return Bounded::Failed;
+    }
+    match receiver.recv_timeout(wait) {
+        Ok(done) => Bounded::Done(done),
+        Err(RecvTimeoutError::Disconnected) => Bounded::Failed,
+        Err(RecvTimeoutError::Timeout) => {
+            if !other_is_done.swap(true, Ordering::SeqCst) {
+                stuck.fetch_add(1, Ordering::SeqCst);
+            }
+            Bounded::Stuck
+        }
+    }
+}
+
+/// Puts what the parser's thread came to on the object: its text and warnings when it finished,
+/// and otherwise the reason there is no text.
+fn settle(
+    outcome: Bounded<(ExtractedObject, Vec<String>)>,
+    wait: Duration,
+    object: &mut ExtractedObject,
+    warnings: &mut Vec<String>,
+) {
+    let problem = match outcome {
+        Bounded::Done((parsed, found)) => {
+            *object = parsed;
+            warnings.extend(found);
+            return;
+        }
+        Bounded::Stuck => format!(
+            "the PDF parser did not finish in {} s: attached without its text",
+            wait.as_secs()
+        ),
+        Bounded::Refused => {
+            "the PDF parser is stuck on an earlier file until the app closes: attached without its \
+             text"
+                .to_owned()
+        }
+        Bounded::Failed => "the PDF parser failed on this file: attached without its text".into(),
+    };
+    warnings.push(problem);
+    object.provenance.confidence = 0.5;
+}
 
 /// The PDF importer.
 #[derive(Clone, Copy, Debug)]
@@ -96,33 +196,46 @@ impl Pdf {
             ));
             object.provenance.confidence = 0.5;
         } else {
-            // The parser panics on some malformed files (found by the proptest layer, M6 Task 9:
-            // a failed assertion on an operator's operands, unwraps on missing objects). A panic
-            // is contained here, so one bad file costs its text and not the import.
-            let outcome = catch_unwind(AssertUnwindSafe(|| {
-                PdfDocument::load_mem(bytes)
-                    .map(|doc| self.extract_pages(&doc, &mut object, &mut extract.warnings))
-            }));
-            match outcome {
-                Ok(Ok(())) => {}
-                Ok(Err(e)) => {
-                    extract.warnings.push(format!(
-                        "not a PDF the parser takes ({e}): attached without its text"
-                    ));
-                    object.provenance.confidence = 0.5;
-                }
-                Err(_) => {
-                    extract.warnings.push(
-                        "the PDF parser failed on this file: attached without its text".into(),
-                    );
-                    object.blocks.clear();
-                    object.provenance.confidence = 0.5;
-                }
-            }
+            let importer = *self;
+            let bytes = bytes.to_vec();
+            let mut parsed = object.clone();
+            let wait = self.budget.saturating_add(PARSER_GRACE);
+            let outcome = bounded(&STUCK_PARSERS, wait, move || {
+                let mut found = Vec::new();
+                importer.parse(&bytes, &mut parsed, &mut found);
+                (parsed, found)
+            });
+            settle(outcome, wait, &mut object, &mut extract.warnings);
         }
         extract.objects.push(object);
         extract
     }
+
+    /// The file's text onto `object`, on the parser's thread.
+    fn parse(&self, bytes: &[u8], object: &mut ExtractedObject, warnings: &mut Vec<String>) {
+        // The parser panics on some malformed files (found by the proptest layer, M6 Task 9:
+        // a failed assertion on an operator's operands, unwraps on missing objects). A panic
+        // is contained here, so one bad file costs its text and not the import.
+        let outcome = catch_unwind(AssertUnwindSafe(|| {
+            PdfDocument::load_mem(bytes).map(|doc| self.extract_pages(&doc, object, warnings))
+        }));
+        match outcome {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                warnings.push(format!(
+                    "not a PDF the parser takes ({e}): attached without its text"
+                ));
+                object.provenance.confidence = 0.5;
+            }
+            Err(_) => {
+                warnings
+                    .push("the PDF parser failed on this file: attached without its text".into());
+                object.blocks.clear();
+                object.provenance.confidence = 0.5;
+            }
+        }
+    }
+
     /// The title and author from the Info dictionary, the page count, and the text of each page
     /// as blocks, inside the budget.
     fn extract_pages(
@@ -246,7 +359,93 @@ pub fn decode_pdf_text(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::decode_pdf_text;
+    #![allow(clippy::unwrap_used, reason = "tests")]
+
+    use super::*;
+
+    const WAIT: Duration = Duration::from_millis(20);
+
+    /// A worker that holds until its sender is dropped.
+    fn held() -> (mpsc::Sender<()>, impl FnOnce() -> u8 + Send + 'static) {
+        let (release, wait_for) = mpsc::channel::<()>();
+        (release, move || {
+            let _released = wait_for.recv();
+            7
+        })
+    }
+
+    #[test]
+    fn stuck_parsers_are_left_behind_up_to_the_limit_and_counted_until_they_finish() {
+        static STUCK: AtomicUsize = AtomicUsize::new(0);
+        let (first, work) = held();
+        assert_eq!(bounded(&STUCK, WAIT, work), Bounded::Stuck);
+        let (second, work) = held();
+        assert_eq!(bounded(&STUCK, WAIT, work), Bounded::Stuck);
+        assert_eq!(STUCK.load(Ordering::SeqCst), MAX_STUCK_PARSERS);
+
+        let (_third, work) = held();
+        assert_eq!(bounded(&STUCK, WAIT, work), Bounded::Refused);
+
+        drop(first);
+        drop(second);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while STUCK.load(Ordering::SeqCst) > 0 {
+            assert!(Instant::now() < deadline, "they never came off the count");
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(bounded(&STUCK, WAIT * 100, || 7), Bounded::Done(7));
+        assert_eq!(
+            STUCK.load(Ordering::SeqCst),
+            0,
+            "a finished one never counts"
+        );
+    }
+
+    #[test]
+    fn a_parser_thread_that_dies_is_a_failure_and_not_a_wait() {
+        static STUCK: AtomicUsize = AtomicUsize::new(0);
+        let started = Instant::now();
+        let outcome: Bounded<u8> = bounded(&STUCK, Duration::from_secs(60), || {
+            std::panic::resume_unwind(Box::new("the thread dies"))
+        });
+        assert_eq!(outcome, Bounded::Failed);
+        assert!(started.elapsed() < Duration::from_secs(30));
+        assert_eq!(STUCK.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn a_parser_that_does_not_finish_costs_the_text_and_says_so() {
+        let source = Source::in_memory("t.pdf");
+        let draft =
+            || ExtractedObject::new("t", "Document", ProvenanceDraft::from_source(&source, None));
+        let wait = Duration::from_secs(20);
+        for (outcome, expected) in [
+            (Bounded::Stuck, "did not finish in 20 s"),
+            (Bounded::Refused, "stuck on an earlier file"),
+            (Bounded::Failed, "failed on this file"),
+        ] {
+            let mut object = draft();
+            let mut warnings = Vec::new();
+            settle(outcome, wait, &mut object, &mut warnings);
+            assert!(warnings[0].contains(expected), "{warnings:?}");
+            assert!(warnings[0].contains("attached without its text"));
+            assert!(object.blocks.is_empty());
+            assert!((object.provenance.confidence - 0.5).abs() < f64::EPSILON);
+        }
+
+        let mut parsed = draft();
+        parsed.title = "Parsed".into();
+        let mut object = draft();
+        let mut warnings = vec!["kept".to_owned()];
+        settle(
+            Bounded::Done((parsed, vec!["found".to_owned()])),
+            wait,
+            &mut object,
+            &mut warnings,
+        );
+        assert_eq!(object.title, "Parsed");
+        assert_eq!(warnings, ["kept", "found"]);
+    }
 
     #[test]
     fn pdf_strings_decode_both_ways() {
