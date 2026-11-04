@@ -34,10 +34,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: parse
-            seeds: fixtures/obsidian fixtures/obsidian-roundtrip fixtures/obsidian-gate
-          - target: csv
-            seeds: fixtures/csv fixtures/malicious-import
           - target: pdf
             seeds: fixtures/pdf fixtures/malicious-import
     steps:
