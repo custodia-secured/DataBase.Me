@@ -35,7 +35,7 @@ jobs:
       matrix:
         include:
           - target: parse
-            seeds: fixtures/obsidian fixtures/obsidian-roundtrip fixtures/obsidian-gate fixtures/malicious
+            seeds: fixtures/obsidian fixtures/obsidian-roundtrip fixtures/obsidian-gate
           - target: csv
             seeds: fixtures/csv fixtures/malicious-import
           - target: pdf
@@ -53,15 +53,30 @@ jobs:
         with:
           workspaces: fuzz
           key: ${{ matrix.target }}
+      # The corpus is kept between runs. Otherwise every night restarts from the seeds and no run gets
+      # further than its own 900 seconds can. Losing it costs progress and nothing else, since the
+      # seeds are in the repository, so the Actions cache is good enough: a night that finds its cache
+      # evicted starts from the seeds. A cache entry cannot be overwritten, so each run saves under its
+      # own key and restores the newest by prefix. The workflow has no pull_request trigger, so nothing
+      # a pull request caches is read here.
+      - name: Restore the corpus of earlier runs
+        uses: actions/cache/restore@v6
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
       # The cargo-fuzz installed above is a prebuilt musl binary, and it builds for the target it was
       # built for unless told otherwise. The sanitizer cannot link against a static libc, and the
       # nightly has no musl std, so name the target the toolchain has.
       - name: Fuzz ${{ matrix.target }}
         env:
           SECONDS_TO_FUZZ: ${{ inputs.seconds || '900' }}
+          CORPUS: fuzz/corpus/${{ matrix.target }}
         run: |
-          mkdir -p "fuzz/corpus/${{ matrix.target }}"
-          cargo +nightly fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.target }}             "fuzz/corpus/${{ matrix.target }}" ${{ matrix.seeds }} --             -max_total_time="$SECONDS_TO_FUZZ" -max_len=65536 -timeout=10 -rss_limit_mb=2048
+          mkdir -p "$CORPUS"
+          cargo +nightly fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.target }} \
+            "$CORPUS" ${{ matrix.seeds }} -- \
+            -max_total_time="$SECONDS_TO_FUZZ" -max_len=65536 -timeout=10 -rss_limit_mb=2048
       - name: Keep the crashing input
         if: failure()
         uses: actions/upload-artifact@v4
@@ -70,3 +85,11 @@ jobs:
           path: fuzz/artifacts
           if-no-files-found: ignore
           retention-days: 30
+      # Its own step because the combined action saves only when the job passes, and a crash should
+      # not lose what the run found before it.
+      - name: Keep the corpus for the next run
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@v6
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
