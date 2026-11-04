@@ -6,11 +6,13 @@
 # as an artifact with the input that caused it; reproduce with
 # `cargo +nightly fuzz run <target> <file>`.
 #
-# Each target starts from the repository's own files of its kind (`seeds` below), named after the
-# writable corpus: libFuzzer adds what it finds to the first directory and only reads the rest, so
-# fixtures/ is left alone and fuzz/corpus/ stays ignored. A folder's files of another kind cost one
-# rejected execution each. From an empty corpus `pdf` reached 389 of 75,448 edges in 60 seconds (run
-# 41756169380), which says little about the PDF parser.
+# `csv` and `pdf` start from the repository's own files of their kind (`seeds` below), named after
+# the writable corpus: libFuzzer adds what it finds to the first directory and only reads the rest,
+# so fixtures/ is left alone and fuzz/corpus/ stays ignored. A folder's files of another kind cost
+# one rejected execution each. From an empty corpus `pdf` reached 389 of 75,448 edges in 60 seconds
+# (run 41756169380); the seeds alone reach 2,555 (run 41759082099). libfuzzer-sys's panic hook aborts
+# before unwinding, so `pdf` reports the parser's panics even where the importer's catch_unwind
+# contains them (docs/milestones/M6.md, Decision 17).
 name: Fuzz
 
 on:
@@ -34,8 +36,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # No seeds: with the repository's Markdown `parse` ran eight times fewer executions in 60
+          # seconds and reached no more edges (7,700 of 48,912 in run 41759082099, 7,842 from empty).
           - target: parse
-            seeds: fixtures/obsidian fixtures/obsidian-roundtrip fixtures/obsidian-gate
+            seeds: ""
           - target: csv
             seeds: fixtures/csv fixtures/malicious-import
           - target: pdf

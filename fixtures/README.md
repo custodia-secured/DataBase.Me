@@ -21,3 +21,6 @@ Contents, each added with the milestone that tests it; a row without a test is p
 | `takeout/`            | A trimmed Google Takeout export                                                                                                                                                                                    | M12       |
 
 Fixtures must be small, made up or freely licensed, and contain no real personal data.
+
+`.github/workflows/fuzz.yml` also reads `csv/`, `pdf/` and `malicious-import/` as seed inputs for the
+fuzz targets, so a change to them changes where fuzzing starts.
