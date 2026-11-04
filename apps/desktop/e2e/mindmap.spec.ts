@@ -3,7 +3,7 @@
  * The Mind map view (ADR-0019): every edit is a command, so the vault and the other views follow,
  * and everything a pointer can do has a keyboard and a touch way too.
  */
-import type { Locator, Page } from "@playwright/test";
+import type { Locator, Page, Route } from "@playwright/test";
 import { workspace } from "./data";
 import { expect, expectAccessible, test, type App, type TreeIds } from "./fixtures";
 
@@ -42,6 +42,23 @@ async function children(app: App, title: string): Promise<string[]> {
     limit: 100,
   });
   return page.map((summary) => summary.object.title);
+}
+
+/**
+ * Holds back the map's reads until the returned function lets them go, so a test can act before the
+ * map has heard of a change. `App.ipc` doesn't pass through here, so it still sees the vault.
+ */
+async function holdMapReads(page: Page): Promise<() => void> {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/ipc", async (route: Route) => {
+    const { cmd } = route.request().postDataJSON() as { cmd: string };
+    if (cmd === "object_tree") await released;
+    await route.continue();
+  });
+  return release;
 }
 
 async function centre(target: Locator, share = 0.5): Promise<{ x: number; y: number }> {
@@ -135,6 +152,81 @@ test("the map works with the keyboard alone", async ({ app, page }) => {
   // Control+Enter opens the page.
   await page.keyboard.press("Control+Enter");
   await expect(app.currentCrumb()).toHaveText("Beta");
+});
+
+// F2 straight after naming a node comes before the map has read the new name, so the box opens on
+// the old one. Each of these holds the read back to land inside that moment every time.
+test.describe("renaming before the map has read the last name", () => {
+  /** Names a new child of Beta "Epsilon", then opens the box again before the map has heard. */
+  async function nameThenRenameAtOnce(app: App, page: Page): Promise<() => void> {
+    const tree = map(app);
+    await tree.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(() => app.activeText(tree)).toBe("Alpha");
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => app.activeText(tree)).toBe("Beta");
+    await page.keyboard.press("Tab");
+    await expect(tree.getByRole("textbox", { name: "Rename Untitled" })).toBeFocused();
+    const release = await holdMapReads(page);
+    await page.keyboard.type("Epsilon");
+    await page.keyboard.press("Enter");
+    await expect.poll(() => children(app, "Beta")).toEqual(["Beta notes", "Epsilon"]);
+    await expect(tree).toBeFocused();
+    await page.keyboard.press("F2");
+    await expect(tree.getByRole("textbox", { name: "Rename Untitled" })).toBeFocused();
+    return release;
+  }
+
+  test("the name arrives, and what is typed next replaces it", async ({ app, page }) => {
+    const release = await nameThenRenameAtOnce(app, page);
+    release();
+    const box = map(app).getByRole("textbox", { name: "Rename Epsilon" });
+    await expect(box).toHaveValue("Epsilon");
+    await page.keyboard.type("Zeta");
+    await page.keyboard.press("Enter");
+    await expect.poll(() => children(app, "Beta")).toEqual(["Beta notes", "Zeta"]);
+  });
+
+  test("the name arrives after typing has begun, and the typing stays", async ({ app, page }) => {
+    const release = await nameThenRenameAtOnce(app, page);
+    await page.keyboard.type("Ze");
+    release();
+    const box = map(app).getByRole("textbox", { name: "Rename Epsilon" });
+    await expect(box).toHaveValue("Ze");
+    await page.keyboard.type("ta");
+    await page.keyboard.press("Enter");
+    await expect.poll(() => children(app, "Beta")).toEqual(["Beta notes", "Zeta"]);
+  });
+
+  test("Enter with nothing typed keeps the new name", async ({ app, page }) => {
+    const release = await nameThenRenameAtOnce(app, page);
+    await page.keyboard.press("Enter");
+    await expect(map(app)).toBeFocused();
+    release();
+    await expect(node(app, "Epsilon")).toBeVisible();
+    expect(await children(app, "Beta")).toEqual(["Beta notes", "Epsilon"]);
+  });
+
+  test("a name replaced in the box is not written back over the new one", async ({ app, page }) => {
+    const tree = map(app);
+    await tree.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(() => app.activeText(tree)).toBe("Alpha");
+    await page.keyboard.press("F2");
+    const release = await holdMapReads(page);
+    await page.keyboard.type("First");
+    await page.keyboard.press("Enter");
+    await expect.poll(() => children(app, "Home")).toEqual(["First", "Beta", "Gamma"]);
+    await expect(tree).toBeFocused();
+    await page.keyboard.press("F2");
+    await expect(tree.getByRole("textbox", { name: "Rename Alpha" })).toBeFocused();
+    release();
+    await expect(tree.getByRole("textbox", { name: "Rename First" })).toHaveValue("First");
+    await page.keyboard.press("Enter");
+    await expect(tree).toBeFocused();
+    await expect(node(app, "First")).toBeVisible();
+    expect(await children(app, "Home")).toEqual(["First", "Beta", "Gamma"]);
+  });
 });
 
 test("the toolbar adds, moves, trashes and opens, and Undo takes it back", async ({
