@@ -105,6 +105,50 @@ const MapContext = createContext<MapApi | null>(null);
 const nodeDomId = (base: string, id: Id) => `${base}-node-${id}`;
 const titleOf = (title: string) => (title === "" ? "Untitled" : title);
 
+/**
+ * The box a node is named in. Its name can change while it is open: F2 straight after naming a node
+ * comes before the map has read the new name, and another view or the files folder can change it at
+ * any time. Until something is typed the box follows the name, all of it selected, and leaving
+ * changes nothing, so typing replaces the newest name and an old one is never written back over it.
+ */
+function RenameBox({ id, title }: { id: Id; title: string }) {
+  const map = useContext(MapContext);
+  const box = useRef<HTMLInputElement>(null);
+  const typed = useRef(false);
+  useLayoutEffect(() => {
+    if (!box.current || typed.current) return;
+    box.current.value = title;
+    box.current.select();
+  }, [title]);
+  const finish = (input: HTMLInputElement) => {
+    map?.rename(id, typed.current ? input.value : null);
+  };
+  return (
+    <input
+      ref={box}
+      // The new node takes the keyboard from the map, and gives it back when done.
+      autoFocus
+      className="dbme-map__rename nodrag nopan nowheel"
+      aria-label={`Rename ${titleOf(title)}`}
+      defaultValue={title}
+      onFocus={(event) => {
+        event.currentTarget.select();
+      }}
+      onChange={() => {
+        typed.current = true;
+      }}
+      onKeyDown={(event) => {
+        event.stopPropagation();
+        if (event.key === "Enter") finish(event.currentTarget);
+        else if (event.key === "Escape") map?.rename(id, null);
+      }}
+      onBlur={(event) => {
+        finish(event.currentTarget);
+      }}
+    />
+  );
+}
+
 const TopicNodeView = memo(function TopicNodeView({ id, data, selected }: NodeProps<TopicNode>) {
   const map = useContext(MapContext);
   const { node, renaming, drop } = data;
@@ -146,24 +190,7 @@ const TopicNodeView = memo(function TopicNodeView({ id, data, selected }: NodePr
           </button>
         ) : null}
         {renaming ? (
-          <input
-            // The new node takes the keyboard from the map, and gives it back when done.
-            autoFocus
-            className="dbme-map__rename nodrag nopan nowheel"
-            aria-label={`Rename ${titleOf(node.title)}`}
-            defaultValue={node.title}
-            onFocus={(event) => {
-              event.currentTarget.select();
-            }}
-            onKeyDown={(event) => {
-              event.stopPropagation();
-              if (event.key === "Enter") map?.rename(id, event.currentTarget.value);
-              else if (event.key === "Escape") map?.rename(id, null);
-            }}
-            onBlur={(event) => {
-              map?.rename(id, event.currentTarget.value);
-            }}
-          />
+          <RenameBox id={id} title={node.title} />
         ) : (
           <span className="dbme-map__title">{titleOf(node.title)}</span>
         )}

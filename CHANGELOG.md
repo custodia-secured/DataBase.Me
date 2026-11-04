@@ -14,6 +14,9 @@ All notable changes to DataBase.Me are recorded here. The format follows
   type named after the page when the pages have none to share. **Edit columns** renames and deletes
   them, and **New row** gives a new row the types of its table, so the columns stay on it. Five new
   commands (`column_target`, `column_add`, `field_rename`, `field_delete`, `row_add`). ADR-0030.
+- The mind map's rename box follows a name that changes while it is open. F2 straight after naming
+  a node could open the box on the old name, and then what was typed landed in front of the new
+  name, or Enter with nothing typed wrote the old name back over it.
 
 ## [0.1.0] - 2026-11-03
 
