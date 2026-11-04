@@ -12,7 +12,8 @@
 # one rejected execution each. From an empty corpus `pdf` reached 389 of 75,448 edges in 60 seconds
 # (run 41756169380); the seeds alone reach 2,555 (run 41759082099). libfuzzer-sys's panic hook aborts
 # before unwinding, so `pdf` reports the parser's panics even where the importer's catch_unwind
-# contains them (docs/milestones/M6.md, Decision 17).
+# contains them, and its job fails until they stop. The owner chose that over replacing the hook
+# (docs/milestones/M6.md, Decision 17).
 name: Fuzz
 
 on:
