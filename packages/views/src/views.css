@@ -689,7 +689,7 @@
 
 /* --- The Map (M8) ------------------------------------------------------------------------- */
 
-.dbme-map {
+.dbme-geo {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -698,40 +698,40 @@
   padding: var(--dbme-space-3);
 }
 
-.dbme-map__count {
+.dbme-geo__count {
   margin: 0;
   color: var(--dbme-color-fg-muted);
   font-size: 0.875rem;
 }
 
-.dbme-map__stage {
+.dbme-geo__stage {
   position: relative;
   display: flex;
   flex: 1;
   min-height: 14rem;
 }
 
-.dbme-map__host {
+.dbme-geo__host {
   flex: 1;
   overflow: hidden;
   border: 1px solid var(--dbme-color-border);
   border-radius: var(--dbme-radius);
 }
 
-.dbme-map__host .maplibregl-canvas:focus-visible {
+.dbme-geo__host .maplibregl-canvas:focus-visible {
   outline: 2px solid var(--dbme-color-focus);
   outline-offset: -2px;
 }
 
-.dbme-map__host .maplibregl-canvas.is-over {
+.dbme-geo__host .maplibregl-canvas.is-over {
   cursor: pointer;
 }
 
-.dbme-map__stage.is-picking .maplibregl-canvas {
+.dbme-geo__stage.is-picking .maplibregl-canvas {
   cursor: crosshair;
 }
 
-.dbme-map__tools {
+.dbme-geo__tools {
   position: absolute;
   top: var(--dbme-space-2);
   right: var(--dbme-space-2);
@@ -742,8 +742,8 @@
   background: var(--dbme-color-bg);
 }
 
-.dbme-map__selected,
-.dbme-map__picking {
+.dbme-geo__selected,
+.dbme-geo__picking {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -751,7 +751,7 @@
   font-size: 0.875rem;
 }
 
-.dbme-map__selected-name {
+.dbme-geo__selected-name {
   flex: 1;
   min-width: 10rem;
 }

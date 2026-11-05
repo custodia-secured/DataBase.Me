@@ -260,9 +260,9 @@ export function MapCanvas({
   };
   const tools = ["Zoom in", "Zoom out", "Show all places"] as const;
   return (
-    <div className={`dbme-map__stage${picking ? " is-picking" : ""}`}>
-      <div ref={host} className="dbme-map__host" data-basemap={file ? "file" : "land"} />
-      <div className="dbme-map__tools" role="group" aria-label="Map controls">
+    <div className={`dbme-geo__stage${picking ? " is-picking" : ""}`}>
+      <div ref={host} className="dbme-geo__host" data-basemap={file ? "file" : "land"} />
+      <div className="dbme-geo__tools" role="group" aria-label="Map controls">
         <IconButton
           label={tools[0]}
           icon={Plus}
