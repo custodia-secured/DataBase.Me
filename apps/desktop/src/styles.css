@@ -254,7 +254,8 @@ h3 {
 }
 
 .pane__panel--table,
-.pane__panel--gallery {
+.pane__panel--gallery,
+.pane__panel--kanban {
   display: flex;
   flex-direction: column;
   overflow: hidden;

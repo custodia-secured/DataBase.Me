@@ -54,6 +54,7 @@ import {
   reportError,
   SettingsDialog,
   ResultsView,
+  savedSearches,
   Sidebar,
   useMode,
   ViewBoundary,
@@ -382,7 +383,7 @@ function Shell() {
           },
         ]
       : []),
-    ...(savedViews.data ?? []).map((view) => ({
+    ...savedSearches(savedViews.data).map((view) => ({
       id: `open-view-${view.id}`,
       label: `Open view: ${view.name}`,
       run: () => {

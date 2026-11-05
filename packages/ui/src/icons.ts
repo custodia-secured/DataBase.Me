@@ -63,6 +63,7 @@ export {
   Search,
   Settings as SettingsIcon,
   SquareCode,
+  SquareKanban,
   Table2,
   TextQuote,
   Trash2,

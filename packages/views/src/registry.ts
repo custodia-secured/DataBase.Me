@@ -9,10 +9,11 @@ import {
   LayoutGrid,
   ListTree,
   Network,
+  SquareKanban,
   Table2,
   type LucideIcon,
 } from "@databaseme/ui";
-import type { ComponentType } from "react";
+import { lazy, type ComponentType } from "react";
 import { DocumentView } from "./document/DocumentView";
 import { GalleryView } from "./gallery/GalleryView";
 import { MindMapView } from "./mindmap/MindMapView";
@@ -26,7 +27,7 @@ export interface ViewProps {
   onOpen: (id: Id) => void;
 }
 
-export type ViewId = "document" | "outline" | "table" | "gallery" | "mindmap";
+export type ViewId = "document" | "outline" | "table" | "gallery" | "mindmap" | "kanban";
 
 export interface ViewDefinition {
   id: ViewId;
@@ -51,14 +52,22 @@ export const VIEWS: readonly ViewDefinition[] = [
   { id: "table", label: "Table", icon: Table2, component: TableView, pinned: true },
   { id: "gallery", label: "Gallery", icon: LayoutGrid, component: GalleryView, pinned: true },
   { id: "mindmap", label: "Mind map", icon: Network, component: MindMapView, pinned: true },
+  {
+    id: "kanban",
+    label: "Kanban",
+    icon: SquareKanban,
+    component: lazy(() =>
+      import("./kanban/KanbanView").then((module) => ({ default: module.KanbanView })),
+    ),
+  },
 ];
 
 export function viewById(id: ViewId): ViewDefinition {
   return VIEWS.find((view) => view.id === id) ?? DOCUMENT;
 }
 
-/** The views Simple mode leaves out (M7): the Table view needs types and fields to mean much. */
-const HIDDEN_IN_SIMPLE: readonly ViewId[] = ["table"];
+/** The views Simple mode leaves out (M7, M8): they need types and fields to mean much. */
+const HIDDEN_IN_SIMPLE: readonly ViewId[] = ["table", "kanban"];
 
 /** The views a pane offers in `mode`, in the registry's order. */
 export function visibleViews(mode: Mode): readonly ViewDefinition[] {

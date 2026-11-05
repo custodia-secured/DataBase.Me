@@ -31,6 +31,134 @@
   max-width: 14rem;
 }
 
+/* --- Kanban (M8) ----------------------------------------------------------- */
+
+.dbme-kanban {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dbme-kanban__selected {
+  min-height: var(--dbme-target);
+  padding-top: 0;
+}
+
+.dbme-kanban__columns {
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--dbme-space-3);
+  min-height: 0;
+  overflow-x: auto;
+}
+
+.dbme-kanban__column {
+  display: flex;
+  flex: 1 0 14rem;
+  flex-direction: column;
+  max-width: 24rem;
+  min-height: 0;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-surface);
+}
+
+.dbme-kanban__column.is-over {
+  border-color: var(--dbme-color-accent);
+}
+
+.dbme-kanban__head {
+  display: flex;
+  align-items: center;
+  gap: var(--dbme-space-2);
+  padding: var(--dbme-space-1) var(--dbme-space-2) var(--dbme-space-1) var(--dbme-space-3);
+}
+
+.dbme-kanban__title {
+  flex: 0 1 auto;
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dbme-kanban__head .dbme-muted {
+  flex: 1 1 auto;
+  font-size: 0.875rem;
+}
+
+.dbme-kanban__cards {
+  flex: 1 1 auto;
+  min-height: 6rem;
+  overflow-y: auto;
+}
+
+.dbme-kanban__cards:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-kanban__body {
+  position: relative;
+  width: 100%;
+}
+
+.dbme-kanban__slot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: var(--dbme-space-1) var(--dbme-space-2);
+}
+
+.dbme-kanban__card {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: var(--dbme-space-2) var(--dbme-space-3);
+  overflow: hidden;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  cursor: pointer;
+  touch-action: pan-x pan-y;
+  user-select: none;
+}
+
+.dbme-kanban__card.is-active {
+  border-color: var(--dbme-color-accent);
+  box-shadow: inset 0 0 0 1px var(--dbme-color-accent);
+}
+
+.dbme-kanban__card.is-over {
+  border-top: 3px solid var(--dbme-color-accent);
+}
+
+.dbme-kanban__card.is-dragging {
+  opacity: 0.4;
+}
+
+.dbme-kanban__card--drag {
+  height: 3.25rem;
+  cursor: grabbing;
+}
+
+@media (max-width: 767px) {
+  .dbme-kanban__columns {
+    scroll-snap-type: x mandatory;
+  }
+
+  .dbme-kanban__column {
+    flex: 0 0 calc(100% - 1.5rem);
+    max-width: none;
+    scroll-snap-align: start;
+  }
+}
+
 /* --- The filter editor (M8) ------------------------------------------------- */
 
 .dbme-filter {

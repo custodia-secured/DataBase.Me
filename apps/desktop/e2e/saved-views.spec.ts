@@ -208,6 +208,13 @@ test.describe("on the Table", () => {
     await expect(picker(app)).toBeHidden();
   });
 
+  test("a saved view stays on its object, out of the sidebar's saved searches", async ({ app }) => {
+    await saveAs(app, "Everything here");
+    await expect(picker(app)).toBeVisible();
+    const sidebar = await app.sidebar();
+    await expect(sidebar.getByRole("region", { name: "Saved views" })).toBeHidden();
+  });
+
   test("changing what the Table shows clears a filter from the last source", async ({ app }) => {
     await app.press(filterButton(app));
     await addCondition(app, "Status", "is", "Done");
