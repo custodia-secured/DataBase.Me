@@ -5,19 +5,12 @@
  * request leaving the machine) say whether the library can come in at all. Each returns the figures
  * the gate records.
  */
-export type GateName = "map" | "graph" | "layout" | "canvas";
+export type GateName = "graph" | "layout" | "canvas";
 
 type Result = Record<string, unknown>;
 
-type Topology<T> = import("topojson-specification").Topology<
-  T & import("topojson-specification").Objects
->;
-type GeometryCollection = import("topojson-specification").GeometryCollection;
-
 export function runGate(name: GateName, root: HTMLElement, params: URLSearchParams) {
   switch (name) {
-    case "map":
-      return gateMap(root);
     case "graph":
       return gateGraph(root, Number(params.get("nodes") ?? 100_000));
     case "layout":
@@ -27,72 +20,6 @@ export function runGate(name: GateName, root: HTMLElement, params: URLSearchPara
     default:
       return Promise.reject(new Error(`no gate ${String(name)}`));
   }
-}
-
-/** MapLibre on the bundled land, its worker from `'self'`, no tiles and no glyphs from anywhere. */
-async function gateMap(root: HTMLElement): Promise<Result> {
-  const started = performance.now();
-  const [maplibre, workerUrl, land, topojson] = await Promise.all([
-    import("maplibre-gl"),
-    import("maplibre-gl/dist/maplibre-gl-worker.mjs?url") as Promise<{ default: string }>,
-    import("world-atlas/land-110m.json"),
-    import("topojson-client"),
-    import("maplibre-gl/dist/maplibre-gl.css"),
-  ]);
-  const loaded = performance.now() - started;
-  maplibre.setWorkerUrl(workerUrl.default);
-  const atlas = land.default as unknown as Topology<{ land: GeometryCollection }>;
-  const data = topojson.feature(atlas, atlas.objects.land);
-  const map = new maplibre.Map({
-    container: root,
-    attributionControl: false,
-    center: [10, 30],
-    zoom: 1,
-    style: {
-      version: 8,
-      sources: {
-        land: { type: "geojson", data },
-        points: {
-          type: "geojson",
-          cluster: true,
-          data: {
-            type: "FeatureCollection",
-            features: Array.from({ length: 2000 }, (_, index) => ({
-              type: "Feature" as const,
-              properties: {},
-              geometry: {
-                type: "Point" as const,
-                coordinates: [((index * 47) % 360) - 180, ((index * 29) % 140) - 70],
-              },
-            })),
-          },
-        },
-      },
-      layers: [
-        { id: "sea", type: "background", paint: { "background-color": "#dfe7ee" } },
-        { id: "land", type: "fill", source: "land", paint: { "fill-color": "#c4cbb8" } },
-        { id: "points", type: "circle", source: "points", paint: { "circle-radius": 6 } },
-      ],
-    },
-  });
-  await new Promise<void>((resolve, reject) => {
-    map.once("idle", () => {
-      resolve();
-    });
-    map.once("error", (event) => {
-      reject(new Error(event.error.message));
-    });
-  });
-  const idle = performance.now() - started;
-  const result = {
-    loaded_ms: Math.round(loaded),
-    idle_ms: Math.round(idle),
-    land_features: map.queryRenderedFeatures({ layers: ["land"] }).length,
-    point_features: map.queryRenderedFeatures({ layers: ["points"] }).length,
-    webgl: map.painter.context.gl instanceof WebGL2RenderingContext ? 2 : 1,
-  };
-  map.remove();
-  return result;
 }
 
 /** The nodes and edges of a test graph: scattered by index, each joined to a few before it. */

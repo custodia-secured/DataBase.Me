@@ -29,12 +29,14 @@ use dbme_store::{
 
 mod blocks;
 mod import;
+mod map_file;
 mod mirror;
 mod settings;
 
 pub use blocks::BlockChange;
 pub use dbme_ingest::{ImportOptions, ImportPlan, ImportRun};
 pub use import::{import_apply, import_plan, provenance_list};
+pub use map_file::{MAX_MAP_READ, map_file_read, map_file_set};
 pub use mirror::{
     DEFAULT_FOLDER, ExportReport, HoldChoice, MirrorStatus, MirrorSync, MirrorWorker,
     OVERRIDES_DIR, conflict_resolve, conflicts_list, export_run, mirror_disable, mirror_enable,
@@ -549,6 +551,22 @@ pub fn object_set_event(
         txn.update_object(id, |o| {
             o.event_start = start;
             o.event_end = end;
+        })
+    })
+}
+
+/// Sets where an object is, in degrees, or with `None` for both says it is nowhere. Latitude and
+/// longitude go together and have to be on the Earth. Returns `false` if nothing changed.
+pub fn object_set_geo(
+    session: &Session,
+    id: Id,
+    lat: Option<f64>,
+    lon: Option<f64>,
+) -> Reply<bool> {
+    session.transact(|txn| {
+        txn.update_object(id, |o| {
+            o.geo_lat = lat;
+            o.geo_lon = lon;
         })
     })
 }

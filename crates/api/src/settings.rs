@@ -67,6 +67,8 @@ pub struct Settings {
     pub last_vault: Option<String>,
     /// Whether onboarding has run to its end.
     pub onboarded: bool,
+    /// The PMTiles file drawn on maps, if one was chosen (`map_file_set`).
+    pub map_file: Option<String>,
 }
 
 impl Default for Settings {
@@ -78,6 +80,7 @@ impl Default for Settings {
             update_checks: false,
             last_vault: None,
             onboarded: false,
+            map_file: None,
         }
     }
 }
@@ -177,11 +180,20 @@ pub fn settings_get(session: &Session) -> Reply<Settings> {
 
 /// Changes the keys `patch` gives, writes the file and returns the settings as they are now.
 pub fn settings_set(session: &Session, patch: SettingsPatch) -> Reply<Settings> {
+    update(session, |settings| settings.with(patch))
+}
+
+/// Changes the settings as `change` says, writes the file and returns them as they are now.
+pub(crate) fn update(
+    session: &Session,
+    change: impl FnOnce(Settings) -> Settings,
+) -> Reply<Settings> {
     let mut guard = session.lock_settings();
-    let next = guard
-        .clone()
-        .unwrap_or_else(|| load(session.config_dir.as_deref()))
-        .with(patch);
+    let next = change(
+        guard
+            .clone()
+            .unwrap_or_else(|| load(session.config_dir.as_deref())),
+    );
     if let Some(dir) = session.config_dir.as_deref() {
         save(dir, &next)?;
     }

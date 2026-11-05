@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-map-file-set"
+description = "Enables the map_file_set command without any pre-configured scope."
+commands.allow = ["map_file_set"]
+
+[[permission]]
+identifier = "deny-map-file-set"
+description = "Denies the map_file_set command without any pre-configured scope."
+commands.deny = ["map_file_set"]

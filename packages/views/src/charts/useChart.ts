@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /** What a chart reads (M8, ADR-0032): its rows from the store, its colours from the theme. */
 import { useAggregate, type AggregateResult, type FieldRow } from "@databaseme/client";
-import { useMemo, useSyncExternalStore } from "react";
+import { useMemo } from "react";
 import type { Listing } from "../framework/listing";
+import { useThemeKey } from "../framework/useTheme";
 import {
   chartAggregate,
   chartData,
@@ -15,28 +16,8 @@ import {
   type ResolvedChart,
 } from "./chart";
 
-/** Whichever theme is showing, as what changes when it does. */
-function themeSnapshot(): string {
-  return getComputedStyle(document.documentElement).getPropertyValue("--dbme-color-bg");
-}
-
-function subscribeToTheme(onChange: () => void): () => void {
-  const observer = new MutationObserver(onChange);
-  observer.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ["data-theme"],
-  });
-  const media = window.matchMedia("(prefers-color-scheme: dark)");
-  media.addEventListener("change", onChange);
-  return () => {
-    observer.disconnect();
-    media.removeEventListener("change", onChange);
-  };
-}
-
-/** The theme's tokens, read when the theme changes. */
 export function useChartLook(): ChartLook {
-  const theme = useSyncExternalStore(subscribeToTheme, themeSnapshot);
+  const theme = useThemeKey();
   return useMemo(() => {
     const style = getComputedStyle(document.documentElement);
     const token = (name: string) => style.getPropertyValue(`--dbme-${name}`).trim();

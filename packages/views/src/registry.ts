@@ -8,6 +8,7 @@ import {
   DocumentIcon,
   LayoutGrid,
   ListTree,
+  MapPin,
   LayoutDashboard,
   Network,
   CalendarDays,
@@ -36,6 +37,7 @@ export type ViewId =
   | "outline"
   | "table"
   | "gallery"
+  | "map"
   | "mindmap"
   | "kanban"
   | "calendar"
@@ -99,6 +101,12 @@ export const VIEWS: readonly ViewDefinition[] = [
     ),
   },
   {
+    id: "map",
+    label: "Map",
+    icon: MapPin,
+    component: lazy(() => import("./map/MapView").then((module) => ({ default: module.MapView }))),
+  },
+  {
     id: "dashboard",
     label: "Dashboard",
     icon: LayoutDashboard,
@@ -115,6 +123,7 @@ export function viewById(id: ViewId): ViewDefinition {
 /** The views Simple mode leaves out (M7, M8): they need types and fields to mean much. */
 const HIDDEN_IN_SIMPLE: readonly ViewId[] = [
   "table",
+  "map",
   "kanban",
   "calendar",
   "timeline",

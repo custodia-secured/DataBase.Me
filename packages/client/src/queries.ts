@@ -314,6 +314,13 @@ export async function setSettings(client: QueryClient, patch: SettingsPatch): Pr
   return settings;
 }
 
+/** Chooses the file maps draw over the land they ship with, or none; refused if it is no map file. */
+export async function setMapFile(client: QueryClient, path: string | null): Promise<Settings> {
+  const settings = await unwrap(commands.mapFileSet(path));
+  client.setQueryData(SETTINGS_KEY, settings);
+  return settings;
+}
+
 /**
  * Object URLs for blob bytes. A blob is named by its hash and never changes, so one URL serves
  * every view; the oldest are revoked once more than {@link BLOB_URLS} are held.

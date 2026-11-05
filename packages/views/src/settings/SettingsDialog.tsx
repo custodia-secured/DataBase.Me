@@ -8,6 +8,7 @@
  */
 import {
   commands,
+  setMapFile,
   setSettings,
   unwrap,
   useSettings,
@@ -36,6 +37,8 @@ export interface SettingsDialogProps {
   onVaultChanged: () => void;
   /** The OS's folder picker, where there is one. */
   pickFolder?: (() => Promise<string | null>) | undefined;
+  /** The OS's file picker for a map file, where there is one. */
+  pickMapFile?: (() => Promise<string | null>) | undefined;
   /** Builds the diagnostic report (Task 7); absent until then. */
   report?: (() => Promise<string>) | undefined;
 }
@@ -49,6 +52,7 @@ export function SettingsDialog({
   onSetupAgain,
   onVaultChanged,
   pickFolder,
+  pickMapFile,
   report,
 }: SettingsDialogProps) {
   const client = useQueryClient();
@@ -56,6 +60,7 @@ export function SettingsDialog({
   const vault = useVaultInfo();
   const [otherVault, setOtherVault] = useState("");
   const [newFolder, setNewFolder] = useState("");
+  const [mapFile, setMapFileText] = useState("");
   const [exportFolder, setExportFolder] = useState("");
   const [fullExport, setFullExport] = useState(true);
   const [exported, setExported] = useState<string | null>(null);
@@ -305,6 +310,67 @@ export function SettingsDialog({
             </span>
           </span>
         </label>
+      </section>
+
+      <section aria-labelledby={`${base}-map`}>
+        <h3 id={`${base}-map`}>Map</h3>
+        <p className="dbme-muted">
+          Maps show coastlines from the app itself and ask for nothing from anywhere. A PMTiles file
+          on this device can add detail.
+        </p>
+        {data?.map_file ? (
+          <p className="dbme-settings__path">
+            <span className="dbme-muted">Map file: </span>
+            {data.map_file}
+          </p>
+        ) : null}
+        <label htmlFor={`${base}-map-file`}>A PMTiles file</label>
+        <div className="dbme-settings__row">
+          <input
+            id={`${base}-map-file`}
+            className="dbme-input"
+            value={mapFile}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => {
+              setMapFileText(event.target.value);
+            }}
+          />
+          {pickMapFile ? (
+            <Button
+              onClick={() => {
+                void pickMapFile().then((picked) => {
+                  if (picked !== null) setMapFileText(picked);
+                });
+              }}
+            >
+              Browse…
+            </Button>
+          ) : null}
+          <Button
+            disabled={busy || mapFile.trim() === ""}
+            onClick={() => {
+              attempt(async () => {
+                await setMapFile(client, mapFile.trim());
+                setMapFileText("");
+              });
+            }}
+          >
+            Use this file
+          </Button>
+        </div>
+        {data?.map_file ? (
+          <Button
+            disabled={busy}
+            onClick={() => {
+              attempt(async () => {
+                await setMapFile(client, null);
+              });
+            }}
+          >
+            Use the built-in map
+          </Button>
+        ) : null}
       </section>
 
       <section aria-labelledby={`${base}-help`}>

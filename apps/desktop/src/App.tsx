@@ -188,6 +188,16 @@ interface Bootstrap {
   defaultVault: string | null;
 }
 
+/** The OS's file picker for a map file (M8, ADR-0033); `null` when cancelled. */
+async function pickMapFile(): Promise<string | null> {
+  const picked = await open({
+    directory: false,
+    multiple: false,
+    filters: [{ name: "PMTiles", extensions: ["pmtiles"] }],
+  });
+  return typeof picked === "string" ? picked : null;
+}
+
 /** The OS's folder picker, through the dialog plugin (M7 gate 1a); `null` when cancelled. */
 async function pickFolder(): Promise<string | null> {
   const picked = await open({ directory: true, multiple: false });
@@ -542,6 +552,7 @@ function Shell() {
           void client.invalidateQueries({ queryKey: ["bootstrap"] });
         }}
         pickFolder={isTauri() ? pickFolder : undefined}
+        pickMapFile={isTauri() ? pickMapFile : undefined}
       />
       <Errors />
     </div>

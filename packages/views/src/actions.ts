@@ -108,6 +108,9 @@ export const actions = {
   setEvent(id: Id, start: number | null, end: number | null) {
     return attempt(() => unwrap(commands.objectSetEvent(id, start, end)));
   },
+  setGeo(id: Id, lat: number | null, lon: number | null) {
+    return attempt(() => unwrap(commands.objectSetGeo(id, lat, lon)));
+  },
   move(id: Id, parent: Id | null, position: Position) {
     return attempt(() => unwrap(commands.objectMove(id, parent, position)));
   },

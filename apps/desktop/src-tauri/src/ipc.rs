@@ -549,6 +549,36 @@ pub(crate) async fn object_set_event(
     api::object_set_event(&session, id, start, end)
 }
 
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn object_set_geo(
+    session: State<'_, Arc<Session>>,
+    id: Id,
+    lat: Option<f64>,
+    lon: Option<f64>,
+) -> Reply<bool> {
+    api::object_set_geo(&session, id, lat, lon)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn map_file_set(
+    session: State<'_, Arc<Session>>,
+    path: Option<String>,
+) -> Reply<api::Settings> {
+    api::map_file_set(&session, path)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn map_file_read(
+    session: State<'_, Arc<Session>>,
+    offset: u64,
+    length: u32,
+) -> Reply<String> {
+    api::map_file_read(&session, offset, length)
+}
+
 /// Sets the value of field `key` on an object, or clears it when `value` is `null`. Returns
 /// `false` if nothing changed.
 #[tauri::command]
@@ -866,6 +896,9 @@ pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
             object_create,
             object_rename,
             object_set_event,
+            object_set_geo,
+            map_file_set,
+            map_file_read,
             object_set_prop,
             object_move,
             object_trash,
@@ -946,7 +979,7 @@ mod tests {
         let list = &build[build.find("const COMMANDS").unwrap()..];
         let list = &list[..list.find("];").unwrap()];
         let commands: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
-        assert_eq!(commands.len(), 68);
+        assert_eq!(commands.len(), 71);
         let capability = include_str!("../capabilities/default.json");
         let source = include_str!("ipc.rs");
         let registered = &source[source.find("collect_commands![").unwrap()..];

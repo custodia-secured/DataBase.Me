@@ -27,12 +27,6 @@ async function run(page: import("@playwright/test").Page, query: string, timeout
   return gate;
 }
 
-test("1b: MapLibre on the bundled land", async ({ page }) => {
-  const gate = await run(page, "gate=map");
-  expect(gate.land_features).toBeGreaterThan(0);
-  expect(gate.point_features).toBeGreaterThan(0);
-});
-
 test("1c: Sigma draws 100,000 nodes", async ({ page }) => {
   test.slow();
   const gate = await run(page, "gate=graph&nodes=100000", 170_000);

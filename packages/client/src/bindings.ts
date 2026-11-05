@@ -109,6 +109,9 @@ export const commands = {
 	 *  Returns `false` if nothing changed.
 	 */
 	objectSetEvent: (id: Id, start: number | null, end: number | null) => typedError<boolean, IpcError>(__TAURI_INVOKE("object_set_event", { id, start, end })),
+	objectSetGeo: (id: Id, lat: number | null, lon: number | null) => typedError<boolean, IpcError>(__TAURI_INVOKE("object_set_geo", { id, lat, lon })),
+	mapFileSet: (path: string | null) => typedError<Settings_Serialize, IpcError>(__TAURI_INVOKE("map_file_set", { path })),
+	mapFileRead: (offset: number, length: number) => typedError<string, IpcError>(__TAURI_INVOKE("map_file_read", { offset, length })),
 	/**
 	 *  Sets the value of field `key` on an object, or clears it when `value` is `null`. Returns
 	 *  `false` if nothing changed.
@@ -1963,6 +1966,8 @@ export type Settings_Deserialize = {
 	last_vault?: string | null,
 	/**  Whether onboarding has run to its end. */
 	onboarded?: boolean,
+	/**  The PMTiles file drawn on maps, if one was chosen (`map_file_set`). */
+	map_file?: string | null,
 };
 
 /**  Everything the app remembers about the person's choices. */
@@ -1983,6 +1988,8 @@ export type Settings_Serialize = {
 	last_vault: string | null,
 	/**  Whether onboarding has run to its end. */
 	onboarded: boolean,
+	/**  The PMTiles file drawn on maps, if one was chosen (`map_file_set`). */
+	map_file: string | null,
 };
 
 /**  A file as seen before any importer reads it. */

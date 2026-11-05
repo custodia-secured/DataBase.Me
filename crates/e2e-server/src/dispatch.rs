@@ -194,6 +194,18 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
             arg(args, "start")?,
             arg(args, "end")?,
         )),
+        "object_set_geo" => ok(api::object_set_geo(
+            s,
+            arg(args, "id")?,
+            arg(args, "lat")?,
+            arg(args, "lon")?,
+        )),
+        "map_file_set" => ok(api::map_file_set(s, arg(args, "path")?)),
+        "map_file_read" => ok(api::map_file_read(
+            s,
+            arg(args, "offset")?,
+            arg(args, "length")?,
+        )),
         "object_move" => ok(api::object_move(
             s,
             arg(args, "id")?,

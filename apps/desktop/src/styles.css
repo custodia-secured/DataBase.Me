@@ -263,6 +263,7 @@ h3 {
 .pane__panel--kanban,
 .pane__panel--calendar,
 .pane__panel--timeline,
+.pane__panel--map,
 .pane__panel--charts,
 .pane__panel--dashboard {
   display: flex;

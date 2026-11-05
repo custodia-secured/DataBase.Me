@@ -10,6 +10,7 @@ export {
   keys,
   MANUAL,
   SETTINGS_KEY,
+  setMapFile,
   setSettings,
   TREE_LIMIT,
   TYPE_FACET,
