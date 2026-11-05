@@ -1,0 +1,23 @@
+diff --git a/dist/d3-format.mjs b/dist/d3-format.mjs
+index 0062227..a74c732 100644
+--- a/dist/d3-format.mjs
++++ b/dist/d3-format.mjs
+@@ -86,7 +86,8 @@ function FormatSpecifier(specifier) {
+   this.type = specifier.type === undefined ? "" : specifier.type + "";
+ }
+ 
+-FormatSpecifier.prototype.toString = function() {
++// Object.prototype may be frozen (Tauri's freezePrototype), and assigning a name it also has then throws.
++Object.defineProperty(FormatSpecifier.prototype, "toString", {value: function() {
+   return this.fill
+       + this.align
+       + this.sign
+@@ -97,7 +98,7 @@ FormatSpecifier.prototype.toString = function() {
+       + (this.precision === undefined ? "" : "." + Math.max(0, this.precision | 0))
+       + (this.trim ? "~" : "")
+       + this.type;
+-};
++}, writable: true, enumerable: true, configurable: true});
+ 
+ // Trims insignificant zeros, e.g., replaces 1.2000k with 1.2k.
+ function formatTrim(s) {

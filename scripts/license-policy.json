@@ -16,5 +16,8 @@
     "CC-BY-4.0": "Browser-support data (caniuse-lite) read at build time; never shipped in the app.",
     "CC0-1.0": "Public-domain dedication (mdn-data). Build tooling only."
   },
-  "packageExceptions": {}
+  "packageExceptions": {
+    "fractional-indexing": "CC0-1.0, not OSI-approved. Excalidraw needs it for element order (ADR-0035).",
+    "robust-predicates": "Unlicense, OSI-approved. Vega needs it through d3-delaunay (ADR-0009)."
+  }
 }

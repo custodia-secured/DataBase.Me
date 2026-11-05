@@ -1,0 +1,24 @@
+diff --git a/dist/d3-color.mjs b/dist/d3-color.mjs
+index d522a08..6cbf5e4 100644
+--- a/dist/d3-color.mjs
++++ b/dist/d3-color.mjs
+@@ -1,12 +1,17 @@
+ // https://d3js.org/d3-color/ v3.1.1 Copyright 2010-2026 Mike Bostock
+ function define(constructor, factory, prototype) {
+   constructor.prototype = factory.prototype = prototype;
+-  prototype.constructor = constructor;
++  put(prototype, "constructor", constructor);
++}
++
++// Object.prototype may be frozen (Tauri's freezePrototype), and assigning a name it also has then throws.
++function put(object, key, value) {
++  Object.defineProperty(object, key, {value: value, writable: true, enumerable: true, configurable: true});
+ }
+ 
+ function extend(parent, definition) {
+   var prototype = Object.create(parent.prototype);
+-  for (var key in definition) prototype[key] = definition[key];
++  for (var key in definition) put(prototype, key, definition[key]);
+   return prototype;
+ }
+ 

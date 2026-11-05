@@ -2,13 +2,18 @@
 import react from "@vitejs/plugin-react";
 import { configDefaults, defineConfig } from "vitest/config";
 import pkg from "./package.json" with { type: "json" };
+import { excalidrawOffline } from "./vite-plugin-excalidraw.ts";
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react()],
+  plugins: [excalidrawOffline(), react()],
   // `--mode e2e` builds the UI for the end-to-end tests (ADR-0018) into its own folder, so it can
   // never be mistaken for the app's bundle.
   build: {
     outDir: mode === "e2e" ? "dist-e2e" : "dist",
+    // M8's gate page (e2e/gate-m8.spec.ts) is in the e2e build alone.
+    ...(mode === "e2e"
+      ? { rolldownOptions: { input: { main: "index.html", gate: "gate-m8.html" } } }
+      : {}),
   },
   clearScreen: false,
   define: {

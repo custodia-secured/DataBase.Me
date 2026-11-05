@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+/**
+ * M8's gates (docs/milestones/M8.md, Task 1): each library on the gate page, under the app's real
+ * CSP. The fixtures fail a test on any CSP violation, uncaught error or request that leaves the
+ * machine; these tests add that the library did its work, and print the figures the gate records.
+ */
+import { expect, test } from "./fixtures";
+
+interface Gate {
+  done: boolean;
+  failed?: string;
+  [key: string]: unknown;
+}
+
+declare global {
+  interface Window {
+    __gate?: Record<string, unknown>;
+  }
+}
+
+async function run(page: import("@playwright/test").Page, query: string, timeout = 120_000) {
+  await page.goto(`/gate-m8.html?${query}`);
+  await page.waitForFunction(() => window.__gate?.done === true, undefined, { timeout });
+  const gate = (await page.evaluate(() => window.__gate)) as Gate;
+  console.log(`gate ${query}: ${JSON.stringify(gate)}`);
+  expect(gate.failed).toBeUndefined();
+  return gate;
+}
+
+test("1a: Vega-Lite on canvas with the interpreter", async ({ page }) => {
+  const gate = await run(page, "gate=vega&renderer=canvas");
+  expect(gate.drawn).toBe(true);
+});
+
+test("1a: Vega-Lite on SVG with the interpreter", async ({ page }) => {
+  const gate = await run(page, "gate=vega&renderer=svg");
+  expect(gate.drawn).toBe(true);
+});
+
+test("1b: MapLibre on the bundled land", async ({ page }) => {
+  const gate = await run(page, "gate=map");
+  expect(gate.land_features).toBeGreaterThan(0);
+  expect(gate.point_features).toBeGreaterThan(0);
+});
+
+test("1c: Sigma draws 100,000 nodes", async ({ page }) => {
+  test.slow();
+  const gate = await run(page, "gate=graph&nodes=100000", 170_000);
+  expect(gate.nodes).toBe(100_000);
+  expect(gate.ink).toBe(true);
+});
+
+test("1c: ForceAtlas2 in a worker of ours", async ({ page }) => {
+  test.slow();
+  const gate = await run(page, "gate=layout&nodes=100000", 170_000);
+  expect(gate.moved).toBe(1);
+});
+
+test("1d: Excalidraw", async ({ page }) => {
+  const gate = await run(page, "gate=canvas");
+  expect(gate.elements).toBe(2);
+  expect(gate.canvases).toBeGreaterThan(0);
+});

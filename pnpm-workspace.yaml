@@ -3,3 +3,6 @@ packages:
   - packages/*
 patchedDependencies:
   d3-color@3.1.0: patches/d3-color@3.1.0.patch
+  d3-color@3.1.1: patches/d3-color@3.1.1.patch
+  d3-format@3.1.3: patches/d3-format@3.1.3.patch
+  vega-functions@6.2.0: patches/vega-functions@6.2.0.patch
