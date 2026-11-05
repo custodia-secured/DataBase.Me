@@ -78,6 +78,10 @@ pnpm test && cargo test --workspace
 pnpm --filter @databaseme/desktop tauri build   # build an installer for your OS
 ```
 
+On Windows, `Open DataBase.Me.cmd` runs `pnpm dev` with a double-click. Like `pnpm dev`, it opens the
+same vault and settings as an installed copy of the app, so a branch that changes the vault format
+upgrades that vault as it opens.
+
 [CONTRIBUTING.md](CONTRIBUTING.md) lists every check CI runs.
 
 ## Repository layout
