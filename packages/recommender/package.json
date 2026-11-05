@@ -1,0 +1,19 @@
+{
+  "name": "@databaseme/recommender",
+  "private": true,
+  "version": "0.0.0",
+  "description": "DataBase.Me view recommender: given the shape of a set of objects, which views suit it and why. Plain TypeScript, with no React and nothing to load.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.5"
+  }
+}
