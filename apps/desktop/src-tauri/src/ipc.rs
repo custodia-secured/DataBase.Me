@@ -536,6 +536,19 @@ pub(crate) async fn object_rename(
     api::object_rename(&session, id, title)
 }
 
+/// Sets when an object's event starts and ends, in milliseconds, or clears them with `null`.
+/// Returns `false` if nothing changed.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn object_set_event(
+    session: State<'_, Arc<Session>>,
+    id: Id,
+    start: Option<i64>,
+    end: Option<i64>,
+) -> Reply<bool> {
+    api::object_set_event(&session, id, start, end)
+}
+
 /// Sets the value of field `key` on an object, or clears it when `value` is `null`. Returns
 /// `false` if nothing changed.
 #[tauri::command]
@@ -852,6 +865,7 @@ pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
             relation_trash,
             object_create,
             object_rename,
+            object_set_event,
             object_set_prop,
             object_move,
             object_trash,
@@ -932,7 +946,7 @@ mod tests {
         let list = &build[build.find("const COMMANDS").unwrap()..];
         let list = &list[..list.find("];").unwrap()];
         let commands: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
-        assert_eq!(commands.len(), 67);
+        assert_eq!(commands.len(), 68);
         let capability = include_str!("../capabilities/default.json");
         let source = include_str!("ipc.rs");
         let registered = &source[source.find("collect_commands![").unwrap()..];

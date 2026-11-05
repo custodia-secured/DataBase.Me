@@ -39,6 +39,7 @@ export {
   ArrowUp,
   Bold,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   CalendarDays,
   Columns2,

@@ -537,6 +537,22 @@ pub fn object_set_prop(
     })
 }
 
+/// Sets when an object's event starts and ends, in milliseconds, or clears them with `None`. One
+/// change, so one undo puts both back. Returns `false` if nothing changed.
+pub fn object_set_event(
+    session: &Session,
+    id: Id,
+    start: Option<i64>,
+    end: Option<i64>,
+) -> Reply<bool> {
+    session.transact(|txn| {
+        txn.update_object(id, |o| {
+            o.event_start = start;
+            o.event_end = end;
+        })
+    })
+}
+
 /// Moves an object under `parent` (`None`: the top level), at `position` among its new
 /// siblings. Returns `false` if it did not move.
 pub fn object_move(

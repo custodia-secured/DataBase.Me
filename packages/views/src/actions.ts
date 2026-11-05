@@ -105,6 +105,9 @@ export const actions = {
   setProp(id: Id, key: string, value: Value | null) {
     return attempt(() => unwrap(commands.objectSetProp(id, key, value)));
   },
+  setEvent(id: Id, start: number | null, end: number | null) {
+    return attempt(() => unwrap(commands.objectSetEvent(id, start, end)));
+  },
   move(id: Id, parent: Id | null, position: Position) {
     return attempt(() => unwrap(commands.objectMove(id, parent, position)));
   },

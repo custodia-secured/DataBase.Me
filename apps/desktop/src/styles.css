@@ -116,8 +116,13 @@ h3 {
   cursor: default;
 }
 
-/* On phones only the open page shows in the path. */
+/* On phones only the open page shows in the path, and the bar's seven buttons touch: with gaps they
+   are wider than 360 px, which puts the last one off the edge and lets the page scroll sideways. */
 @media (max-width: 767px) {
+  .app__bar {
+    gap: 0;
+  }
+
   .app__brand {
     position: absolute;
     width: 1px;
@@ -255,7 +260,8 @@ h3 {
 
 .pane__panel--table,
 .pane__panel--gallery,
-.pane__panel--kanban {
+.pane__panel--kanban,
+.pane__panel--calendar {
   display: flex;
   flex-direction: column;
   overflow: hidden;

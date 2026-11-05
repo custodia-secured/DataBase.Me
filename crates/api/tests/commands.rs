@@ -199,6 +199,44 @@ fn every_change_is_announced_and_reads_are_not() {
 }
 
 #[test]
+fn an_event_moves_in_one_undo_and_cannot_end_before_it_starts() {
+    let f = Fixture::new();
+    let x = f.object("x");
+    let when = |f: &Fixture| {
+        let row = api::object_get(&f.session, x).unwrap();
+        (row.event_start, row.event_end)
+    };
+    f.tick();
+    assert!(api::object_set_event(&f.session, x, Some(1_000), Some(2_000)).unwrap());
+    assert_eq!(when(&f), (Some(1_000), Some(2_000)));
+    assert!(
+        !api::object_set_event(&f.session, x, Some(1_000), Some(2_000)).unwrap(),
+        "no change"
+    );
+
+    f.tick();
+    assert!(api::object_set_event(&f.session, x, Some(5_000), Some(2_000)).is_err());
+    assert_eq!(
+        when(&f),
+        (Some(1_000), Some(2_000)),
+        "a refusal changes nothing"
+    );
+
+    f.tick();
+    assert!(api::object_set_event(&f.session, x, Some(3_000), Some(4_000)).unwrap());
+    api::undo(&f.session).unwrap().unwrap();
+    assert_eq!(
+        when(&f),
+        (Some(1_000), Some(2_000)),
+        "one undo puts both back"
+    );
+
+    f.tick();
+    assert!(api::object_set_event(&f.session, x, None, None).unwrap());
+    assert_eq!(when(&f), (None, None));
+}
+
+#[test]
 fn an_editor_batch_builds_a_nested_list_in_one_step() {
     let f = Fixture::new();
     let page = f.object("page");

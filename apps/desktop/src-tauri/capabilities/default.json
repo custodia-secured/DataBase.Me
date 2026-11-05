@@ -49,6 +49,7 @@
     "allow-relation-trash",
     "allow-object-create",
     "allow-object-rename",
+    "allow-object-set-event",
     "allow-object-set-prop",
     "allow-object-move",
     "allow-object-trash",

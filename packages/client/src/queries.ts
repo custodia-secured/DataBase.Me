@@ -6,6 +6,8 @@
  */
 import { keepPreviousData, useQuery, type QueryClient } from "@tanstack/react-query";
 import type {
+  AggregateQuery_Deserialize,
+  AggregateResult,
   AttachmentRow_Serialize,
   Backlink_Serialize,
   BlockRow_Serialize,
@@ -53,6 +55,7 @@ export const keys = {
   fullSearch: (text: string, limit: number) => [VAULT, "full-search", text, limit] as const,
   query: (query: Query_Deserialize) => [VAULT, "query", query] as const,
   queryCount: (query: Query_Deserialize) => [VAULT, "query-count", query] as const,
+  aggregate: (aggregate: AggregateQuery_Deserialize) => [VAULT, "aggregate", aggregate] as const,
   facets: (query: Query_Deserialize, field: string) => [VAULT, "facets", query, field] as const,
   views: () => [VAULT, "views"] as const,
   view: (id: Id) => [VAULT, "view", id] as const,
@@ -206,6 +209,16 @@ export function useQueryCount(query: Query_Deserialize | null) {
     queryFn: () => unwrap(commands.objectsQueryCount(query ?? {})),
     placeholderData: keepPreviousData,
     enabled: query !== null,
+  });
+}
+
+/** Figures per group over a query's results, worked out in the store (build plan §2.7). */
+export function useAggregate(aggregate: AggregateQuery_Deserialize | null) {
+  return useQuery<AggregateResult>({
+    queryKey: keys.aggregate(aggregate ?? { query: {}, measures: [] }),
+    queryFn: () => unwrap(commands.aggregate(aggregate ?? { query: {}, measures: [] })),
+    placeholderData: keepPreviousData,
+    enabled: aggregate !== null,
   });
 }
 

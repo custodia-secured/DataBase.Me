@@ -29,6 +29,7 @@ export {
   usePage,
   useProvenance,
   useQueryCount,
+  useAggregate,
   useQueryResults,
   useSearch,
   useSettings,

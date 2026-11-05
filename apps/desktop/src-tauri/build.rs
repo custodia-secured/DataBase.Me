@@ -48,6 +48,7 @@ const COMMANDS: &[&str] = &[
     "relation_trash",
     "object_create",
     "object_rename",
+    "object_set_event",
     "object_set_prop",
     "object_move",
     "object_trash",

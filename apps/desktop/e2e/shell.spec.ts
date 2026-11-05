@@ -185,6 +185,23 @@ async function touchDrag(page: Page, from: { x: number; y: number }, to: { x: nu
   await cdp.detach();
 }
 
+test("a phone's page does not scroll sideways, and every button in the bar is on it", async ({
+  app,
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "the phone's width");
+  await app.openPage("Home");
+  const sizes = await page.evaluate(() => {
+    const { scrollWidth, clientWidth } = document.documentElement;
+    return { scrollWidth, clientWidth };
+  });
+  expect(sizes.scrollWidth).toBeLessThanOrEqual(sizes.clientWidth);
+  const redo = await page.getByRole("button", { name: "Redo" }).boundingBox();
+  if (!redo) throw new Error("no box");
+  expect(redo.x + redo.width).toBeLessThanOrEqual(sizes.clientWidth);
+});
+
 test("dragging a page onto another puts it inside", async ({
   app,
   page,

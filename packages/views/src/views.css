@@ -159,6 +159,199 @@
   }
 }
 
+/* --- Calendar (M8) --------------------------------------------------------- */
+
+.dbme-calendar {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dbme-calendar__nav {
+  padding-top: 0;
+}
+
+.dbme-calendar__title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.dbme-calendar__selected {
+  min-height: var(--dbme-target);
+  padding-top: 0;
+}
+
+.dbme-calendar__grid {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-calendar__week {
+  display: grid;
+  flex: 1 0 5.5rem;
+  grid-template-columns: repeat(7, minmax(5rem, 1fr));
+}
+
+.is-week > .dbme-calendar__week {
+  flex-basis: 24rem;
+}
+
+.dbme-calendar__grid > .dbme-calendar__head {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  flex: 0 0 auto;
+  background: var(--dbme-color-surface);
+}
+
+.dbme-calendar__weekday {
+  padding: var(--dbme-space-1) var(--dbme-space-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.dbme-calendar__day {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--dbme-space-1);
+  overflow-y: auto;
+  border-top: 1px solid var(--dbme-color-border);
+  border-left: 1px solid var(--dbme-color-border);
+}
+
+.dbme-calendar__day:first-child {
+  border-left: 0;
+}
+
+.dbme-calendar__day:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-calendar__day.is-outside {
+  background: var(--dbme-color-surface);
+}
+
+.dbme-calendar__day.is-over {
+  box-shadow: inset 0 0 0 2px var(--dbme-color-accent);
+}
+
+.dbme-calendar__date {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  min-width: 1.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.5rem;
+  text-align: center;
+}
+
+/* Not by colour alone: a ring and a weight, and aria-current says so to a screen reader. */
+.dbme-calendar__day.is-today .dbme-calendar__date {
+  border: 1px solid var(--dbme-color-accent);
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.dbme-calendar__item {
+  display: block;
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 1.5rem;
+  padding: 0 var(--dbme-space-1);
+  overflow: hidden;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: pan-x pan-y;
+  user-select: none;
+}
+
+.dbme-calendar__item:focus-visible,
+.dbme-calendar__more:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-calendar__item.is-active {
+  border-color: var(--dbme-color-accent);
+  box-shadow: inset 0 0 0 1px var(--dbme-color-accent);
+}
+
+.dbme-calendar__item.is-dragging {
+  opacity: 0.4;
+}
+
+.dbme-calendar__item--drag {
+  max-width: 14rem;
+  line-height: 1.5rem;
+  cursor: grabbing;
+}
+
+.dbme-calendar__more {
+  flex: 0 0 auto;
+  min-height: 1.5rem;
+  padding: 0 var(--dbme-space-1);
+  border: 0;
+  background: none;
+  color: var(--dbme-color-fg);
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: start;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.dbme-calendar__agenda {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.dbme-calendar__agenda-day {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-1);
+  padding-bottom: var(--dbme-space-3);
+}
+
+.dbme-calendar__agenda-date {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.dbme-calendar__agenda .dbme-calendar__item,
+.dbme-calendar__agenda .dbme-calendar__more {
+  min-height: var(--dbme-target);
+  font-size: 0.875rem;
+}
+
+.dbme-calendar__list {
+  display: flex;
+  width: min(80vw, 28rem);
+  height: min(60vh, 24rem);
+}
+
 /* --- The filter editor (M8) ------------------------------------------------- */
 
 .dbme-filter {

@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   ListTree,
   Network,
+  CalendarDays,
   SquareKanban,
   Table2,
   type LucideIcon,
@@ -27,7 +28,8 @@ export interface ViewProps {
   onOpen: (id: Id) => void;
 }
 
-export type ViewId = "document" | "outline" | "table" | "gallery" | "mindmap" | "kanban";
+export type ViewId =
+  "document" | "outline" | "table" | "gallery" | "mindmap" | "kanban" | "calendar";
 
 export interface ViewDefinition {
   id: ViewId;
@@ -60,6 +62,14 @@ export const VIEWS: readonly ViewDefinition[] = [
       import("./kanban/KanbanView").then((module) => ({ default: module.KanbanView })),
     ),
   },
+  {
+    id: "calendar",
+    label: "Calendar",
+    icon: CalendarDays,
+    component: lazy(() =>
+      import("./calendar/CalendarView").then((module) => ({ default: module.CalendarView })),
+    ),
+  },
 ];
 
 export function viewById(id: ViewId): ViewDefinition {
@@ -67,7 +77,7 @@ export function viewById(id: ViewId): ViewDefinition {
 }
 
 /** The views Simple mode leaves out (M7, M8): they need types and fields to mean much. */
-const HIDDEN_IN_SIMPLE: readonly ViewId[] = ["table", "kanban"];
+const HIDDEN_IN_SIMPLE: readonly ViewId[] = ["table", "kanban", "calendar"];
 
 /** The views a pane offers in `mode`, in the registry's order. */
 export function visibleViews(mode: Mode): readonly ViewDefinition[] {

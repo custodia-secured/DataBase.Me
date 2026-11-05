@@ -105,6 +105,11 @@ export const commands = {
 	/**  Renames an object. Returns `false` if the title was already `title`. */
 	objectRename: (id: Id, title: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("object_rename", { id, title })),
 	/**
+	 *  Sets when an object's event starts and ends, in milliseconds, or clears them with `null`.
+	 *  Returns `false` if nothing changed.
+	 */
+	objectSetEvent: (id: Id, start: number | null, end: number | null) => typedError<boolean, IpcError>(__TAURI_INVOKE("object_set_event", { id, start, end })),
+	/**
 	 *  Sets the value of field `key` on an object, or clears it when `value` is `null`. Returns
 	 *  `false` if nothing changed.
 	 */

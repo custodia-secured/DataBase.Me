@@ -188,6 +188,12 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
             arg(args, "key")?,
             arg(args, "value")?,
         )),
+        "object_set_event" => ok(api::object_set_event(
+            s,
+            arg(args, "id")?,
+            arg(args, "start")?,
+            arg(args, "end")?,
+        )),
         "object_move" => ok(api::object_move(
             s,
             arg(args, "id")?,
