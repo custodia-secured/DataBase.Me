@@ -524,13 +524,103 @@
 
 .dbme-timeline__fill {
   flex: 0 0 auto;
-  min-width: 2px;
+  align-self: center;
+  width: min(24px, 100%);
   min-height: 2px;
-  background: var(--dbme-color-accent);
+  border-radius: 4px 4px 0 0;
+  background: var(--dbme-chart-1);
 }
 
 .dbme-timeline__lane.is-vertical .dbme-timeline__fill {
-  align-self: stretch;
+  width: auto;
+  height: min(24px, 100%);
+  min-width: 2px;
+  min-height: 0;
+  border-radius: 0 4px 4px 0;
+}
+
+/* --- Charts (M8) ----------------------------------------------------------- */
+
+.dbme-charts {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dbme-charts__settings > summary {
+  min-height: var(--dbme-target);
+  padding: var(--dbme-space-2) 0;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.dbme-charts__title {
+  margin: var(--dbme-space-2) 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.dbme-charts__figure {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 14rem;
+  overflow: hidden;
+}
+
+.dbme-charts__canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.dbme-charts__tip {
+  position: fixed;
+  z-index: 20;
+  max-width: 18rem;
+  padding: var(--dbme-space-1) var(--dbme-space-2);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  font-size: 0.8125rem;
+  pointer-events: none;
+}
+
+.dbme-charts__table {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dbme-charts__table:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-charts__table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.dbme-charts__table th {
+  position: sticky;
+  top: 0;
+  background: var(--dbme-color-surface);
+  font-weight: 600;
+  text-align: start;
+}
+
+.dbme-charts__table th,
+.dbme-charts__table td {
+  padding: var(--dbme-space-1) var(--dbme-space-2);
+  border-bottom: 1px solid var(--dbme-color-border);
+}
+
+.dbme-charts__table .dbme-charts__number {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
 }
 
 /* --- The filter editor (M8) ------------------------------------------------- */

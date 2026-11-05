@@ -39,4 +39,5 @@ other.
 | [0029](0029-the-release.md)                          | The release                                                  | Proposed |
 | [0030](0030-table-columns.md)                        | Adding columns to a Table                                    | Proposed |
 | [0031](0031-the-view-framework.md)                   | The view framework                                           | Proposed |
+| [0032](0032-charts-and-aggregates.md)                | Charts and aggregates                                        | Proposed |
 | [0035](0035-the-canvas.md)                           | The canvas: Excalidraw, with no network                      | Proposed |

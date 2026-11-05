@@ -38,6 +38,7 @@ export function ViewControls<O>({
   objectId,
   renderer,
   alternative = false,
+  saveWith,
   children,
 }: {
   state: ViewState<O>;
@@ -46,6 +47,8 @@ export function ViewControls<O>({
   renderer: string;
   /** Whether the view has an accessible alternative to switch to. */
   alternative?: boolean;
+  /** What a saved view keeps beside its settings. */
+  saveWith?: () => Pick<SavedConfig<O>, "spec">;
   children?: ReactNode;
 }) {
   const organizing = showsTypes(useMode());
@@ -82,7 +85,9 @@ export function ViewControls<O>({
           <label htmlFor={switchId}>Show as list</label>
         </span>
       ) : null}
-      {organizing ? <SavedViews state={state} objectId={objectId} renderer={renderer} /> : null}
+      {organizing ? (
+        <SavedViews state={state} objectId={objectId} renderer={renderer} saveWith={saveWith} />
+      ) : null}
     </div>
   );
 }
@@ -350,10 +355,12 @@ function SavedViews<O>({
   state,
   objectId,
   renderer,
+  saveWith,
 }: {
   state: ViewState<O>;
   objectId: Id;
   renderer: string;
+  saveWith: (() => Pick<SavedConfig<O>, "spec">) | undefined;
 }) {
   const views = useViews();
   const pickerId = useId();
@@ -368,7 +375,11 @@ function SavedViews<O>({
   const current: ViewRow_Serialize | undefined = saved.find((view) => view.id === state.savedId);
 
   const asNew = (name: string) => {
-    const config: SavedConfig<O> = { options: state.options, as_list: state.asList };
+    const config: SavedConfig<O> = {
+      options: state.options,
+      as_list: state.asList,
+      ...saveWith?.(),
+    };
     return {
       name,
       renderer,

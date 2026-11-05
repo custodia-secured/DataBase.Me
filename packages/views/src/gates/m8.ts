@@ -5,7 +5,7 @@
  * request leaving the machine) say whether the library can come in at all. Each returns the figures
  * the gate records.
  */
-export type GateName = "vega" | "map" | "graph" | "layout" | "canvas";
+export type GateName = "map" | "graph" | "layout" | "canvas";
 
 type Result = Record<string, unknown>;
 
@@ -16,8 +16,6 @@ type GeometryCollection = import("topojson-specification").GeometryCollection;
 
 export function runGate(name: GateName, root: HTMLElement, params: URLSearchParams) {
   switch (name) {
-    case "vega":
-      return gateVega(root, params.get("renderer") === "svg" ? "svg" : "canvas");
     case "map":
       return gateMap(root);
     case "graph":
@@ -29,57 +27,6 @@ export function runGate(name: GateName, root: HTMLElement, params: URLSearchPara
     default:
       return Promise.reject(new Error(`no gate ${String(name)}`));
   }
-}
-
-/** Vega-Lite compiled, then drawn by the interpreter: the expressions a spec needs, without eval. */
-async function gateVega(root: HTMLElement, renderer: "canvas" | "svg"): Promise<Result> {
-  const started = performance.now();
-  const [{ compile }, { parse, View }, { expressionInterpreter }] = await Promise.all([
-    import("vega-lite"),
-    import("vega"),
-    import("vega-interpreter"),
-  ]);
-  const loaded = performance.now() - started;
-  const values = Array.from({ length: 200 }, (_, index) => ({
-    day: new Date(Date.UTC(2026, 0, 1 + index)).toISOString(),
-    kind: ["a", "b", "c"][index % 3],
-    amount: (index * 37) % 101,
-  }));
-  const { spec } = compile({
-    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
-    width: 400,
-    height: 200,
-    data: { values },
-    // A filter, a time bin, an aggregate and a colour scale: each goes through an expression.
-    transform: [{ filter: "datum.amount > 10" }],
-    mark: "bar",
-    encoding: {
-      x: { timeUnit: "yearmonth", field: "day", type: "ordinal" },
-      y: { aggregate: "sum", field: "amount", type: "quantitative" },
-      color: { field: "kind", type: "nominal" },
-      tooltip: [{ field: "kind", type: "nominal" }],
-    },
-  });
-  const view = new View(parse(spec, undefined, { ast: true }), {
-    expr: expressionInterpreter,
-    renderer,
-    container: root,
-    hover: false,
-  });
-  await view.runAsync();
-  const canvas = root.querySelector("canvas");
-  const marks = root.querySelectorAll("svg path").length;
-  const drawn = renderer === "canvas" ? canvasHasInk(canvas) : marks > 0;
-  const rows = (view.data("source_0") as unknown[]).length;
-  view.finalize();
-  return { renderer, loaded_ms: Math.round(loaded), drawn, rows };
-}
-
-function canvasHasInk(canvas: HTMLCanvasElement | null): boolean {
-  const context = canvas?.getContext("2d");
-  if (!canvas || !context) return false;
-  const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
-  return data.some((value, index) => index % 4 === 3 && value > 0);
 }
 
 /** MapLibre on the bundled land, its worker from `'self'`, no tiles and no glyphs from anywhere. */

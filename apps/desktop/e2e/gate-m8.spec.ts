@@ -27,16 +27,6 @@ async function run(page: import("@playwright/test").Page, query: string, timeout
   return gate;
 }
 
-test("1a: Vega-Lite on canvas with the interpreter", async ({ page }) => {
-  const gate = await run(page, "gate=vega&renderer=canvas");
-  expect(gate.drawn).toBe(true);
-});
-
-test("1a: Vega-Lite on SVG with the interpreter", async ({ page }) => {
-  const gate = await run(page, "gate=vega&renderer=svg");
-  expect(gate.drawn).toBe(true);
-});
-
 test("1b: MapLibre on the bundled land", async ({ page }) => {
   const gate = await run(page, "gate=map");
   expect(gate.land_features).toBeGreaterThan(0);

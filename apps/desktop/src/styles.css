@@ -262,7 +262,8 @@ h3 {
 .pane__panel--gallery,
 .pane__panel--kanban,
 .pane__panel--calendar,
-.pane__panel--timeline {
+.pane__panel--timeline,
+.pane__panel--charts {
   display: flex;
   flex-direction: column;
   overflow: hidden;

@@ -42,6 +42,7 @@ export {
   ChevronLeft,
   ChevronRight,
   CalendarDays,
+  ChartColumn,
   ChartGantt,
   Columns2,
   Ellipsis,

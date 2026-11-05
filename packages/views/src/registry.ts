@@ -10,6 +10,7 @@ import {
   ListTree,
   Network,
   CalendarDays,
+  ChartColumn,
   ChartGantt,
   SquareKanban,
   Table2,
@@ -30,7 +31,15 @@ export interface ViewProps {
 }
 
 export type ViewId =
-  "document" | "outline" | "table" | "gallery" | "mindmap" | "kanban" | "calendar" | "timeline";
+  | "document"
+  | "outline"
+  | "table"
+  | "gallery"
+  | "mindmap"
+  | "kanban"
+  | "calendar"
+  | "timeline"
+  | "charts";
 
 export interface ViewDefinition {
   id: ViewId;
@@ -79,6 +88,14 @@ export const VIEWS: readonly ViewDefinition[] = [
       import("./timeline/TimelineView").then((module) => ({ default: module.TimelineView })),
     ),
   },
+  {
+    id: "charts",
+    label: "Charts",
+    icon: ChartColumn,
+    component: lazy(() =>
+      import("./charts/ChartsView").then((module) => ({ default: module.ChartsView })),
+    ),
+  },
 ];
 
 export function viewById(id: ViewId): ViewDefinition {
@@ -86,7 +103,7 @@ export function viewById(id: ViewId): ViewDefinition {
 }
 
 /** The views Simple mode leaves out (M7, M8): they need types and fields to mean much. */
-const HIDDEN_IN_SIMPLE: readonly ViewId[] = ["table", "kanban", "calendar", "timeline"];
+const HIDDEN_IN_SIMPLE: readonly ViewId[] = ["table", "kanban", "calendar", "timeline", "charts"];
 
 /** The views a pane offers in `mode`, in the registry's order. */
 export function visibleViews(mode: Mode): readonly ViewDefinition[] {

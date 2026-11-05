@@ -12,6 +12,8 @@ import { listingFromQuery, listingOf, type Listing } from "./listing";
 export interface SavedConfig<O> {
   options?: Partial<O>;
   as_list?: boolean;
+  /** A chart's Vega-Lite spec, kept for what reads a vault from outside; never drawn from. */
+  spec?: unknown;
 }
 
 export interface ViewState<O> {
