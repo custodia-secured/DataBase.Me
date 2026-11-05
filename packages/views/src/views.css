@@ -31,6 +31,755 @@
   max-width: 14rem;
 }
 
+/* --- Kanban (M8) ----------------------------------------------------------- */
+
+.dbme-kanban {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dbme-kanban__selected {
+  min-height: var(--dbme-target);
+  padding-top: 0;
+}
+
+.dbme-kanban__columns {
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--dbme-space-3);
+  min-height: 0;
+  overflow-x: auto;
+}
+
+.dbme-kanban__column {
+  display: flex;
+  flex: 1 0 14rem;
+  flex-direction: column;
+  max-width: 24rem;
+  min-height: 0;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-surface);
+}
+
+.dbme-kanban__column.is-over {
+  border-color: var(--dbme-color-accent);
+}
+
+.dbme-kanban__head {
+  display: flex;
+  align-items: center;
+  gap: var(--dbme-space-2);
+  padding: var(--dbme-space-1) var(--dbme-space-2) var(--dbme-space-1) var(--dbme-space-3);
+}
+
+.dbme-kanban__title {
+  flex: 0 1 auto;
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dbme-kanban__head .dbme-muted {
+  flex: 1 1 auto;
+  font-size: 0.875rem;
+}
+
+.dbme-kanban__cards {
+  flex: 1 1 auto;
+  min-height: 6rem;
+  overflow-y: auto;
+}
+
+.dbme-kanban__cards:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-kanban__body {
+  position: relative;
+  width: 100%;
+}
+
+.dbme-kanban__slot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: var(--dbme-space-1) var(--dbme-space-2);
+}
+
+.dbme-kanban__card {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: var(--dbme-space-2) var(--dbme-space-3);
+  overflow: hidden;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  cursor: pointer;
+  touch-action: pan-x pan-y;
+  user-select: none;
+}
+
+.dbme-kanban__card.is-active {
+  border-color: var(--dbme-color-accent);
+  box-shadow: inset 0 0 0 1px var(--dbme-color-accent);
+}
+
+.dbme-kanban__card.is-over {
+  border-top: 3px solid var(--dbme-color-accent);
+}
+
+.dbme-kanban__card.is-dragging {
+  opacity: 0.4;
+}
+
+.dbme-kanban__card--drag {
+  height: 3.25rem;
+  cursor: grabbing;
+}
+
+@media (max-width: 767px) {
+  .dbme-kanban__columns {
+    scroll-snap-type: x mandatory;
+  }
+
+  .dbme-kanban__column {
+    flex: 0 0 calc(100% - 1.5rem);
+    max-width: none;
+    scroll-snap-align: start;
+  }
+}
+
+/* --- Calendar (M8) --------------------------------------------------------- */
+
+.dbme-calendar {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dbme-calendar__nav {
+  padding-top: 0;
+}
+
+.dbme-calendar__title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.dbme-calendar__selected {
+  min-height: var(--dbme-target);
+  padding-top: 0;
+}
+
+.dbme-calendar__grid {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-calendar__week {
+  display: grid;
+  flex: 1 0 5.5rem;
+  grid-template-columns: repeat(7, minmax(5rem, 1fr));
+}
+
+.is-week > .dbme-calendar__week {
+  flex-basis: 24rem;
+}
+
+.dbme-calendar__grid > .dbme-calendar__head {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  flex: 0 0 auto;
+  background: var(--dbme-color-surface);
+}
+
+.dbme-calendar__weekday {
+  padding: var(--dbme-space-1) var(--dbme-space-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.dbme-calendar__day {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--dbme-space-1);
+  overflow-y: auto;
+  border-top: 1px solid var(--dbme-color-border);
+  border-left: 1px solid var(--dbme-color-border);
+}
+
+.dbme-calendar__day:first-child {
+  border-left: 0;
+}
+
+.dbme-calendar__day:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-calendar__day.is-outside {
+  background: var(--dbme-color-surface);
+}
+
+.dbme-calendar__day.is-over {
+  box-shadow: inset 0 0 0 2px var(--dbme-color-accent);
+}
+
+.dbme-calendar__date {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  min-width: 1.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.5rem;
+  text-align: center;
+}
+
+/* Not by colour alone: a ring and a weight, and aria-current says so to a screen reader. */
+.dbme-calendar__day.is-today .dbme-calendar__date {
+  border: 1px solid var(--dbme-color-accent);
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.dbme-calendar__item {
+  display: block;
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 1.5rem;
+  padding: 0 var(--dbme-space-1);
+  overflow: hidden;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: pan-x pan-y;
+  user-select: none;
+}
+
+.dbme-calendar__item:focus-visible,
+.dbme-calendar__more:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-calendar__item.is-active {
+  border-color: var(--dbme-color-accent);
+  box-shadow: inset 0 0 0 1px var(--dbme-color-accent);
+}
+
+.dbme-calendar__item.is-dragging {
+  opacity: 0.4;
+}
+
+.dbme-calendar__item--drag {
+  max-width: 14rem;
+  line-height: 1.5rem;
+  cursor: grabbing;
+}
+
+.dbme-calendar__more {
+  flex: 0 0 auto;
+  min-height: 1.5rem;
+  padding: 0 var(--dbme-space-1);
+  border: 0;
+  background: none;
+  color: var(--dbme-color-fg);
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: start;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.dbme-calendar__agenda {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.dbme-calendar__agenda-day {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-1);
+  padding-bottom: var(--dbme-space-3);
+}
+
+.dbme-calendar__agenda-date {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.dbme-calendar__agenda .dbme-calendar__item,
+.dbme-calendar__agenda .dbme-calendar__more {
+  min-height: var(--dbme-target);
+  font-size: 0.875rem;
+}
+
+.dbme-calendar__list {
+  display: flex;
+  width: min(80vw, 28rem);
+  height: min(60vh, 24rem);
+}
+
+/* --- Timeline (M8) --------------------------------------------------------- */
+
+.dbme-timeline {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dbme-timeline__nav {
+  padding-top: 0;
+}
+
+.dbme-timeline__title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.dbme-timeline__selected {
+  min-height: var(--dbme-target);
+  padding-top: 0;
+}
+
+.dbme-timeline__lane {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 12rem;
+  overflow: auto;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-timeline__lane:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-timeline__body {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.dbme-timeline__lane.is-vertical .dbme-timeline__body {
+  width: 100%;
+}
+
+.dbme-timeline__axis {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  height: 2rem;
+  border-bottom: 1px solid var(--dbme-color-border);
+  background: var(--dbme-color-surface);
+}
+
+.dbme-timeline__lane.is-vertical .dbme-timeline__axis {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 5rem;
+  height: auto;
+  border-right: 1px solid var(--dbme-color-border);
+  border-bottom: 0;
+}
+
+.dbme-timeline__tick {
+  position: absolute;
+  box-sizing: border-box;
+  top: 0;
+  height: 100%;
+  padding: var(--dbme-space-1);
+  border-left: 1px solid var(--dbme-color-border);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.dbme-timeline__lane.is-vertical .dbme-timeline__tick {
+  right: 0;
+  left: 0;
+  border-top: 1px solid var(--dbme-color-border);
+  border-left: 0;
+}
+
+/* Not by colour alone: it says Today, as the Calendar's day rings it and says so. */
+.dbme-timeline__today {
+  position: absolute;
+  z-index: 1;
+  top: 2rem;
+  bottom: 0;
+  padding: 0 var(--dbme-space-1);
+  border-left: 2px solid var(--dbme-color-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Down a phone the word sits in the axis, under the date, where no bar can cover it. */
+.dbme-timeline__lane.is-vertical .dbme-timeline__today {
+  z-index: 2;
+  top: auto;
+  right: 0;
+  bottom: auto;
+  left: 0;
+  box-sizing: border-box;
+  padding: 1.25rem 0 0 var(--dbme-space-1);
+  border-top: 2px solid var(--dbme-color-accent);
+  border-left: 0;
+}
+
+.dbme-timeline__bar {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  padding: 0 var(--dbme-space-2);
+  overflow: hidden;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  font-size: 0.8125rem;
+  line-height: 1.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dbme-timeline__bar.is-active,
+.dbme-timeline__count.is-active {
+  border-color: var(--dbme-color-accent);
+  box-shadow: inset 0 0 0 2px var(--dbme-color-accent);
+}
+
+.dbme-timeline__count {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  height: 14rem;
+  max-height: calc(100% - 3.25rem);
+  padding: 0 2px;
+  border: 1px solid transparent;
+  color: var(--dbme-color-fg);
+  cursor: pointer;
+}
+
+.dbme-timeline__lane.is-vertical .dbme-timeline__count {
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  max-height: none;
+  gap: var(--dbme-space-1);
+  padding: 2px var(--dbme-space-1);
+}
+
+.dbme-timeline__number {
+  flex: 0 0 auto;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  text-align: center;
+}
+
+.dbme-timeline__fill {
+  flex: 0 0 auto;
+  align-self: center;
+  width: min(24px, 100%);
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  background: var(--dbme-chart-1);
+}
+
+.dbme-timeline__lane.is-vertical .dbme-timeline__fill {
+  width: auto;
+  height: min(24px, 100%);
+  min-width: 2px;
+  min-height: 0;
+  border-radius: 0 4px 4px 0;
+}
+
+/* --- Charts (M8) ----------------------------------------------------------- */
+
+.dbme-charts {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dbme-charts__settings > summary {
+  min-height: var(--dbme-target);
+  padding: var(--dbme-space-2) 0;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.dbme-charts__title {
+  margin: var(--dbme-space-2) 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.dbme-charts__figure {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 14rem;
+  overflow: hidden;
+}
+
+.dbme-charts__canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.dbme-charts__tip {
+  position: fixed;
+  z-index: 20;
+  max-width: 18rem;
+  padding: var(--dbme-space-1) var(--dbme-space-2);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  font-size: 0.8125rem;
+  pointer-events: none;
+}
+
+.dbme-charts__table {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dbme-charts__table:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-charts__table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.dbme-charts__table th {
+  position: sticky;
+  top: 0;
+  background: var(--dbme-color-surface);
+  font-weight: 600;
+  text-align: start;
+}
+
+.dbme-charts__table th,
+.dbme-charts__table td {
+  padding: var(--dbme-space-1) var(--dbme-space-2);
+  border-bottom: 1px solid var(--dbme-color-border);
+}
+
+.dbme-charts__table .dbme-charts__number {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+/* --- Dashboard (M8) -------------------------------------------------------- */
+
+.dbme-dashboard {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dbme-dashboard__grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-auto-rows: 24rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--dbme-space-3);
+  min-height: 0;
+  overflow: auto;
+}
+
+.dbme-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--dbme-space-1) var(--dbme-space-3) var(--dbme-space-2);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-tile.is-wide {
+  grid-column: 1 / -1;
+}
+
+.dbme-tile__head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--dbme-space-2);
+}
+
+.dbme-tile__title {
+  flex: 1 1 auto;
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dbme-tile__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 767px) {
+  .dbme-dashboard__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- The Map (M8) ------------------------------------------------------------------------- */
+
+.dbme-map {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+  min-height: 0;
+  padding: var(--dbme-space-3);
+}
+
+.dbme-map__count {
+  margin: 0;
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.875rem;
+}
+
+.dbme-map__stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 14rem;
+}
+
+.dbme-map__host {
+  flex: 1;
+  overflow: hidden;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-map__host .maplibregl-canvas:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-map__host .maplibregl-canvas.is-over {
+  cursor: pointer;
+}
+
+.dbme-map__stage.is-picking .maplibregl-canvas {
+  cursor: crosshair;
+}
+
+.dbme-map__tools {
+  position: absolute;
+  top: var(--dbme-space-2);
+  right: var(--dbme-space-2);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+}
+
+.dbme-map__selected,
+.dbme-map__picking {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbme-space-2);
+  font-size: 0.875rem;
+}
+
+.dbme-map__selected-name {
+  flex: 1;
+  min-width: 10rem;
+}
+
+/* --- The filter editor (M8) ------------------------------------------------- */
+
+.dbme-filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-3);
+}
+
+.dbme-filter__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbme-space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dbme-filter__row .dbme-input {
+  flex: 1 1 8rem;
+  width: auto;
+  min-width: 0;
+}
+
 /* --- Document ------------------------------------------------------------------------------ */
 
 .dbme-document {

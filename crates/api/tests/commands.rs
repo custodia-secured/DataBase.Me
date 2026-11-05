@@ -199,6 +199,120 @@ fn every_change_is_announced_and_reads_are_not() {
 }
 
 #[test]
+fn a_location_goes_in_one_undo_whole_and_on_the_earth() {
+    let f = Fixture::new();
+    let x = f.object("x");
+    let where_is = |f: &Fixture| {
+        let row = api::object_get(&f.session, x).unwrap();
+        (row.geo_lat, row.geo_lon)
+    };
+    f.tick();
+    assert!(api::object_set_geo(&f.session, x, Some(47.5), Some(8.5)).unwrap());
+    assert_eq!(where_is(&f), (Some(47.5), Some(8.5)));
+    assert!(
+        !api::object_set_geo(&f.session, x, Some(47.5), Some(8.5)).unwrap(),
+        "no change"
+    );
+
+    f.tick();
+    assert!(api::object_set_geo(&f.session, x, Some(91.0), Some(8.5)).is_err());
+    assert!(api::object_set_geo(&f.session, x, Some(47.5), Some(181.0)).is_err());
+    assert!(api::object_set_geo(&f.session, x, Some(47.5), None).is_err());
+    assert!(api::object_set_geo(&f.session, x, None, Some(8.5)).is_err());
+    assert!(api::object_set_geo(&f.session, x, Some(f64::NAN), Some(8.5)).is_err());
+    assert_eq!(where_is(&f), (Some(47.5), Some(8.5)));
+
+    f.tick();
+    assert!(api::object_set_geo(&f.session, x, None, None).unwrap());
+    assert_eq!(where_is(&f), (None, None));
+    api::undo(&f.session).unwrap().unwrap();
+    assert_eq!(where_is(&f), (Some(47.5), Some(8.5)));
+}
+
+#[test]
+fn a_map_file_has_to_be_a_pmtiles_archive_and_is_read_by_range() {
+    let f = Fixture::new();
+    let dir = tempfile::tempdir().unwrap();
+    let path = |name: &str| dir.path().join(name).to_str().unwrap().to_owned();
+    let map = path("world.pmtiles");
+    std::fs::write(&map, b"PMTiles\x03 and the rest").unwrap();
+    let other = path("notes.txt");
+    std::fs::write(&other, b"not a map").unwrap();
+    let old = path("old.pmtiles");
+    std::fs::write(&old, b"PMTiles\x02 an older one").unwrap();
+    let chosen = |f: &Fixture| api::settings_get(&f.session).unwrap().map_file;
+    let decode = |text: String| BASE64.decode(text).unwrap();
+
+    assert!(api::map_file_read(&f.session, 0, 8).is_err(), "none chosen");
+
+    // What is not an archive cannot be chosen, so it cannot be read.
+    for refused in [&other, &old, &path("missing.pmtiles")] {
+        assert!(api::map_file_set(&f.session, Some(refused.clone())).is_err());
+        assert_eq!(chosen(&f), None);
+    }
+
+    let settings = api::map_file_set(&f.session, Some(map.clone())).unwrap();
+    assert_eq!(settings.map_file.as_ref(), Some(&map));
+    assert_eq!(chosen(&f), Some(map.clone()));
+
+    assert_eq!(
+        decode(api::map_file_read(&f.session, 8, 4).unwrap()),
+        b" and"
+    );
+    assert_eq!(
+        decode(api::map_file_read(&f.session, 17, 99).unwrap()),
+        b"rest"
+    );
+    assert!(decode(api::map_file_read(&f.session, 99, 4).unwrap()).is_empty());
+    assert!(api::map_file_read(&f.session, 0, api::MAX_MAP_READ + 1).is_err());
+
+    // Replaced under it by something else, it stops being read.
+    std::fs::write(&map, b"not a map any more").unwrap();
+    assert!(api::map_file_read(&f.session, 0, 8).is_err());
+
+    assert_eq!(api::map_file_set(&f.session, None).unwrap().map_file, None);
+    assert!(api::map_file_read(&f.session, 0, 8).is_err());
+}
+
+#[test]
+fn an_event_moves_in_one_undo_and_cannot_end_before_it_starts() {
+    let f = Fixture::new();
+    let x = f.object("x");
+    let when = |f: &Fixture| {
+        let row = api::object_get(&f.session, x).unwrap();
+        (row.event_start, row.event_end)
+    };
+    f.tick();
+    assert!(api::object_set_event(&f.session, x, Some(1_000), Some(2_000)).unwrap());
+    assert_eq!(when(&f), (Some(1_000), Some(2_000)));
+    assert!(
+        !api::object_set_event(&f.session, x, Some(1_000), Some(2_000)).unwrap(),
+        "no change"
+    );
+
+    f.tick();
+    assert!(api::object_set_event(&f.session, x, Some(5_000), Some(2_000)).is_err());
+    assert_eq!(
+        when(&f),
+        (Some(1_000), Some(2_000)),
+        "a refusal changes nothing"
+    );
+
+    f.tick();
+    assert!(api::object_set_event(&f.session, x, Some(3_000), Some(4_000)).unwrap());
+    api::undo(&f.session).unwrap().unwrap();
+    assert_eq!(
+        when(&f),
+        (Some(1_000), Some(2_000)),
+        "one undo puts both back"
+    );
+
+    f.tick();
+    assert!(api::object_set_event(&f.session, x, None, None).unwrap());
+    assert_eq!(when(&f), (None, None));
+}
+
+#[test]
 fn an_editor_batch_builds_a_nested_list_in_one_step() {
     let f = Fixture::new();
     let page = f.object("page");

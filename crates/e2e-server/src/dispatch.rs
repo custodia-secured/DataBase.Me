@@ -158,6 +158,17 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
             &arg(args, "query")?,
             &arg::<String>(args, "field")?,
         )),
+        "aggregate" => ok(api::aggregate(s, &arg(args, "aggregate")?)),
+        "data_profile" => ok(api::data_profile(
+            s,
+            &arg(args, "query")?,
+            &arg::<Vec<String>>(args, "fields")?,
+        )),
+        "graph_read" => ok(api::graph_read(
+            s,
+            &arg(args, "query")?,
+            arg(args, "limit")?,
+        )),
         "views_list" => ok(api::views_list(s)),
         "view_get" => ok(api::view_get(s, arg(args, "id")?)),
         "view_save" => ok(api::view_save(s, arg(args, "view")?)),
@@ -176,6 +187,24 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
             arg(args, "id")?,
             arg(args, "key")?,
             arg(args, "value")?,
+        )),
+        "object_set_event" => ok(api::object_set_event(
+            s,
+            arg(args, "id")?,
+            arg(args, "start")?,
+            arg(args, "end")?,
+        )),
+        "object_set_geo" => ok(api::object_set_geo(
+            s,
+            arg(args, "id")?,
+            arg(args, "lat")?,
+            arg(args, "lon")?,
+        )),
+        "map_file_set" => ok(api::map_file_set(s, arg(args, "path")?)),
+        "map_file_read" => ok(api::map_file_read(
+            s,
+            arg(args, "offset")?,
+            arg(args, "length")?,
         )),
         "object_move" => ok(api::object_move(
             s,

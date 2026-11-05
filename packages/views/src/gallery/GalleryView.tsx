@@ -5,21 +5,15 @@
  * bytes over IPC and shown through `blob:` URLs, which the CSP allows. One tab stop; the arrow
  * keys move between cards and Enter opens one.
  */
-import {
-  MANUAL,
-  useBlobUrl,
-  useCount,
-  type ObjectSummary_Serialize,
-  type Sort,
-  type Source,
-} from "@databaseme/client";
+import { MANUAL, useBlobUrl, type ObjectSummary_Serialize, type Sort } from "@databaseme/client";
 import { StatusMessage } from "@databaseme/ui";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useListingCount, usePagedListing, type Listing } from "../framework/listing";
+import { useViewState } from "../framework/useViewState";
+import { ViewControls } from "../framework/ViewControls";
 import { moveCell } from "../grid";
-import { childrenOf, usePagedObjects } from "../paging";
 import type { ViewProps } from "../registry";
-import { SourcePicker } from "../SourcePicker";
 
 // Two cards a row on a 360 px phone.
 const MIN_CARD = 140;
@@ -33,20 +27,20 @@ const SORTS: { label: string; sort: Sort }[] = [
   { label: "Recently changed", sort: { by: "updated", field: null, descending: true } },
 ];
 
+const NO_OPTIONS = {};
+
 export function GalleryView({ objectId, onOpen }: ViewProps) {
-  const [source, setSource] = useState<Source>(() => childrenOf(objectId));
-  const [sortIndex, setSortIndex] = useState(0);
-  const [shownFor, setShownFor] = useState(objectId);
-  if (shownFor !== objectId) {
-    setShownFor(objectId);
-    setSource(childrenOf(objectId));
-  }
+  const state = useViewState(objectId, NO_OPTIONS);
   const sortId = useId();
-  const sort = SORTS[sortIndex]?.sort ?? MANUAL;
+  const sortIndex = Math.max(
+    0,
+    SORTS.findIndex(
+      ({ sort }) => sort.by === state.sort.by && sort.descending === state.sort.descending,
+    ),
+  );
   return (
     <section className="dbme-gallery" aria-label="Gallery">
-      <div className="dbme-view-bar">
-        <SourcePicker objectId={objectId} source={source} onChange={setSource} />
+      <ViewControls state={state} objectId={objectId} renderer="gallery">
         <span className="dbme-source">
           <label htmlFor={sortId}>Order</label>
           <select
@@ -54,7 +48,7 @@ export function GalleryView({ objectId, onOpen }: ViewProps) {
             className="dbme-input"
             value={sortIndex}
             onChange={(event) => {
-              setSortIndex(Number(event.target.value));
+              state.setSort(SORTS[Number(event.target.value)]?.sort ?? MANUAL);
             }}
           >
             {SORTS.map((option, index) => (
@@ -64,23 +58,23 @@ export function GalleryView({ objectId, onOpen }: ViewProps) {
             ))}
           </select>
         </span>
-      </div>
-      <Cards source={source} sort={sort} onOpen={onOpen} />
+      </ViewControls>
+      <Cards listing={state.listing} sort={state.sort} onOpen={onOpen} />
     </section>
   );
 }
 
 function Cards({
-  source,
+  listing,
   sort,
   onOpen,
 }: {
-  source: Source;
+  listing: Listing;
   sort: Sort;
   onOpen: (id: string) => void;
 }) {
   const gridId = useId();
-  const count = useCount(source);
+  const count = useListingCount(listing);
   const total = count.data ?? 0;
   const scroller = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -117,7 +111,7 @@ function Cards({
   const items = virtualizer.getVirtualItems();
   const first = (items[0]?.index ?? 0) * perRow;
   const last = ((items.at(-1)?.index ?? 0) + 1) * perRow - 1;
-  const cardAt = usePagedObjects(source, sort, first, Math.min(last, Math.max(0, total - 1)));
+  const cardAt = usePagedListing(listing, sort, first, Math.min(last, Math.max(0, total - 1)));
 
   const cardId = (index: number) => `${gridId}-card-${String(index)}`;
   const go = (index: number) => {

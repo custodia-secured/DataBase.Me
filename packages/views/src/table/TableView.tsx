@@ -8,12 +8,10 @@
  */
 import {
   MANUAL,
-  useCount,
   useFields,
   type FieldRow,
   type ObjectSummary_Serialize,
   type Sort,
-  type Source,
   type Value,
 } from "@databaseme/client";
 import {
@@ -30,10 +28,11 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { actions } from "../actions";
 import { FieldEditor } from "../fields";
+import { useListingCount, usePagedListing, type Listing } from "../framework/listing";
+import { useViewState } from "../framework/useViewState";
+import { ViewControls } from "../framework/ViewControls";
 import { isTyping, moveCell, type Cell } from "../grid";
-import { childrenOf, usePagedObjects } from "../paging";
 import type { ViewProps } from "../registry";
-import { SourcePicker } from "../SourcePicker";
 import { displayValue, isEditable } from "../values";
 import { EditColumnsDialog, NewColumnDialog } from "./ColumnDialogs";
 
@@ -69,37 +68,36 @@ function nextSort(sort: Sort, column: ColumnKind): Sort {
   return sort.descending ? MANUAL : { ...base, descending: true };
 }
 
+const NO_OPTIONS = {};
+
 export function TableView({ objectId, onOpen }: ViewProps) {
-  const [source, setSource] = useState<Source>(() => childrenOf(objectId));
-  const [sort, setSort] = useState<Sort>(MANUAL);
-  // A new object resets the table to its children.
-  const [shownFor, setShownFor] = useState(objectId);
-  if (shownFor !== objectId) {
-    setShownFor(objectId);
-    setSource(childrenOf(objectId));
-    setSort(MANUAL);
-  }
+  const state = useViewState(objectId, NO_OPTIONS);
   return (
     <section className="dbme-table" aria-label="Table">
-      <div className="dbme-view-bar">
-        <SourcePicker objectId={objectId} source={source} onChange={setSource} />
-      </div>
-      <Grid objectId={objectId} source={source} sort={sort} onSort={setSort} onOpen={onOpen} />
+      <ViewControls state={state} objectId={objectId} renderer="table" />
+      <Grid
+        objectId={objectId}
+        listing={state.listing}
+        sort={state.sort}
+        onSort={state.setSort}
+        onOpen={onOpen}
+      />
     </section>
   );
 }
 
 interface GridProps {
   objectId: string;
-  source: Source;
+  listing: Listing;
   sort: Sort;
   onSort: (sort: Sort) => void;
   onOpen: (id: string) => void;
 }
 
-function Grid({ objectId, source, sort, onSort, onOpen }: GridProps) {
+function Grid({ objectId, listing, sort, onSort, onOpen }: GridProps) {
+  const { source } = listing;
   const gridId = useId();
-  const count = useCount(source);
+  const count = useListingCount(listing);
   const fields = useFields(source);
   const coarse = useMediaQuery("(pointer: coarse)");
   const rowHeight = coarse ? 44 : 36;
@@ -119,7 +117,7 @@ function Grid({ objectId, source, sort, onSort, onOpen }: GridProps) {
   const items = virtualizer.getVirtualItems();
   const first = items[0]?.index ?? 0;
   const last = items.at(-1)?.index ?? 0;
-  const rowAt = usePagedObjects(source, sort, first, last);
+  const rowAt = usePagedListing(listing, sort, first, last);
 
   const columnKinds = useMemo<ColumnKind[]>(
     () => [

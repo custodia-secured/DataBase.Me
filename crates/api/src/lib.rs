@@ -19,22 +19,24 @@ use serde_json::Value;
 use dbme_core::model::{
     AttachmentRole, AttachmentRow, BlockRow, FieldRow, ObjectRow, TypeRow, ViewRow,
 };
-use dbme_core::query::Query;
+use dbme_core::query::{AggregateQuery, Query};
 use dbme_core::{ContentHash, CoreError, Id};
 use dbme_store::{
-    Backlink, ColumnTarget, Committed, FacetBucket, NewAttachment, NewColumn, NewField, NewObject,
-    NewRelation, NewView, ObjectSummary, ObjectTree, Position, SearchHit, Sort, Source, StoreError,
-    Txn, Vault, VaultOptions,
+    AggregateResult, Backlink, ColumnTarget, Committed, DataProfile, FacetBucket, GraphData,
+    NewAttachment, NewColumn, NewField, NewObject, NewRelation, NewView, ObjectSummary, ObjectTree,
+    Position, SearchHit, Sort, Source, StoreError, Txn, Vault, VaultOptions,
 };
 
 mod blocks;
 mod import;
+mod map_file;
 mod mirror;
 mod settings;
 
 pub use blocks::BlockChange;
 pub use dbme_ingest::{ImportOptions, ImportPlan, ImportRun};
 pub use import::{import_apply, import_plan, provenance_list};
+pub use map_file::{MAX_MAP_READ, map_file_read, map_file_set};
 pub use mirror::{
     DEFAULT_FOLDER, ExportReport, HoldChoice, MirrorStatus, MirrorSync, MirrorWorker,
     OVERRIDES_DIR, conflict_resolve, conflicts_list, export_run, mirror_disable, mirror_enable,
@@ -537,6 +539,38 @@ pub fn object_set_prop(
     })
 }
 
+/// Sets when an object's event starts and ends, in milliseconds, or clears them with `None`. One
+/// change, so one undo puts both back. Returns `false` if nothing changed.
+pub fn object_set_event(
+    session: &Session,
+    id: Id,
+    start: Option<i64>,
+    end: Option<i64>,
+) -> Reply<bool> {
+    session.transact(|txn| {
+        txn.update_object(id, |o| {
+            o.event_start = start;
+            o.event_end = end;
+        })
+    })
+}
+
+/// Sets where an object is, in degrees, or with `None` for both says it is nowhere. Latitude and
+/// longitude go together and have to be on the Earth. Returns `false` if nothing changed.
+pub fn object_set_geo(
+    session: &Session,
+    id: Id,
+    lat: Option<f64>,
+    lon: Option<f64>,
+) -> Reply<bool> {
+    session.transact(|txn| {
+        txn.update_object(id, |o| {
+            o.geo_lat = lat;
+            o.geo_lon = lon;
+        })
+    })
+}
+
 /// Moves an object under `parent` (`None`: the top level), at `position` among its new
 /// siblings. Returns `false` if it did not move.
 pub fn object_move(
@@ -660,6 +694,22 @@ pub fn objects_query_count(session: &Session, query: &Query) -> Reply<u32> {
 /// first. `field` is a field key, or `$type` for the results' types.
 pub fn facets(session: &Session, query: &Query, field: &str) -> Reply<Vec<FacetBucket>> {
     session.with(|vault| vault.read().facets(query, field))
+}
+
+/// Figures per group over a query's results, computed in the store (M8, ADR-0032).
+pub fn aggregate(session: &Session, aggregate: &AggregateQuery) -> Reply<AggregateResult> {
+    session.with(|vault| vault.read().aggregate(aggregate))
+}
+
+/// The shape of a query's results, read from a sample, for the view recommender (M8).
+pub fn data_profile(session: &Session, query: &Query, fields: &[String]) -> Reply<DataProfile> {
+    session.with(|vault| vault.read().data_profile(query, fields))
+}
+
+/// A query's results as a graph, up to `limit` nodes, with the live relations and parent links
+/// among them (M8, ADR-0034).
+pub fn graph_read(session: &Session, query: &Query, limit: u32) -> Reply<GraphData> {
+    session.with(|vault| vault.read().graph(query, limit))
 }
 
 /// Every saved view, by name.

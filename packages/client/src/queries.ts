@@ -6,10 +6,13 @@
  */
 import { keepPreviousData, useQuery, type QueryClient } from "@tanstack/react-query";
 import type {
+  AggregateQuery_Deserialize,
+  AggregateResult,
   AttachmentRow_Serialize,
   Backlink_Serialize,
   BlockRow_Serialize,
   ColumnTarget_Serialize,
+  DataProfile_Serialize,
   Conflict_Serialize,
   FacetBucket,
   FieldRow,
@@ -53,6 +56,9 @@ export const keys = {
   fullSearch: (text: string, limit: number) => [VAULT, "full-search", text, limit] as const,
   query: (query: Query_Deserialize) => [VAULT, "query", query] as const,
   queryCount: (query: Query_Deserialize) => [VAULT, "query-count", query] as const,
+  aggregate: (aggregate: AggregateQuery_Deserialize) => [VAULT, "aggregate", aggregate] as const,
+  dataProfile: (query: Query_Deserialize, fields: readonly string[]) =>
+    [VAULT, "data-profile", query, fields] as const,
   facets: (query: Query_Deserialize, field: string) => [VAULT, "facets", query, field] as const,
   views: () => [VAULT, "views"] as const,
   view: (id: Id) => [VAULT, "view", id] as const,
@@ -124,10 +130,11 @@ export function useCount(source: Source) {
   });
 }
 
-export function useFields(source: Source) {
+export function useFields(source: Source, enabled = true) {
   return useQuery<FieldRow[]>({
     queryKey: keys.fields(source),
     queryFn: () => unwrap(commands.fieldsList(source)),
+    enabled,
   });
 }
 
@@ -209,6 +216,25 @@ export function useQueryCount(query: Query_Deserialize | null) {
   });
 }
 
+/** Figures per group over a query's results, worked out in the store (build plan §2.7). */
+export function useAggregate(aggregate: AggregateQuery_Deserialize | null) {
+  return useQuery<AggregateResult>({
+    queryKey: keys.aggregate(aggregate ?? { query: {}, measures: [] }),
+    queryFn: () => unwrap(commands.aggregate(aggregate ?? { query: {}, measures: [] })),
+    placeholderData: keepPreviousData,
+    enabled: aggregate !== null,
+  });
+}
+
+/** The shape of a query's results, which the view recommender reads. Nothing is read while `query` is null. */
+export function useDataProfile(query: Query_Deserialize | null, fields: readonly string[]) {
+  return useQuery<DataProfile_Serialize>({
+    queryKey: keys.dataProfile(query ?? {}, fields),
+    queryFn: () => unwrap(commands.dataProfile(query ?? {}, [...fields])),
+    enabled: query !== null,
+  });
+}
+
 /** The type facet of a query's results. */
 export const TYPE_FACET = "$type";
 
@@ -284,6 +310,13 @@ export function useSettings() {
 /** Changes the settings `patch` names and puts the result in the cache at once. */
 export async function setSettings(client: QueryClient, patch: SettingsPatch): Promise<Settings> {
   const settings = await unwrap(commands.settingsSet(patch));
+  client.setQueryData(SETTINGS_KEY, settings);
+  return settings;
+}
+
+/** Chooses the file maps draw over the land they ship with, or none; refused if it is no map file. */
+export async function setMapFile(client: QueryClient, path: string | null): Promise<Settings> {
+  const settings = await unwrap(commands.mapFileSet(path));
   client.setQueryData(SETTINGS_KEY, settings);
   return settings;
 }

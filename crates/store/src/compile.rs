@@ -7,7 +7,10 @@ use rusqlite::types::Value as SqlValue;
 use serde_json::Value;
 
 use dbme_core::Id;
-use dbme_core::query::{COLUMNS, Compare, Condition, Direction, Query, SortBy};
+use dbme_core::query::{
+    AggregateQuery, COLUMNS, Compare, Condition, Direction, Group, MeasureOp, Query, RelatedTo,
+    SortBy, TimeBin,
+};
 
 use crate::search::{WEIGHTS, match_expression};
 use crate::sql::to_json;
@@ -34,6 +37,8 @@ pub enum Select {
     /// The values of a field among the results and how many have each, most first. A list value
     /// counts each of its items.
     FacetField,
+    /// The IDs of the results in no order and without paging, to build a larger statement on.
+    Set,
 }
 
 /// A query value as a parameter: booleans as integers, as SQLite's JSON functions read them;
@@ -195,7 +200,14 @@ pub fn compile(query: &Query, types: &[Id], select: Select, field: &str) -> Resu
         sql.push_str(" AND ");
         sql.push_str(&clause);
     }
-    if let Some(related) = &query.related_to {
+    if let Some(related) = query
+        .related_to
+        .as_ref()
+        .filter(|related| related.depth > 1)
+    {
+        sql.push_str(" AND ");
+        sql.push_str(&reach(&mut b, related));
+    } else if let Some(related) = &query.related_to {
         let id = related.id.to_string();
         let ends = match related.direction {
             Direction::Either => {
@@ -234,6 +246,7 @@ pub fn compile(query: &Query, types: &[Id], select: Select, field: &str) -> Resu
             format!("{sql} ORDER BY {order} LIMIT {limit} OFFSET {offset}")
         }
         Select::Count => format!("SELECT count(*) FROM ({sql})"),
+        Select::Set => sql,
         Select::FacetTypes => format!(
             "SELECT ot.type_id, count(*) FROM ({sql}) q JOIN object_types ot ON ot.object_id = q.id \
              GROUP BY ot.type_id ORDER BY 2 DESC, 1 LIMIT 50"
@@ -260,6 +273,142 @@ pub fn compile(query: &Query, types: &[Id], select: Select, field: &str) -> Resu
         sql,
         params: b.params,
     })
+}
+
+/// The clause for a [`RelatedTo`] of more than one step: a walk along the live relations from the
+/// object, as far as its depth. The object itself is not a result, even when a cycle reaches it.
+fn reach(b: &mut Builder, related: &RelatedTo) -> String {
+    let start = b.param(SqlValue::Text(related.id.to_string()));
+    let (next, on) = match related.direction {
+        Direction::Either => (
+            "CASE WHEN r.src_id = reach.id THEN r.dst_id ELSE r.src_id END",
+            "(r.src_id = reach.id OR r.dst_id = reach.id)",
+        ),
+        Direction::Outgoing => ("r.dst_id", "r.src_id = reach.id"),
+        Direction::Incoming => ("r.src_id", "r.dst_id = reach.id"),
+    };
+    let depth = b.param(SqlValue::Integer(i64::from(related.depth)));
+    let rel_type = match &related.rel_type {
+        Some(rel_type) => format!(
+            " AND r.rel_type = {}",
+            b.param(SqlValue::Text(rel_type.clone()))
+        ),
+        None => String::new(),
+    };
+    let again = b.param(SqlValue::Text(related.id.to_string()));
+    format!(
+        "o.id IN (WITH RECURSIVE reach(id, depth) AS (SELECT {start}, 0 UNION \
+         SELECT {next}, reach.depth + 1 FROM reach JOIN relations r ON {on} \
+         WHERE r.deleted_at IS NULL AND reach.depth < {depth}{rel_type}) \
+         SELECT id FROM reach WHERE id != {again})"
+    )
+}
+
+/// The moment a date value stands for and the modifier that reads it, as the two arguments of
+/// SQLite's date functions. Columns hold milliseconds since the epoch and date fields hold text.
+fn moment(b: &mut Builder, field: &str) -> String {
+    let (one, two, three, four) = (
+        b.field(field),
+        b.field(field),
+        b.field(field),
+        b.field(field),
+    );
+    format!(
+        "CASE WHEN typeof({one}) IN ('integer', 'real') THEN {two} / 1000 ELSE {three} END, \
+         CASE WHEN typeof({four}) IN ('integer', 'real') THEN 'unixepoch' ELSE '+0 seconds' END"
+    )
+}
+
+/// The bucket of a date: text that sorts in time order. A value that is not a date has none.
+fn time_bucket(b: &mut Builder, field: &str, bin: TimeBin) -> String {
+    match bin {
+        TimeBin::Year => format!("strftime('%Y', {})", moment(b, field)),
+        TimeBin::Month => format!("strftime('%Y-%m', {})", moment(b, field)),
+        TimeBin::Day => format!("strftime('%Y-%m-%d', {})", moment(b, field)),
+        TimeBin::Hour => format!("strftime('%Y-%m-%dT%H:00', {})", moment(b, field)),
+        // Sunday on or after the date, less six days: the Monday that starts its week.
+        TimeBin::Week => format!("date({}, 'weekday 0', '-6 days')", moment(b, field)),
+        TimeBin::Quarter => {
+            let year = moment(b, field);
+            let month = moment(b, field);
+            format!(
+                "strftime('%Y', {year}) || '-Q' || ((CAST(strftime('%m', {month}) AS INTEGER) + 2) / 3)"
+            )
+        }
+    }
+}
+
+/// Compiles an aggregate. The inner query's parameters sit between the groups' and the joins', in
+/// the order the statement reads them.
+pub fn compile_aggregate(aggregate: &AggregateQuery, types: &[Id]) -> Result<Compiled> {
+    aggregate.validate()?;
+    let inner = compile(&aggregate.query, types, Select::Set, "")?;
+    let mut columns = Builder { params: Vec::new() };
+    let mut joins = Builder { params: Vec::new() };
+    let mut inner_terms = Vec::new();
+    let mut join_clauses = String::new();
+    for (index, Group { field, bin }) in aggregate.group_by.iter().enumerate() {
+        let term = match bin {
+            Some(bin) => time_bucket(&mut columns, field, *bin),
+            None if COLUMNS.contains(&field.as_str()) => columns.field(field),
+            // A list counts once per item; a value counts once; no value is one empty bucket.
+            None => {
+                let path = SqlValue::Text(format!("$.{field}"));
+                let kind = joins.param(path.clone());
+                let list = joins.param(path.clone());
+                let one = joins.param(path);
+                join_clauses.push_str(&format!(
+                    " LEFT JOIN json_each(CASE WHEN json_type(o.props_json, {kind}) = 'array' \
+                     THEN json_extract(o.props_json, {list}) \
+                     ELSE json_array(json_extract(o.props_json, {one})) END) j{index} ON 1"
+                ));
+                format!("j{index}.value")
+            }
+        };
+        inner_terms.push(format!("{term} AS k{index}"));
+    }
+    let mut outer_terms: Vec<String> = (0..aggregate.group_by.len())
+        .map(|index| format!("k{index}"))
+        .collect();
+    let keys = outer_terms.join(", ");
+    for (index, measure) in aggregate.measures.iter().enumerate() {
+        let function = match measure.op {
+            MeasureOp::Count => {
+                outer_terms.push("count(*)".into());
+                continue;
+            }
+            MeasureOp::Sum => "sum",
+            MeasureOp::Avg => "avg",
+            MeasureOp::Min => "min",
+            MeasureOp::Max => "max",
+        };
+        let field = measure.field.as_deref().unwrap_or_default();
+        // Numbers only: SQLite would otherwise read the text "n/a" as 0.
+        let (kind, value) = (columns.field(field), columns.field(field));
+        inner_terms.push(format!(
+            "CASE WHEN typeof({kind}) IN ('integer', 'real') THEN {value} END AS v{index}"
+        ));
+        outer_terms.push(format!("{function}(v{index})"));
+    }
+    // A subquery with no named column of its own still needs one to select.
+    inner_terms.push("1 AS one".into());
+    let grouping = if keys.is_empty() {
+        String::new()
+    } else {
+        format!(" GROUP BY {keys} ORDER BY {keys}")
+    };
+    let sql = format!(
+        "SELECT {} FROM (SELECT {} FROM ({}) q JOIN objects o ON o.id = q.id{join_clauses}){grouping} LIMIT ?",
+        outer_terms.join(", "),
+        inner_terms.join(", "),
+        inner.sql,
+    );
+    let mut params = columns.params;
+    params.extend(inner.params);
+    params.extend(joins.params);
+    // One more than asked, so the caller can say the list was cut.
+    params.push(SqlValue::Integer(i64::from(aggregate.bucket_limit()) + 1));
+    Ok(Compiled { sql, params })
 }
 
 /// The `ORDER BY` terms. Ties are broken by ID, in the same direction.

@@ -1,0 +1,15 @@
+diff --git a/build/vega-functions.js b/build/vega-functions.js
+index 8f1bb38..d3cbcb1 100644
+--- a/build/vega-functions.js
++++ b/build/vega-functions.js
+@@ -778,8 +778,9 @@ const codeGenerator = codegenExpression(codegenParams);
+ function buildFunctions(codegen) {
+   const fn = functions(codegen);
+   eventFunctions.forEach(name => fn[name] = eventPrefix + name);
++  // Object.prototype may be frozen (Tauri's freezePrototype), and one of these names is toString.
+   for (const name in functionContext) {
+-    fn[name] = thisPrefix + name;
++    Object.defineProperty(fn, name, {value: thisPrefix + name, writable: true, enumerable: true, configurable: true});
+   }
+   extend(fn, internalScaleFunctions(codegen, functionContext, astVisitors));
+   return fn;

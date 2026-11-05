@@ -125,6 +125,19 @@ export interface MenuItem {
   onSelect: () => void;
   danger?: boolean;
   disabled?: boolean;
+  /** A line under the label. It is read out with it, as all that shows of an item has to be. */
+  description?: string;
+}
+
+/**
+ * Items set apart at the foot of a menu under a heading of their own. At the foot, since they can arrive
+ * once the menu is open: nothing above them moves, under a pointer or with the focus in it.
+ */
+export interface MenuSection {
+  heading: string;
+  items: readonly MenuItem[];
+  /** Said in place of the items, when there is something to say about having none. */
+  note?: string;
 }
 
 export interface MenuProps {
@@ -133,6 +146,30 @@ export interface MenuProps {
   icon: LucideIcon;
   items: readonly MenuItem[];
   className?: string;
+  section?: MenuSection | null;
+  onOpenChange?: (open: boolean) => void;
+}
+
+function MenuRow({ item }: { item: MenuItem }) {
+  const ItemIcon = item.icon;
+  return (
+    <DropdownMenu.Item
+      className={classes("dbme-menu__item", item.danger && "dbme-menu__item--danger")}
+      disabled={item.disabled ?? false}
+      onSelect={item.onSelect}
+      textValue={item.label}
+    >
+      {ItemIcon ? <ItemIcon aria-hidden="true" size={16} /> : null}
+      {item.description === undefined ? (
+        <span>{item.label}</span>
+      ) : (
+        <span className="dbme-menu__text">
+          <span>{item.label}</span>
+          <span className="dbme-menu__description">{item.description}</span>
+        </span>
+      )}
+    </DropdownMenu.Item>
+  );
 }
 
 /**
@@ -140,32 +177,38 @@ export interface MenuProps {
  * injecting styles, which the CSP refuses (ADR-0017). Inside a modal `<dialog>` (the phone's
  * sidebar drawer) it opens within the dialog, since the rest of the page is inert there.
  */
-export function Menu({ label, icon, items, className }: MenuProps) {
+export function Menu({ label, icon, items, className, section, onOpenChange }: MenuProps) {
   const [container, setContainer] = useState<HTMLElement | null>(null);
+  const sectionHeading = useId();
   const findContainer = useCallback((trigger: HTMLButtonElement | null) => {
     setContainer(trigger?.closest("dialog") ?? null);
   }, []);
   return (
-    <DropdownMenu.Root modal={false}>
+    <DropdownMenu.Root modal={false} {...(onOpenChange ? { onOpenChange } : {})}>
       <DropdownMenu.Trigger asChild>
         <IconButton ref={findContainer} label={label} icon={icon} className={className} />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal container={container}>
         <DropdownMenu.Content className="dbme-menu" align="end" sideOffset={4}>
-          {items.map((item) => {
-            const ItemIcon = item.icon;
-            return (
-              <DropdownMenu.Item
-                key={item.label}
-                className={classes("dbme-menu__item", item.danger && "dbme-menu__item--danger")}
-                disabled={item.disabled ?? false}
-                onSelect={item.onSelect}
-              >
-                {ItemIcon ? <ItemIcon aria-hidden="true" size={16} /> : null}
-                <span>{item.label}</span>
-              </DropdownMenu.Item>
-            );
-          })}
+          {items.map((item) => (
+            <MenuRow key={item.label} item={item} />
+          ))}
+          {section ? (
+            <>
+              <DropdownMenu.Separator className="dbme-menu__separator" />
+              <DropdownMenu.Group aria-labelledby={sectionHeading}>
+                <DropdownMenu.Label id={sectionHeading} className="dbme-menu__heading">
+                  {section.heading}
+                </DropdownMenu.Label>
+                {section.note === undefined ? null : (
+                  <p className="dbme-menu__note">{section.note}</p>
+                )}
+                {section.items.map((item) => (
+                  <MenuRow key={item.label} item={item} />
+                ))}
+              </DropdownMenu.Group>
+            </>
+          ) : null}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

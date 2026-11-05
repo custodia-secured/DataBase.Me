@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+export { ViewBoundary } from "./framework/ViewBoundary";
+export { useSuggestedViews } from "./framework/useSuggestedViews";
+export { savedSearches } from "./search/savedSearches";
 export { actions, flushEditors, onActionError, registerFlusher, reportError } from "./actions";
 export { BlockEditor, type BlockEditorProps } from "./editor/BlockEditor";
 export { FilesDialog, type FilesDialogProps } from "./files/FilesDialog";

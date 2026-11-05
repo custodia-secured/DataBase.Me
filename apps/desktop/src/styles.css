@@ -116,8 +116,13 @@ h3 {
   cursor: default;
 }
 
-/* On phones only the open page shows in the path. */
+/* On phones only the open page shows in the path, and the bar's seven buttons touch: with gaps they
+   are wider than 360 px, which puts the last one off the edge and lets the page scroll sideways. */
 @media (max-width: 767px) {
+  .app__bar {
+    gap: 0;
+  }
+
   .app__brand {
     position: absolute;
     width: 1px;
@@ -200,12 +205,20 @@ h3 {
   min-height: 0;
 }
 
+.pane__views {
+  display: flex;
+  align-items: center;
+  padding-right: var(--dbme-space-2);
+  border-bottom: 1px solid var(--dbme-color-border);
+}
+
 .pane__tabs {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: var(--dbme-space-1);
   padding: var(--dbme-space-1) var(--dbme-space-2);
   overflow-x: auto;
-  border-bottom: 1px solid var(--dbme-color-border);
 }
 
 .pane__tab {
@@ -246,7 +259,13 @@ h3 {
 }
 
 .pane__panel--table,
-.pane__panel--gallery {
+.pane__panel--gallery,
+.pane__panel--kanban,
+.pane__panel--calendar,
+.pane__panel--timeline,
+.pane__panel--map,
+.pane__panel--charts,
+.pane__panel--dashboard {
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -260,7 +279,12 @@ h3 {
 }
 
 /* Five tabs don't fit a phone with their labels: the active one keeps its label. */
+/* An icon alone needs less room, which leaves the chosen tab room for its whole name. */
 @media (max-width: 767px) {
+  .pane__tab:not([aria-selected="true"]) {
+    padding: 0 var(--dbme-space-2);
+  }
+
   .pane__tab:not([aria-selected="true"]) span {
     display: none;
   }

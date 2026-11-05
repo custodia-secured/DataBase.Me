@@ -185,6 +185,23 @@ async function touchDrag(page: Page, from: { x: number; y: number }, to: { x: nu
   await cdp.detach();
 }
 
+test("a phone's page does not scroll sideways, and every button in the bar is on it", async ({
+  app,
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "the phone's width");
+  await app.openPage("Home");
+  const sizes = await page.evaluate(() => {
+    const { scrollWidth, clientWidth } = document.documentElement;
+    return { scrollWidth, clientWidth };
+  });
+  expect(sizes.scrollWidth).toBeLessThanOrEqual(sizes.clientWidth);
+  const redo = await page.getByRole("button", { name: "Redo" }).boundingBox();
+  if (!redo) throw new Error("no box");
+  expect(redo.x + redo.width).toBeLessThanOrEqual(sizes.clientWidth);
+});
+
 test("dragging a page onto another puts it inside", async ({
   app,
   page,
@@ -206,6 +223,15 @@ test("dragging a page onto another puts it inside", async ({
     await page.mouse.down();
     await page.mouse.move(from.x, from.y + 8, { steps: 4 });
     await page.mouse.move(to.x, to.y, { steps: 12 });
+    // Let go only once the row shows it would take the page. WebKit can be behind the mouse, and the
+    // row's zone is worked out on a move, so the pointer keeps moving a little, as a hand does.
+    const target = await app.treeItem("Inbox");
+    let nudge = 0;
+    await expect(async () => {
+      nudge = nudge === 0 ? 1 : 0;
+      await page.mouse.move(to.x, to.y + nudge);
+      await expect(target).toHaveClass(/drop-inside/, { timeout: 250 });
+    }).toPass();
     await page.mouse.up();
   }
   await expect(await treeTitles(app)).toHaveText([

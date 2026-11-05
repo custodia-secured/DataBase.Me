@@ -21,7 +21,7 @@ pub const MAX_SEARCH: usize = 1000;
 
 /// The built-in columns a condition or a sort may name, each written with a leading `$` so that
 /// it can never be confused with a field key.
-pub const COLUMNS: [&str; 8] = [
+pub const COLUMNS: [&str; 11] = [
     "$title",
     "$summary",
     "$created_at",
@@ -30,7 +30,28 @@ pub const COLUMNS: [&str; 8] = [
     "$event_start",
     "$event_end",
     "$sensitivity",
+    "$geo_lat",
+    "$geo_lon",
+    "$parent_id",
 ];
+
+/// The columns a query may sort by as a field: those with no [`SortBy`] of their own.
+pub const SORT_COLUMNS: [&str; 3] = ["$event_start", "$event_end", "$captured_at"];
+
+/// How many steps away a [`RelatedTo`] may reach.
+pub const MAX_DEPTH: u8 = 6;
+/// The most fields one aggregate groups by.
+pub const MAX_GROUPS: usize = 2;
+/// The most measures one aggregate computes.
+pub const MAX_MEASURES: usize = 4;
+/// The most buckets one aggregate returns: enough for any chart a person can read.
+pub const MAX_BUCKETS: u32 = 5000;
+/// The most nodes one read of the graph returns.
+pub const MAX_GRAPH_NODES: u32 = 200_000;
+/// The most fields one profile looks at.
+pub const MAX_PROFILE_FIELDS: usize = 64;
+/// How many results a profile looks at: its shape, not its exact figures, is what it reports.
+pub const PROFILE_SAMPLE: u32 = 5000;
 
 /// What a list is ordered by.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -175,6 +196,14 @@ pub struct RelatedTo {
     /// Which end the results are.
     #[serde(default)]
     pub direction: Direction,
+    /// How many relations away the results may be, from 1 up to [`MAX_DEPTH`]. The object itself
+    /// is never a result.
+    #[serde(default = "one_step")]
+    pub depth: u8,
+}
+
+fn one_step() -> u8 {
+    1
 }
 
 /// A query over the live objects of a vault.
@@ -213,6 +242,131 @@ impl Default for Query {
             },
             limit: 50,
             offset: 0,
+        }
+    }
+}
+
+/// A period dates are grouped into.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum TimeBin {
+    /// `2026`.
+    Year,
+    /// `2026-Q4`.
+    Quarter,
+    /// `2026-11`.
+    Month,
+    /// The Monday that starts the week, `2026-11-02`.
+    Week,
+    /// `2026-11-04`.
+    Day,
+    /// `2026-11-04T17:00`.
+    Hour,
+}
+
+/// What an aggregate groups by.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct Group {
+    /// A built-in column or a field key. An object whose field holds a list counts once per item.
+    pub field: String,
+    /// The period to group a date into; `None` groups by the value itself.
+    #[serde(default)]
+    pub bin: Option<TimeBin>,
+}
+
+/// How an aggregate combines the results in a bucket.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub enum MeasureOp {
+    /// How many results. Takes no field.
+    Count,
+    /// The sum of a field's numbers.
+    Sum,
+    /// The mean of a field's numbers.
+    Avg,
+    /// The smallest of a field's numbers.
+    Min,
+    /// The largest of a field's numbers.
+    Max,
+}
+
+/// One figure an aggregate computes per bucket.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct Measure {
+    /// How to combine.
+    pub op: MeasureOp,
+    /// The column or field to combine; `None` for a count.
+    #[serde(default)]
+    pub field: Option<String>,
+}
+
+/// Figures per group over a query's results, computed where the data is (build plan §2.7). The
+/// query's sort, limit and offset do not apply.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct AggregateQuery {
+    /// The results to look at.
+    pub query: Query,
+    /// What to group by, at most [`MAX_GROUPS`]; empty for one bucket over everything.
+    #[serde(default)]
+    pub group_by: Vec<Group>,
+    /// What to compute, from 1 to [`MAX_MEASURES`].
+    pub measures: Vec<Measure>,
+    /// How many buckets at most, up to [`MAX_BUCKETS`]; 0 for that maximum.
+    #[serde(default)]
+    pub limit: u32,
+}
+
+impl AggregateQuery {
+    /// Checks the groups, the measures and the limit. The query checks itself when it compiles.
+    pub fn validate(&self) -> Result<(), CoreError> {
+        if self.group_by.len() > MAX_GROUPS {
+            return Err(invalid(format!("at most {MAX_GROUPS} groups")));
+        }
+        for group in &self.group_by {
+            if !is_field_name(&group.field) {
+                return Err(invalid(format!(
+                    "{:?} is not a column or a field key",
+                    group.field
+                )));
+            }
+        }
+        if self.measures.is_empty() || self.measures.len() > MAX_MEASURES {
+            return Err(invalid(format!("1 to {MAX_MEASURES} measures")));
+        }
+        for measure in &self.measures {
+            match (&measure.op, &measure.field) {
+                (MeasureOp::Count, None) => {}
+                (MeasureOp::Count, Some(_)) => {
+                    return Err(invalid("a count takes no field"));
+                }
+                (_, Some(field)) if is_field_name(field) => {}
+                (_, field) => {
+                    return Err(invalid(format!(
+                        "{field:?} is not a column or a field key to compute from"
+                    )));
+                }
+            }
+        }
+        if self.limit > MAX_BUCKETS {
+            return Err(invalid(format!("limit must be at most {MAX_BUCKETS}")));
+        }
+        Ok(())
+    }
+
+    /// The number of buckets to read: the limit, or the maximum when none is given.
+    pub fn bucket_limit(&self) -> u32 {
+        if self.limit == 0 {
+            MAX_BUCKETS
+        } else {
+            self.limit
         }
     }
 }
@@ -285,22 +439,39 @@ impl Query {
                 "search text longer than {MAX_SEARCH} characters"
             )));
         }
-        if let Some(related) = &self.related_to
-            && let Some(rel_type) = &related.rel_type
-            && !is_identifier(rel_type, 64)
-        {
-            return Err(invalid(format!("{rel_type:?} is not a relation type")));
+        if let Some(related) = &self.related_to {
+            if let Some(rel_type) = &related.rel_type
+                && !is_identifier(rel_type, 64)
+            {
+                return Err(invalid(format!("{rel_type:?} is not a relation type")));
+            }
+            if related.depth == 0 || related.depth > MAX_DEPTH {
+                return Err(invalid(format!("depth must be 1 to {MAX_DEPTH}")));
+            }
         }
-        self.sort.validate()?;
+        if !self.sorts_by_column() {
+            self.sort.validate()?;
+        }
         if let Some(key) = &self.sort.field
             && self.sort.by == SortBy::Field
             && COLUMNS.contains(&key.as_str())
+            && !self.sorts_by_column()
         {
             return Err(invalid(
                 "sort by a column with its own `by`, not as a field",
             ));
         }
         Ok(())
+    }
+
+    /// Whether the query sorts by one of [`SORT_COLUMNS`].
+    fn sorts_by_column(&self) -> bool {
+        self.sort.by == SortBy::Field
+            && self
+                .sort
+                .field
+                .as_deref()
+                .is_some_and(|key| SORT_COLUMNS.contains(&key))
     }
 
     /// Whether the query has search text that is not blank.
@@ -350,6 +521,7 @@ mod tests {
                 id: Id::from_parts(1, 3),
                 rel_type: Some("mentions".into()),
                 direction: Direction::Incoming,
+                depth: 1,
             }),
             sort: Sort {
                 by: SortBy::Field,
@@ -429,6 +601,7 @@ mod tests {
             id: Id::from_parts(1, 1),
             rel_type: Some("Not Valid".into()),
             direction: Direction::Either,
+            depth: 1,
         });
         assert!(query.validate().is_err());
         query.related_to = None;

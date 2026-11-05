@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-graph-read"
+description = "Enables the graph_read command without any pre-configured scope."
+commands.allow = ["graph_read"]
+
+[[permission]]
+identifier = "deny-graph-read"
+description = "Denies the graph_read command without any pre-configured scope."
+commands.deny = ["graph_read"]

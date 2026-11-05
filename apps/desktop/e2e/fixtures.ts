@@ -191,8 +191,16 @@ export class App {
 
   /** Switches a pane to a view: "Document", "Outline", "Table" or "Gallery". */
   async view(name: string, pane: 0 | 1 = 0): Promise<void> {
-    const tab = this.pane(pane).getByRole("tab", { name });
-    await this.press(tab);
+    const tab = this.pane(pane).getByRole("tab", { name, exact: true });
+    // A view that is not pinned has a tab only while it is chosen (M8); until then it is in the menu.
+    await expect(this.pane(pane).getByRole("tablist", { name: "Views" })).toBeVisible();
+    if ((await tab.count()) === 0) {
+      await this.press(this.pane(pane).getByRole("button", { name: "More views" }));
+      // The list is first, and a view "Suggested" offers is below it as well.
+      await this.press(this.page.getByRole("menuitem", { name, exact: true }).first());
+    } else {
+      await this.press(tab);
+    }
     await expect(tab).toHaveAttribute("aria-selected", "true");
   }
 

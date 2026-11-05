@@ -27,9 +27,12 @@ import {
   Button,
   Columns2,
   Dialog,
+  Ellipsis,
   FolderInput,
   FolderSync,
   IconButton,
+  Menu,
+  type MenuItem,
   PanelLeft,
   Redo2,
   Search,
@@ -52,12 +55,15 @@ import {
   reportError,
   SettingsDialog,
   ResultsView,
+  savedSearches,
   Sidebar,
   useMode,
+  ViewBoundary,
   viewById,
   visibleViews,
   type Mode,
   type PaletteCommand,
+  useSuggestedViews,
 } from "@databaseme/views";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isTauri } from "@tauri-apps/api/core";
@@ -66,6 +72,8 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { notifyReady } from "./ipc";
 import { useShell } from "./store";
 
+/** How many views "Suggested" offers: enough to choose from, and few enough to mean something. */
+const SUGGESTED_VIEWS = 3;
 const WIDE = "(min-width: 768px)";
 const SPLIT = "(min-width: 1100px)";
 /** One empty list, so a closed Import dialog's props do not change between renders. */
@@ -178,6 +186,16 @@ export function App() {
 interface Bootstrap {
   vault: VaultInfo | null;
   defaultVault: string | null;
+}
+
+/** The OS's file picker for a map file (M8, ADR-0033); `null` when cancelled. */
+async function pickMapFile(): Promise<string | null> {
+  const picked = await open({
+    directory: false,
+    multiple: false,
+    filters: [{ name: "PMTiles", extensions: ["pmtiles"] }],
+  });
+  return typeof picked === "string" ? picked : null;
 }
 
 /** The OS's folder picker, through the dialog plugin (M7 gate 1a); `null` when cancelled. */
@@ -379,7 +397,7 @@ function Shell() {
           },
         ]
       : []),
-    ...(savedViews.data ?? []).map((view) => ({
+    ...savedSearches(savedViews.data).map((view) => ({
       id: `open-view-${view.id}`,
       label: `Open view: ${view.name}`,
       run: () => {
@@ -534,6 +552,7 @@ function Shell() {
           void client.invalidateQueries({ queryKey: ["bootstrap"] });
         }}
         pickFolder={isTauri() ? pickFolder : undefined}
+        pickMapFile={isTauri() ? pickMapFile : undefined}
       />
       <Errors />
     </div>
@@ -660,17 +679,39 @@ function Pane({
     views.find((candidate) => candidate.id === chosenId) ?? views[0] ?? viewById("document");
   const viewId = view.id;
   const View = view.component;
+  // The pinned views are tabs, and the rest wait in the menu until one is chosen (M8): thirteen tabs
+  // fit no window, and none at 360 px.
+  const shown = views.filter((candidate) => candidate.pinned === true || candidate.id === viewId);
+  // What suits this page's contents is read when someone opens the menu, not on every change to the
+  // vault, and it only ever offers: choosing is theirs (M8, Task 9).
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { suggested, failed } = useSuggestedViews(objectId, menuOpen);
+  const offered = suggested
+    .filter((result) => result.view !== viewId)
+    .flatMap((result) => {
+      const candidate = views.find((one) => one.id === result.view);
+      return candidate ? [{ candidate, why: result.why }] : [];
+    })
+    .slice(0, SUGGESTED_VIEWS);
+  const more = views.filter((candidate) => candidate.pinned !== true);
+  const choose = (candidate: (typeof views)[number]): MenuItem => ({
+    label: candidate.label,
+    icon: candidate.icon,
+    onSelect: () => {
+      setView(index, candidate.id);
+    },
+  });
 
   const onKeyDown = (event: KeyboardEvent) => {
-    const at = views.findIndex((candidate) => candidate.id === viewId);
+    const at = shown.findIndex((candidate) => candidate.id === viewId);
     const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
     let next = at + step;
     if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = views.length - 1;
+    else if (event.key === "End") next = shown.length - 1;
     else if (step === 0) return;
     event.preventDefault();
-    next = (next + views.length) % views.length;
-    const target = views[next];
+    next = (next + shown.length) % shown.length;
+    const target = shown[next];
     if (!target) return;
     setView(index, target.id);
     tabs.current[next]?.focus();
@@ -678,34 +719,57 @@ function Pane({
 
   return (
     <section className="pane" aria-label={index === 0 ? "Main pane" : "Second pane"}>
-      <div className="pane__tabs" role="tablist" aria-label="Views" onKeyDown={onKeyDown}>
-        {views.map((candidate, i) => {
-          const Icon = candidate.icon;
-          const chosen = candidate.id === viewId;
-          return (
-            <button
-              key={candidate.id}
-              ref={(button) => {
-                tabs.current[i] = button;
-              }}
-              type="button"
-              role="tab"
-              id={`${base}-tab-${candidate.id}`}
-              aria-selected={chosen}
-              aria-label={candidate.label}
-              title={candidate.label}
-              aria-controls={`${base}-panel`}
-              tabIndex={chosen ? 0 : -1}
-              className="pane__tab"
-              onClick={() => {
-                setView(index, candidate.id);
-              }}
-            >
-              <Icon aria-hidden="true" size={16} />
-              <span>{candidate.label}</span>
-            </button>
-          );
-        })}
+      <div className="pane__views">
+        <div className="pane__tabs" role="tablist" aria-label="Views" onKeyDown={onKeyDown}>
+          {shown.map((candidate, i) => {
+            const Icon = candidate.icon;
+            const chosen = candidate.id === viewId;
+            return (
+              <button
+                key={candidate.id}
+                ref={(button) => {
+                  tabs.current[i] = button;
+                }}
+                type="button"
+                role="tab"
+                id={`${base}-tab-${candidate.id}`}
+                aria-selected={chosen}
+                aria-label={candidate.label}
+                title={candidate.label}
+                aria-controls={`${base}-panel`}
+                tabIndex={chosen ? 0 : -1}
+                className="pane__tab"
+                onClick={() => {
+                  setView(index, candidate.id);
+                }}
+              >
+                <Icon aria-hidden="true" size={16} />
+                <span>{candidate.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {more.length > 0 ? (
+          <Menu
+            label="More views"
+            icon={Ellipsis}
+            items={more.map(choose)}
+            onOpenChange={setMenuOpen}
+            section={
+              offered.length > 0
+                ? {
+                    heading: "Suggested",
+                    items: offered.map(({ candidate, why }) => ({
+                      ...choose(candidate),
+                      description: why,
+                    })),
+                  }
+                : failed
+                  ? { heading: "Suggested", items: [], note: "Suggestions could not be read." }
+                  : null
+            }
+          />
+        ) : null}
       </div>
       {object.data?.deleted_at != null ? (
         <div className="pane__trashed">
@@ -727,7 +791,9 @@ function Pane({
         id={`${base}-panel`}
         aria-labelledby={`${base}-tab-${view.id}`}
       >
-        <View objectId={objectId} onOpen={onOpen} />
+        <ViewBoundary key={view.id}>
+          <View objectId={objectId} onOpen={onOpen} />
+        </ViewBoundary>
       </div>
     </section>
   );
