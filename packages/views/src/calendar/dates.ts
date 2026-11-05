@@ -23,9 +23,12 @@ export const EVENT = "$event_start";
 
 const DAY_MS = 86_400_000;
 
-function msOf(day: Day): number {
+/** A day as the moment it starts. */
+export function msOfDay(day: Day): number {
   return Date.parse(`${day}T00:00:00Z`);
 }
+
+const msOf = msOfDay;
 
 function dayOfMs(ms: number): Day {
   return new Date(ms).toISOString().slice(0, 10);
@@ -204,9 +207,9 @@ export function chosenDate(choices: readonly DateChoice[], chosen: string | null
   return choices.find((choice) => choice.key === chosen) ?? choices[1] ?? choices[0] ?? EVENT_DATE;
 }
 
-/** An aggregate grouped by day, as how many are on each. */
-export function countsByDay(result: AggregateResult | undefined): Map<Day, number> {
-  const counts = new Map<Day, number>();
+/** An aggregate grouped by one thing, as how many are in each. */
+export function countsByKey(result: AggregateResult | undefined): Map<string, number> {
+  const counts = new Map<string, number>();
   for (const row of result?.rows ?? []) {
     const [day] = row.keys;
     const [count] = row.values;

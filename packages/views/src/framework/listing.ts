@@ -74,6 +74,16 @@ export function listingFromQuery(
   return { listing: { source, conditions }, sort: query.sort };
 }
 
+/** A listing with more conditions on it. */
+export function narrowed(listing: Listing, ...conditions: Listing["conditions"]): Listing {
+  return { source: listing.source, conditions: [...listing.conditions, ...conditions] };
+}
+
+/** The order of a field or date column, earliest first. */
+export function byField(key: string): Sort {
+  return { by: "field", field: key, descending: false };
+}
+
 /** How many objects a listing has. */
 export function useListingCount(listing: Listing) {
   const plain = listing.conditions.length === 0;

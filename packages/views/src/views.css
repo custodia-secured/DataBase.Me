@@ -352,6 +352,187 @@
   height: min(60vh, 24rem);
 }
 
+/* --- Timeline (M8) --------------------------------------------------------- */
+
+.dbme-timeline {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dbme-timeline__nav {
+  padding-top: 0;
+}
+
+.dbme-timeline__title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.dbme-timeline__selected {
+  min-height: var(--dbme-target);
+  padding-top: 0;
+}
+
+.dbme-timeline__lane {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 12rem;
+  overflow: auto;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-timeline__lane:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-timeline__body {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.dbme-timeline__lane.is-vertical .dbme-timeline__body {
+  width: 100%;
+}
+
+.dbme-timeline__axis {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  height: 2rem;
+  border-bottom: 1px solid var(--dbme-color-border);
+  background: var(--dbme-color-surface);
+}
+
+.dbme-timeline__lane.is-vertical .dbme-timeline__axis {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 5rem;
+  height: auto;
+  border-right: 1px solid var(--dbme-color-border);
+  border-bottom: 0;
+}
+
+.dbme-timeline__tick {
+  position: absolute;
+  box-sizing: border-box;
+  top: 0;
+  height: 100%;
+  padding: var(--dbme-space-1);
+  border-left: 1px solid var(--dbme-color-border);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.dbme-timeline__lane.is-vertical .dbme-timeline__tick {
+  right: 0;
+  left: 0;
+  border-top: 1px solid var(--dbme-color-border);
+  border-left: 0;
+}
+
+/* Not by colour alone: it says Today, as the Calendar's day rings it and says so. */
+.dbme-timeline__today {
+  position: absolute;
+  z-index: 1;
+  top: 2rem;
+  bottom: 0;
+  padding: 0 var(--dbme-space-1);
+  border-left: 2px solid var(--dbme-color-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Down a phone the word sits in the axis, under the date, where no bar can cover it. */
+.dbme-timeline__lane.is-vertical .dbme-timeline__today {
+  z-index: 2;
+  top: auto;
+  right: 0;
+  bottom: auto;
+  left: 0;
+  box-sizing: border-box;
+  padding: 1.25rem 0 0 var(--dbme-space-1);
+  border-top: 2px solid var(--dbme-color-accent);
+  border-left: 0;
+}
+
+.dbme-timeline__bar {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  padding: 0 var(--dbme-space-2);
+  overflow: hidden;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  font-size: 0.8125rem;
+  line-height: 1.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dbme-timeline__bar.is-active,
+.dbme-timeline__count.is-active {
+  border-color: var(--dbme-color-accent);
+  box-shadow: inset 0 0 0 2px var(--dbme-color-accent);
+}
+
+.dbme-timeline__count {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  height: 14rem;
+  max-height: calc(100% - 3.25rem);
+  padding: 0 2px;
+  border: 1px solid transparent;
+  color: var(--dbme-color-fg);
+  cursor: pointer;
+}
+
+.dbme-timeline__lane.is-vertical .dbme-timeline__count {
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  max-height: none;
+  gap: var(--dbme-space-1);
+  padding: 2px var(--dbme-space-1);
+}
+
+.dbme-timeline__number {
+  flex: 0 0 auto;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  text-align: center;
+}
+
+.dbme-timeline__fill {
+  flex: 0 0 auto;
+  min-width: 2px;
+  min-height: 2px;
+  background: var(--dbme-color-accent);
+}
+
+.dbme-timeline__lane.is-vertical .dbme-timeline__fill {
+  align-self: stretch;
+}
+
 /* --- The filter editor (M8) ------------------------------------------------- */
 
 .dbme-filter {

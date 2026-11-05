@@ -8,17 +8,12 @@
  * on a phone, where the grid gives way to an agenda. Every move is one change, so one undo.
  */
 import {
-  commands,
-  keys,
-  unwrap,
-  useAggregate,
   useFields,
   useQueryCount,
   useSummary,
   type FieldRow,
   type Id,
   type ObjectSummary_Serialize,
-  type Sort,
 } from "@databaseme/client";
 import {
   Button,
@@ -42,7 +37,6 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { useQueries } from "@tanstack/react-query";
 import {
   useEffect,
   useId,
@@ -54,7 +48,8 @@ import {
 } from "react";
 import { actions } from "../actions";
 import { ListAlternative, type ListColumn } from "../framework/ListAlternative";
-import { listingQuery, type Listing } from "../framework/listing";
+import { byField, listingQuery, narrowed, type Listing } from "../framework/listing";
+import { dayBuckets, useBuckets, type BucketReads } from "../framework/useBuckets";
 import { useViewState } from "../framework/useViewState";
 import { ViewControls } from "../framework/ViewControls";
 import type { ViewProps } from "../registry";
@@ -63,7 +58,6 @@ import {
   addDays,
   carryKey,
   chosenDate,
-  countsByDay,
   dateChoices,
   dateWrite,
   dayKey,
@@ -96,13 +90,6 @@ const BOUND: Record<CalendarMode, number> = { month: 3, week: 12 };
 const AGENDA_BOUND = 5;
 
 const titleOfItem = (summary: ObjectSummary_Serialize) => summary.object.title || "Untitled";
-
-const sortBy = (key: string): Sort => ({ by: "field", field: key, descending: false });
-
-const narrowed = (listing: Listing, ...conditions: Listing["conditions"]): Listing => ({
-  source: listing.source,
-  conditions: [...listing.conditions, ...conditions],
-});
 
 const onDay = (listing: Listing, key: string, day: Day) =>
   narrowed(listing, ...rangeConditions(key, day, addDays(day, 1)));
@@ -177,34 +164,6 @@ export function CalendarView({ objectId, onOpen }: ViewProps) {
   );
 }
 
-/** How many are on each of `days`, and the first `bound` of each day that has any. */
-function useDays(listing: Listing, key: string, days: readonly Day[], bound: number) {
-  const first = days[0] ?? "";
-  const last = days.at(-1) ?? first;
-  const counted = useAggregate({
-    query: listingQuery(narrowed(listing, ...rangeConditions(key, first, addDays(last, 1)))),
-    group_by: [{ field: key, bin: "day" }],
-    measures: [{ op: "count" }],
-  });
-  const counts = useMemo(() => countsByDay(counted.data), [counted.data]);
-  const filled = days.filter((day) => (counts.get(day) ?? 0) > 0);
-  const reads = useQueries({
-    queries: filled.map((day) => {
-      const query = listingQuery(onDay(listing, key, day), sortBy(key), 0, bound);
-      return {
-        queryKey: keys.query(query),
-        queryFn: () => unwrap(commands.objectsQuery(query)),
-      };
-    }),
-  });
-  return {
-    filled,
-    ready: counted.isSuccess,
-    countOf: (day: Day) => counts.get(day) ?? 0,
-    itemsOf: (day: Day) => reads[filled.indexOf(day)]?.data,
-  };
-}
-
 type Opened = { kind: "day"; day: Day } | { kind: "undated" } | { kind: "new" };
 
 function Calendar({
@@ -230,7 +189,15 @@ function Calendar({
   const [anchor, setAnchor] = useState(today);
   const weeks = useMemo(() => weeksOf(mode, anchor), [mode, anchor]);
   const days = useMemo(() => (phone ? monthDays(anchor) : weeks.flat()), [phone, weeks, anchor]);
-  const read = useDays(listing, date.key, days, phone ? AGENDA_BOUND : BOUND[mode]);
+  const buckets = useMemo(() => dayBuckets(days), [days]);
+  const read = useBuckets(
+    listing,
+    date.key,
+    "day",
+    buckets,
+    phone ? AGENDA_BOUND : BOUND[mode],
+    byField(date.key),
+  );
   const undated = useQueryCount(
     listingQuery(narrowed(listing, { field: date.key, op: "is_empty", value: null })),
   );
@@ -375,7 +342,7 @@ function Calendar({
             listing,
             ...rangeConditions(date.key, days[0] ?? anchor, addDays(days.at(-1) ?? anchor, 1)),
           )}
-          sort={sortBy(date.key)}
+          sort={byField(date.key)}
           columns={listColumns(date, fields)}
           onOpen={onOpen}
         />
@@ -760,7 +727,7 @@ function Agenda({
   onMore,
 }: {
   title: string;
-  read: ReturnType<typeof useDays>;
+  read: BucketReads;
   selectedId: Id | null;
   onPress: (summary: ObjectSummary_Serialize) => void;
   onMore: (day: Day) => void;
@@ -770,7 +737,7 @@ function Agenda({
   }
   return (
     <ul className="dbme-calendar__agenda" aria-label={title}>
-      {read.filled.map((day) => {
+      {read.filled.map(({ key: day }) => {
         const items = read.itemsOf(day);
         const more = items ? read.countOf(day) - items.length : 0;
         return (

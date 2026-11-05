@@ -42,6 +42,7 @@ export {
   ChevronLeft,
   ChevronRight,
   CalendarDays,
+  ChartGantt,
   Columns2,
   Ellipsis,
   FileText as DocumentIcon,

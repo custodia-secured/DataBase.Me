@@ -6,7 +6,7 @@ import {
   addMonths,
   carryKey,
   chosenDate,
-  countsByDay,
+  countsByKey,
   dateChoices,
   dateWrite,
   dayKey,
@@ -120,7 +120,7 @@ describe("reading a range", () => {
   });
 
   it("counts by the day of each bucket and skips one with no date", () => {
-    const counts = countsByDay({
+    const counts = countsByKey({
       rows: [
         { keys: ["2026-11-02"], values: [3] },
         { keys: [null], values: [9] },
@@ -128,7 +128,7 @@ describe("reading a range", () => {
       truncated: false,
     });
     expect([...counts]).toEqual([["2026-11-02", 3]]);
-    expect(countsByDay(undefined).size).toBe(0);
+    expect(countsByKey(undefined).size).toBe(0);
   });
 });
 
