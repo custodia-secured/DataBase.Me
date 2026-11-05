@@ -19,12 +19,12 @@ use serde_json::Value;
 use dbme_core::model::{
     AttachmentRole, AttachmentRow, BlockRow, FieldRow, ObjectRow, TypeRow, ViewRow,
 };
-use dbme_core::query::Query;
+use dbme_core::query::{AggregateQuery, Query};
 use dbme_core::{ContentHash, CoreError, Id};
 use dbme_store::{
-    Backlink, ColumnTarget, Committed, FacetBucket, NewAttachment, NewColumn, NewField, NewObject,
-    NewRelation, NewView, ObjectSummary, ObjectTree, Position, SearchHit, Sort, Source, StoreError,
-    Txn, Vault, VaultOptions,
+    AggregateResult, Backlink, ColumnTarget, Committed, DataProfile, FacetBucket, GraphData,
+    NewAttachment, NewColumn, NewField, NewObject, NewRelation, NewView, ObjectSummary, ObjectTree,
+    Position, SearchHit, Sort, Source, StoreError, Txn, Vault, VaultOptions,
 };
 
 mod blocks;
@@ -660,6 +660,22 @@ pub fn objects_query_count(session: &Session, query: &Query) -> Reply<u32> {
 /// first. `field` is a field key, or `$type` for the results' types.
 pub fn facets(session: &Session, query: &Query, field: &str) -> Reply<Vec<FacetBucket>> {
     session.with(|vault| vault.read().facets(query, field))
+}
+
+/// Figures per group over a query's results, computed in the store (M8, ADR-0032).
+pub fn aggregate(session: &Session, aggregate: &AggregateQuery) -> Reply<AggregateResult> {
+    session.with(|vault| vault.read().aggregate(aggregate))
+}
+
+/// The shape of a query's results, read from a sample, for the view recommender (M8).
+pub fn data_profile(session: &Session, query: &Query, fields: &[String]) -> Reply<DataProfile> {
+    session.with(|vault| vault.read().data_profile(query, fields))
+}
+
+/// A query's results as a graph, up to `limit` nodes, with the live relations and parent links
+/// among them (M8, ADR-0034).
+pub fn graph_read(session: &Session, query: &Query, limit: u32) -> Reply<GraphData> {
+    session.with(|vault| vault.read().graph(query, limit))
 }
 
 /// Every saved view, by name.

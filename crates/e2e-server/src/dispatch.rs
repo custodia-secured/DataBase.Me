@@ -158,6 +158,17 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
             &arg(args, "query")?,
             &arg::<String>(args, "field")?,
         )),
+        "aggregate" => ok(api::aggregate(s, &arg(args, "aggregate")?)),
+        "data_profile" => ok(api::data_profile(
+            s,
+            &arg(args, "query")?,
+            &arg::<Vec<String>>(args, "fields")?,
+        )),
+        "graph_read" => ok(api::graph_read(
+            s,
+            &arg(args, "query")?,
+            arg(args, "limit")?,
+        )),
         "views_list" => ok(api::views_list(s)),
         "view_get" => ok(api::view_get(s, arg(args, "id")?)),
         "view_save" => ok(api::view_save(s, arg(args, "view")?)),

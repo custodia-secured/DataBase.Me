@@ -9,6 +9,7 @@
 //!
 //! All SQL in DataBase.Me lives in this crate.
 
+mod analysis;
 mod blobs;
 mod compile;
 mod error;
@@ -26,6 +27,7 @@ mod txn;
 mod vault;
 mod verify;
 
+pub use analysis::{AggregateResult, AggregateRow, DataProfile, FieldProfile, GraphData};
 pub use blobs::{BlobStore, StoredBlob};
 pub use compile::{Compiled, Select, compile};
 pub use error::{Result, StoreError};

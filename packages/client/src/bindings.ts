@@ -77,6 +77,15 @@ export const commands = {
 	objectsQueryCount: (query: Query_Deserialize) => typedError<number, IpcError>(__TAURI_INVOKE("objects_query_count", { query })),
 	/**  The values of `field` among a query's results and how many have each; `$type` for the types. */
 	facets: (query: Query_Deserialize, field: string) => typedError<FacetBucket[], IpcError>(__TAURI_INVOKE("facets", { query, field })),
+	/**  Figures per group over a query's results, computed in the store. */
+	aggregate: (aggregate: AggregateQuery_Deserialize) => typedError<AggregateResult, IpcError>(__TAURI_INVOKE("aggregate", { aggregate })),
+	/**  The shape of a query's results, read from a sample, for the view recommender. */
+	dataProfile: (query: Query_Deserialize, fields: string[]) => typedError<DataProfile_Serialize, IpcError>(__TAURI_INVOKE("data_profile", { query, fields })),
+	/**
+	 *  A query's results as a graph, up to `limit` nodes, with the relations and parent links among
+	 *  them.
+	 */
+	graphRead: (query: Query_Deserialize, limit: number) => typedError<GraphData, IpcError>(__TAURI_INVOKE("graph_read", { query, limit })),
 	/**  Every saved view, by name. */
 	viewsList: () => typedError<ViewRow_Serialize[], IpcError>(__TAURI_INVOKE("views_list")),
 	/**  A saved view. */
@@ -161,6 +170,58 @@ export const events = {
 };
 
 /* Types */
+/**
+ *  Figures per group over a query's results, computed where the data is (build plan §2.7). The
+ *  query's sort, limit and offset do not apply.
+ */
+export type AggregateQuery = AggregateQuery_Serialize | AggregateQuery_Deserialize;
+
+/**
+ *  Figures per group over a query's results, computed where the data is (build plan §2.7). The
+ *  query's sort, limit and offset do not apply.
+ */
+export type AggregateQuery_Deserialize = {
+	/**  The results to look at. */
+	query: Query_Deserialize,
+	/**  What to group by, at most [`MAX_GROUPS`]; empty for one bucket over everything. */
+	group_by?: Group_Deserialize[],
+	/**  What to compute, from 1 to [`MAX_MEASURES`]. */
+	measures: Measure_Deserialize[],
+	/**  How many buckets at most, up to [`MAX_BUCKETS`]; 0 for that maximum. */
+	limit?: number,
+};
+
+/**
+ *  Figures per group over a query's results, computed where the data is (build plan §2.7). The
+ *  query's sort, limit and offset do not apply.
+ */
+export type AggregateQuery_Serialize = {
+	/**  The results to look at. */
+	query: Query_Serialize,
+	/**  What to group by, at most [`MAX_GROUPS`]; empty for one bucket over everything. */
+	group_by: Group_Serialize[],
+	/**  What to compute, from 1 to [`MAX_MEASURES`]. */
+	measures: Measure_Serialize[],
+	/**  How many buckets at most, up to [`MAX_BUCKETS`]; 0 for that maximum. */
+	limit: number,
+};
+
+/**  The result of an aggregate. */
+export type AggregateResult = {
+	/**  The buckets, in the order of their keys. */
+	rows: AggregateRow[],
+	/**  Whether there were more buckets than the limit. */
+	truncated: boolean,
+};
+
+/**  One bucket of an aggregate. */
+export type AggregateRow = {
+	/**  The bucket's value for each group, in order; `null` for no value. */
+	keys: Value[],
+	/**  Each measure, in order; `null` where a bucket has no number to compute from. */
+	values: (number | null)[],
+};
+
 /**  About the running app. */
 export type AppInfo = AppInfo_Serialize | AppInfo_Deserialize;
 
@@ -599,6 +660,45 @@ export type Conflict_Serialize = {
 /**  A hash with its algorithm, for example `blake3:af13…` (64 hex digits). */
 export type ContentHash = string;
 
+/**  The shape of a set of results, for the view recommender. */
+export type DataProfile = DataProfile_Serialize | DataProfile_Deserialize;
+
+/**  The shape of a set of results, for the view recommender. */
+export type DataProfile_Deserialize = {
+	/**  How many results there are in all. */
+	objects: number,
+	/**  How many of them the figures below looked at. */
+	sampled: number,
+	/**  How many have an event date. */
+	with_event: number,
+	/**  How many have a location. */
+	with_geo: number,
+	/**  How many have children. */
+	with_children: number,
+	/**  How many have a live relation. */
+	with_relations: number,
+	/**  The fields asked about, in the order asked. */
+	fields: FieldProfile_Deserialize[],
+};
+
+/**  The shape of a set of results, for the view recommender. */
+export type DataProfile_Serialize = {
+	/**  How many results there are in all. */
+	objects: number,
+	/**  How many of them the figures below looked at. */
+	sampled: number,
+	/**  How many have an event date. */
+	with_event: number,
+	/**  How many have a location. */
+	with_geo: number,
+	/**  How many have children. */
+	with_children: number,
+	/**  How many have a live relation. */
+	with_relations: number,
+	/**  The fields asked about, in the order asked. */
+	fields: FieldProfile_Serialize[],
+};
+
 /**
  *  What the diagnostic report says about this machine (M7): the OS and architecture, the
  *  webview and its version, and the vault's counts. No path, no title, no content.
@@ -826,6 +926,45 @@ export type FieldDraft = {
 /**  The kinds a field can have (FORMAT.md §3.3). */
 export type FieldKind = "text" | "rich_text" | "number" | "currency" | "boolean" | "date" | "datetime" | "duration" | "select" | "multi_select" | "relation" | "url" | "email" | "phone" | "geo" | "file" | "rating" | "formula" | "rollup" | "json";
 
+/**  What a field holds across the results a profile looked at. */
+export type FieldProfile = FieldProfile_Serialize | FieldProfile_Deserialize;
+
+/**  What a field holds across the results a profile looked at. */
+export type FieldProfile_Deserialize = {
+	/**  The field's key. */
+	key: string,
+	/**  How many results have a value. */
+	non_empty: number,
+	/**  How many different values there are. */
+	distinct: number,
+	/**  How many values are numbers. */
+	numeric: number,
+	/**  How many values are lists. */
+	lists: number,
+	/**  The smallest value. */
+	min?: Value | null,
+	/**  The largest value. */
+	max?: Value | null,
+};
+
+/**  What a field holds across the results a profile looked at. */
+export type FieldProfile_Serialize = {
+	/**  The field's key. */
+	key: string,
+	/**  How many results have a value. */
+	non_empty: number,
+	/**  How many different values there are. */
+	distinct: number,
+	/**  How many values are numbers. */
+	numeric: number,
+	/**  How many values are lists. */
+	lists: number,
+	/**  The smallest value. */
+	min: Value | null,
+	/**  The largest value. */
+	max: Value | null,
+};
+
 /**  A field definition belonging to a type. */
 export type FieldRow = {
 	id: Id,
@@ -888,6 +1027,50 @@ export type From_Serialize = {
 	types: Id[],
 	/**  Objects anywhere below this one in the hierarchy, not counting itself. */
 	under: Id | null,
+};
+
+/**
+ *  Objects and what joins them, as flat arrays: a large graph crosses to the UI in one reply and
+ *  costs a few numbers per edge rather than an object per edge.
+ */
+export type GraphData = {
+	/**  The nodes. */
+	ids: Id[],
+	/**  Each node's title, cut to a label's length. */
+	titles: string[],
+	/**  The types that appear, for `node_types` to point into. */
+	types: Id[],
+	/**  Each node's first type, as an index into `types`; -1 for none. */
+	node_types: number[],
+	/**  Pairs of indexes into `ids`: source, target, source, target. */
+	edges: number[],
+	/**  The relation types that appear, for `edge_types` to point into. */
+	rel_types: string[],
+	/**  Each edge's relation type, as an index into `rel_types`. */
+	edge_types: number[],
+	/**  Pairs of indexes into `ids`: parent, child, parent, child. */
+	parent_edges: number[],
+	/**  Whether there were more nodes than the limit. */
+	truncated: boolean,
+};
+
+/**  What an aggregate groups by. */
+export type Group = Group_Serialize | Group_Deserialize;
+
+/**  What an aggregate groups by. */
+export type Group_Deserialize = {
+	/**  A built-in column or a field key. An object whose field holds a list counts once per item. */
+	field: string,
+	/**  The period to group a date into; `None` groups by the value itself. */
+	bin?: TimeBin | null,
+};
+
+/**  What an aggregate groups by. */
+export type Group_Serialize = {
+	/**  A built-in column or a field key. An object whose field holds a list counts once per item. */
+	field: string,
+	/**  The period to group a date into; `None` groups by the value itself. */
+	bin: TimeBin | null,
 };
 
 /**  What to do with a held batch of changes. */
@@ -1075,6 +1258,38 @@ export type IpcErrorKind =
 "invalid" | 
 /**  Reading or writing failed. */
 "storage";
+
+/**  One figure an aggregate computes per bucket. */
+export type Measure = Measure_Serialize | Measure_Deserialize;
+
+/**  How an aggregate combines the results in a bucket. */
+export type MeasureOp = 
+/**  How many results. Takes no field. */
+"count" | 
+/**  The sum of a field's numbers. */
+"sum" | 
+/**  The mean of a field's numbers. */
+"avg" | 
+/**  The smallest of a field's numbers. */
+"min" | 
+/**  The largest of a field's numbers. */
+"max";
+
+/**  One figure an aggregate computes per bucket. */
+export type Measure_Deserialize = {
+	/**  How to combine. */
+	op: MeasureOp,
+	/**  The column or field to combine; `None` for a count. */
+	field?: string | null,
+};
+
+/**  One figure an aggregate computes per bucket. */
+export type Measure_Serialize = {
+	/**  How to combine. */
+	op: MeasureOp,
+	/**  The column or field to combine; `None` for a count. */
+	field: string | null,
+};
 
 /**
  *  Sent whenever the files folder's status changes: enabled or disabled, files written or read,
@@ -1590,6 +1805,11 @@ export type RelatedTo_Deserialize = {
 	rel_type?: string | null,
 	/**  Which end the results are. */
 	direction?: Direction,
+	/**
+	 *  How many relations away the results may be, from 1 up to [`MAX_DEPTH`]. The object itself
+	 *  is never a result.
+	 */
+	depth?: number,
 };
 
 /**  Results must have a live relation with this object. */
@@ -1600,6 +1820,11 @@ export type RelatedTo_Serialize = {
 	rel_type: string | null,
 	/**  Which end the results are. */
 	direction: Direction,
+	/**
+	 *  How many relations away the results may be, from 1 up to [`MAX_DEPTH`]. The object itself
+	 *  is never a result.
+	 */
+	depth: number,
 };
 
 /**  A typed, directed link between two objects. */
@@ -1854,6 +2079,21 @@ export type Theme =
 "light" | 
 /**  Dark colours regardless of the OS. */
 "dark";
+
+/**  A period dates are grouped into. */
+export type TimeBin = 
+/**  `2026`. */
+"year" | 
+/**  `2026-Q4`. */
+"quarter" | 
+/**  `2026-11`. */
+"month" | 
+/**  The Monday that starts the week, `2026-11-02`. */
+"week" | 
+/**  `2026-11-04`. */
+"day" | 
+/**  `2026-11-04T17:00`. */
+"hour";
 
 /**  One object of an [`ObjectTree`]. */
 export type TreeNode = TreeNode_Serialize | TreeNode_Deserialize;

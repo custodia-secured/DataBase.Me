@@ -40,7 +40,7 @@ fn json_of(value: ValueRef<'_>) -> Option<Value> {
 
 impl Reader<'_> {
     /// The types of `query.from`, each with the types that extend it.
-    fn query_types(&self, query: &Query) -> Result<Vec<Id>> {
+    pub(crate) fn query_types(&self, query: &Query) -> Result<Vec<Id>> {
         let mut types = Vec::new();
         for type_id in &query.from.types {
             for id in self.type_and_subtypes(*type_id)? {
@@ -52,7 +52,7 @@ impl Reader<'_> {
         Ok(types)
     }
 
-    fn compiled(&self, query: &Query, select: Select, field: &str) -> Result<Compiled> {
+    pub(crate) fn compiled(&self, query: &Query, select: Select, field: &str) -> Result<Compiled> {
         if query.has_search() {
             crate::search::flush(self.conn)?;
         }

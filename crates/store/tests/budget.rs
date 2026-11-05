@@ -12,7 +12,8 @@
 //! gates one at a time: together they slow each other down (the search gate seeds 100,000
 //! objects while the bulk gate runs). Debug builds skip the gate.
 //!
-//! M3 adds the mind map's tree read, and M4 search on 100,000 objects (ADR-0020).
+//! M3 adds the mind map's tree read, M4 search on 100,000 objects (ADR-0020), and M8 the reads behind
+//! the visual views on 100,000 objects, printed and not gated.
 
 #![allow(
     clippy::unwrap_used,
@@ -25,7 +26,7 @@ use std::time::{Duration, Instant};
 
 use dbme_core::Id;
 use dbme_core::model::{FieldKind, Props};
-use dbme_core::query::Query;
+use dbme_core::query::{AggregateQuery, Group, Measure, MeasureOp, Query, TimeBin};
 use dbme_store::{NewBlock, NewField, NewObject, NewRelation, NewType, Position};
 use serde_json::json;
 
@@ -360,6 +361,143 @@ fn search_on_one_hundred_thousand_objects_is_within_budget() {
         *took < SEARCH_BUDGET,
         "{slowest} took {took:?}, over the {SEARCH_BUDGET:?} budget: {gated:?}"
     );
+}
+
+/// M8, gate 1f: what the charts, the recommender and the graph ask of a vault of this size. Printed:
+/// the figures that matter are the views', measured with their drawing, and shared runners vary.
+#[test]
+#[cfg_attr(debug_assertions, ignore = "the budget applies to release builds")]
+fn visual_reads_on_one_hundred_thousand_objects() {
+    const COUNT: usize = 100_000;
+    const BATCH: usize = 10_000;
+    let mut t = new_vault();
+    t.tick();
+    let (task, _) = t
+        .vault
+        .transact(|txn| {
+            let task = txn.create_type(NewType {
+                name: "Task".into(),
+                ..Default::default()
+            })?;
+            for (key, kind) in [
+                ("status", FieldKind::Text),
+                ("amount", FieldKind::Number),
+                ("due", FieldKind::Date),
+            ] {
+                txn.create_field(NewField {
+                    type_id: task,
+                    key: key.into(),
+                    label: key.into(),
+                    kind,
+                    options: json!({}),
+                    required: false,
+                })?;
+            }
+            Ok(task)
+        })
+        .unwrap();
+    let mut ids: Vec<Id> = Vec::with_capacity(COUNT);
+    for batch in 0..COUNT / BATCH {
+        t.tick();
+        t.vault
+            .transact(|txn| {
+                for i in 0..BATCH {
+                    let n = batch * BATCH + i;
+                    let id = txn.create_object(NewObject {
+                        title: format!("Object {n}"),
+                        type_ids: vec![task],
+                        props: [
+                            ("status".to_owned(), json!(["open", "doing", "done"][n % 3])),
+                            ("amount".to_owned(), json!(n % 1000)),
+                            (
+                                "due".to_owned(),
+                                json!(format!("20{:02}-{:02}-15", n % 30, n % 12 + 1)),
+                            ),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        ..Default::default()
+                    })?;
+                    if n > 0 {
+                        txn.create_relation(NewRelation {
+                            src_id: id,
+                            dst_id: ids[n / 2],
+                            rel_type: "links".into(),
+                            field_id: None,
+                            src_block_id: None,
+                            label: None,
+                            props: Props::default(),
+                        })?;
+                    }
+                    ids.push(id);
+                }
+                Ok(())
+            })
+            .unwrap();
+    }
+    let read = t.vault.read();
+    let report = |name: &str, work: &mut dyn FnMut() -> usize| {
+        let started = Instant::now();
+        let size = work();
+        eprintln!(
+            "  {name}: {:.1} ms ({size})",
+            started.elapsed().as_secs_f64() * 1000.0
+        );
+    };
+    let count = Measure {
+        op: MeasureOp::Count,
+        field: None,
+    };
+    let sum = Measure {
+        op: MeasureOp::Sum,
+        field: Some("amount".into()),
+    };
+    let aggregate = |group_by: Vec<Group>, measures: Vec<Measure>| AggregateQuery {
+        query: Query::default(),
+        group_by,
+        measures,
+        limit: 0,
+    };
+    let by_status = aggregate(
+        vec![Group {
+            field: "status".into(),
+            bin: None,
+        }],
+        vec![count.clone()],
+    );
+    let by_month = aggregate(
+        vec![Group {
+            field: "due".into(),
+            bin: Some(TimeBin::Month),
+        }],
+        vec![count, sum],
+    );
+    let fields = ["status", "amount", "due"].map(String::from);
+    eprintln!("visual reads, {COUNT} objects, {} relations:", COUNT - 1);
+    report("aggregate by a field", &mut || {
+        read.aggregate(&by_status).unwrap().rows.len()
+    });
+    report("aggregate by month, count and sum", &mut || {
+        read.aggregate(&by_month).unwrap().rows.len()
+    });
+    report("profile of three fields", &mut || {
+        read.data_profile(&Query::default(), &fields)
+            .unwrap()
+            .fields
+            .len()
+    });
+    report("graph", &mut || {
+        read.graph(&Query::default(), COUNT as u32)
+            .unwrap()
+            .ids
+            .len()
+    });
+    let graph = read.graph(&Query::default(), COUNT as u32).unwrap();
+    assert_eq!(graph.ids.len(), COUNT);
+    assert_eq!(graph.edges.len(), (COUNT - 1) * 2);
+    report("graph as JSON, bytes", &mut || {
+        serde_json::to_vec(&graph).unwrap().len()
+    });
 }
 
 #[test]

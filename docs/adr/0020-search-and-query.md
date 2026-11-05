@@ -94,6 +94,13 @@ CROSS JOIN objects`, which fixes that order, as SQLite documents for `CROSS JOIN
 - The brief's "typed as text" form of the DSL is not a second grammar: the palette's `>` prefix and
   plain words are all the typing there is in M4. A text grammar arrives with NL → DSL (M11).
 
+**Later change (M8, ADR-0032, ADR-0034).** `related_to` gains `depth`, from 1 to 6, defaulting to 1, so
+a saved query keeps its meaning; a walk of more than one step never returns the object it started
+from. The DSL names `$geo_lat` and `$geo_lon`, and a query may sort by `$event_start`, `$event_end` or
+`$captured_at` as a field; the pages of a source (`objects_page`) still sort only by their own list.
+`aggregate` (figures per group, in SQL, at most 5,000 buckets), `data_profile` and `graph_read` take a
+query in this DSL and stand beside it; none of them changes it.
+
 ## Alternatives considered
 
 - **SQL triggers on `objects` and `blocks` keeping `fts` directly.** The body is text drawn from

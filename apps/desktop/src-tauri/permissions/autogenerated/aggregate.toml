@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aggregate"
+description = "Enables the aggregate command without any pre-configured scope."
+commands.allow = ["aggregate"]
+
+[[permission]]
+identifier = "deny-aggregate"
+description = "Denies the aggregate command without any pre-configured scope."
+commands.deny = ["aggregate"]

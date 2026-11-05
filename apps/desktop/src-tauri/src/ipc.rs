@@ -21,11 +21,12 @@ use dbme_api::{
     MirrorSync, Reply, Session, VaultInfo,
 };
 use dbme_core::model::{AttachmentRow, BlockRow, FieldRow, ObjectRow, TypeRow, ViewRow};
-use dbme_core::query::Query;
+use dbme_core::query::{AggregateQuery, Query};
 use dbme_core::{ContentHash, Id, SystemClock};
 use dbme_store::{
-    Backlink, ColumnTarget, Committed, Conflict, FacetBucket, Identity, NewColumn, NewField,
-    NewObject, NewView, ObjectSummary, ObjectTree, Position, SearchHit, Sort, Source, VaultOptions,
+    AggregateResult, Backlink, ColumnTarget, Committed, Conflict, DataProfile, FacetBucket,
+    GraphData, Identity, NewColumn, NewField, NewObject, NewView, ObjectSummary, ObjectTree,
+    Position, SearchHit, Sort, Source, VaultOptions,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -424,6 +425,39 @@ pub(crate) async fn facets(
     api::facets(&session, &query, &field)
 }
 
+/// Figures per group over a query's results, computed in the store.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn aggregate(
+    session: State<'_, Arc<Session>>,
+    aggregate: AggregateQuery,
+) -> Reply<AggregateResult> {
+    api::aggregate(&session, &aggregate)
+}
+
+/// The shape of a query's results, read from a sample, for the view recommender.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn data_profile(
+    session: State<'_, Arc<Session>>,
+    query: Query,
+    fields: Vec<String>,
+) -> Reply<DataProfile> {
+    api::data_profile(&session, &query, &fields)
+}
+
+/// A query's results as a graph, up to `limit` nodes, with the relations and parent links among
+/// them.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn graph_read(
+    session: State<'_, Arc<Session>>,
+    query: Query,
+    limit: u32,
+) -> Reply<GraphData> {
+    api::graph_read(&session, &query, limit)
+}
+
 /// Every saved view, by name.
 #[tauri::command]
 #[specta::specta]
@@ -806,6 +840,9 @@ pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
             objects_query,
             objects_query_count,
             facets,
+            aggregate,
+            data_profile,
+            graph_read,
             views_list,
             view_get,
             view_save,
