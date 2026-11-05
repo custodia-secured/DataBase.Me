@@ -23,7 +23,8 @@ pub fn csv(name: &str, bytes: &[u8]) -> Result<Extract, IngestError> {
 
 /// The PDF importer on `bytes`, as if they were the file `name`, with `budget` for the text:
 /// always a `Document` with the original attached, its text when the parser takes the file and a
-/// warning when it does not. Never panics; returns inside the budget plus one page.
+/// warning when it does not. Never panics; returns inside the budget plus
+/// [`PARSER_GRACE`](crate::documents::PARSER_GRACE), even when the parser gets stuck.
 pub fn pdf(name: &str, bytes: &[u8], budget: Duration) -> Extract {
     Pdf { budget }.extract(&Source::in_memory(name), bytes)
 }

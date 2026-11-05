@@ -143,6 +143,19 @@ and `--dry-run`.
   also what makes a zip bomb harmless.
 - **A watchdog thread for PDF extraction.** The budget is checked between pages on the caller's
   thread; a page that takes long is bounded by the file's size and the parser, and a thread that
-  cannot be stopped would not help.
+  cannot be stopped would not help. Reversed on 2026-11-04: see Later changes.
 - **Replacing `pdf-extract` over its panics.** The containment costs one page; the fallback crate
   was not shown to be safer at gate 1 and would be another reading of PDF to verify.
+
+## Later changes
+
+These notes record what came after this decision; the rest of it stands.
+
+- **After M7 (2026-11-04):** the parser runs on a thread of its own, the watchdog rejected above.
+  The rejection assumed that a long page was bounded by the file's size. Fuzzing found a file under
+  1 KiB on which the parser had not finished after 90 seconds in an ordinary release build, so the
+  check between pages never ran and the import waited on it. The importer now waits for the budget
+  and ten seconds more (`PARSER_GRACE`), then attaches the file without its text and says so. The
+  thread still cannot be stopped, so each one left behind holds a core until the app closes; after
+  two, PDFs are attached without trying, so that a folder of hostile files cannot take every core.
+  A process could be stopped, but the app ships as one program, and this keeps it so.

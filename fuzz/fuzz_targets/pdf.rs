@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! The PDF importer on arbitrary bytes (M6 Task 9, brief §10: fuzzing for the importers). The
 //! property is the proptest layer's (`crates/ingest/tests/fuzz_pdf.rs`): it returns, always as
-//! one `Document` with the original attached, and never panics. The text budget is two seconds,
-//! under libFuzzer's own timeout of ten.
+//! one `Document` with the original attached, and never panics. The text budget is two seconds.
+//! With the importer's ten seconds of grace that outlasts libFuzzer's own timeout of ten, so a
+//! parser stuck on an input stays a finding here even though the importer now walks away from it.
 //!
 //! This target is stricter than that layer: libfuzzer-sys's panic hook aborts before unwinding, so
 //! a panic in `pdf-extract` is a crash here even where the importer's `catch_unwind` contains it.

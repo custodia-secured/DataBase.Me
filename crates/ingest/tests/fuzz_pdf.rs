@@ -19,8 +19,9 @@ use proptest::test_runner::TestCaseError;
 
 /// The text budget each case gets.
 const BUDGET: Duration = Duration::from_secs(1);
-/// What a case may take beyond it: the parse itself, and one page past the budget's check.
-const SLACK: Duration = Duration::from_secs(8);
+/// What a case may take beyond it: the importer's grace before it leaves a stuck parser behind
+/// (`PARSER_GRACE`, ten seconds), and a little for a busy machine.
+const SLACK: Duration = Duration::from_secs(12);
 
 fn check(bytes: &[u8]) -> Result<(), TestCaseError> {
     let started = Instant::now();
