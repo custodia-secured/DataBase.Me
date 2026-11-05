@@ -12,6 +12,7 @@ import type {
   Backlink_Serialize,
   BlockRow_Serialize,
   ColumnTarget_Serialize,
+  DataProfile_Serialize,
   Conflict_Serialize,
   FacetBucket,
   FieldRow,
@@ -56,6 +57,8 @@ export const keys = {
   query: (query: Query_Deserialize) => [VAULT, "query", query] as const,
   queryCount: (query: Query_Deserialize) => [VAULT, "query-count", query] as const,
   aggregate: (aggregate: AggregateQuery_Deserialize) => [VAULT, "aggregate", aggregate] as const,
+  dataProfile: (query: Query_Deserialize, fields: readonly string[]) =>
+    [VAULT, "data-profile", query, fields] as const,
   facets: (query: Query_Deserialize, field: string) => [VAULT, "facets", query, field] as const,
   views: () => [VAULT, "views"] as const,
   view: (id: Id) => [VAULT, "view", id] as const,
@@ -127,10 +130,11 @@ export function useCount(source: Source) {
   });
 }
 
-export function useFields(source: Source) {
+export function useFields(source: Source, enabled = true) {
   return useQuery<FieldRow[]>({
     queryKey: keys.fields(source),
     queryFn: () => unwrap(commands.fieldsList(source)),
+    enabled,
   });
 }
 
@@ -219,6 +223,15 @@ export function useAggregate(aggregate: AggregateQuery_Deserialize | null) {
     queryFn: () => unwrap(commands.aggregate(aggregate ?? { query: {}, measures: [] })),
     placeholderData: keepPreviousData,
     enabled: aggregate !== null,
+  });
+}
+
+/** The shape of a query's results, which the view recommender reads. Nothing is read while `query` is null. */
+export function useDataProfile(query: Query_Deserialize | null, fields: readonly string[]) {
+  return useQuery<DataProfile_Serialize>({
+    queryKey: keys.dataProfile(query ?? {}, fields),
+    queryFn: () => unwrap(commands.dataProfile(query ?? {}, [...fields])),
+    enabled: query !== null,
   });
 }
 

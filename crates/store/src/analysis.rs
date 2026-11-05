@@ -71,6 +71,12 @@ pub struct DataProfile {
     pub sampled: u32,
     /// How many have an event date.
     pub with_event: u32,
+    /// How many of those end after they start: a span and not a moment.
+    pub with_span: u32,
+    /// The earliest event date, in milliseconds since 1970.
+    pub event_first: Option<i64>,
+    /// The latest event date, in milliseconds since 1970.
+    pub event_last: Option<i64>,
     /// How many have a location.
     pub with_geo: u32,
     /// How many have children.
@@ -190,6 +196,22 @@ impl Reader<'_> {
         let mut sample_params = set.params;
         sample_params.push(SqlValue::Integer(i64::from(PROFILE_SAMPLE)));
 
+        let event = self.conn.query_row(
+            &format!(
+                "{sample} SELECT coalesce(sum(o.event_end > o.event_start), 0), \
+                 min(o.event_start), max(o.event_start) FROM s JOIN objects o ON o.id = s.id"
+            ),
+            params_from_iter(sample_params.clone()),
+            |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, Option<i64>>(1)?,
+                    r.get::<_, Option<i64>>(2)?,
+                ))
+            },
+        )?;
+        let (with_span, event_first, event_last) = event;
+
         let (sampled, with_event, with_geo, with_children, with_relations) = self.conn.query_row(
             &format!(
                 "{sample} SELECT count(*), count(o.event_start), count(o.geo_lat), \
@@ -240,6 +262,9 @@ impl Reader<'_> {
             objects: u32::try_from(objects).unwrap_or(u32::MAX),
             sampled: count(sampled),
             with_event: count(with_event),
+            with_span: count(with_span),
+            event_first,
+            event_last,
             with_geo: count(with_geo),
             with_children: count(with_children),
             with_relations: count(with_relations),

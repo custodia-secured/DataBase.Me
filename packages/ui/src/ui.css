@@ -98,6 +98,7 @@
 .dbme-menu {
   z-index: 50;
   min-width: 12rem;
+  max-width: min(22rem, calc(100vw - 2 * var(--dbme-space-3)));
   padding: var(--dbme-space-1);
   border: 1px solid var(--dbme-color-border);
   border-radius: var(--dbme-radius);
@@ -116,6 +117,41 @@
   font-size: 0.875rem;
   cursor: pointer;
   outline: none;
+}
+
+.dbme-menu__item > svg {
+  flex: none;
+}
+
+.dbme-menu__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--dbme-space-1) 0;
+}
+
+.dbme-menu__description,
+.dbme-menu__note {
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.75rem;
+}
+
+.dbme-menu__heading {
+  padding: var(--dbme-space-1) var(--dbme-space-2);
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.dbme-menu__note {
+  margin: 0;
+  padding: 0 var(--dbme-space-2) var(--dbme-space-1);
+}
+
+.dbme-menu__separator {
+  height: 1px;
+  margin: var(--dbme-space-1) 0;
+  background: var(--dbme-color-border);
 }
 
 .dbme-menu__item[data-highlighted] {

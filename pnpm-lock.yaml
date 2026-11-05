@@ -359,6 +359,9 @@ importers:
       '@databaseme/client':
         specifier: workspace:*
         version: link:../client
+      '@databaseme/recommender':
+        specifier: workspace:*
+        version: link:../recommender
       '@databaseme/ui':
         specifier: workspace:*
         version: link:../ui

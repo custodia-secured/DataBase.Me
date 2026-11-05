@@ -30,6 +30,7 @@ export {
   useProvenance,
   useQueryCount,
   useAggregate,
+  useDataProfile,
   useQueryResults,
   useSearch,
   useSettings,

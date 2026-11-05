@@ -676,6 +676,12 @@ export type DataProfile_Deserialize = {
 	sampled: number,
 	/**  How many have an event date. */
 	with_event: number,
+	/**  How many of those end after they start: a span and not a moment. */
+	with_span: number,
+	/**  The earliest event date, in milliseconds since 1970. */
+	event_first?: number | null,
+	/**  The latest event date, in milliseconds since 1970. */
+	event_last?: number | null,
 	/**  How many have a location. */
 	with_geo: number,
 	/**  How many have children. */
@@ -694,6 +700,12 @@ export type DataProfile_Serialize = {
 	sampled: number,
 	/**  How many have an event date. */
 	with_event: number,
+	/**  How many of those end after they start: a span and not a moment. */
+	with_span: number,
+	/**  The earliest event date, in milliseconds since 1970. */
+	event_first: number | null,
+	/**  The latest event date, in milliseconds since 1970. */
+	event_last: number | null,
 	/**  How many have a location. */
 	with_geo: number,
 	/**  How many have children. */

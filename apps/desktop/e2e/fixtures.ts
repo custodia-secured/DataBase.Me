@@ -196,7 +196,8 @@ export class App {
     await expect(this.pane(pane).getByRole("tablist", { name: "Views" })).toBeVisible();
     if ((await tab.count()) === 0) {
       await this.press(this.pane(pane).getByRole("button", { name: "More views" }));
-      await this.press(this.page.getByRole("menuitem", { name }));
+      // The list is first, and a view "Suggested" offers is below it as well.
+      await this.press(this.page.getByRole("menuitem", { name }).first());
     } else {
       await this.press(tab);
     }

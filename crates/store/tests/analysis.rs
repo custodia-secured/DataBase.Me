@@ -618,8 +618,14 @@ fn a_profile_reports_the_shape_of_the_results() {
             txn.update_object(one, |row| {
                 row.geo_lat = Some(47.5);
                 row.geo_lon = Some(8.5);
+                // A moment: it ends when it starts.
+                row.event_start = Some(9_000);
+                row.event_end = Some(9_000);
             })?;
-            txn.update_object(two, |row| row.event_start = Some(1_000))?;
+            txn.update_object(two, |row| {
+                row.event_start = Some(1_000);
+                row.event_end = Some(5_000);
+            })?;
             Ok(())
         })
         .unwrap();
@@ -635,7 +641,10 @@ fn a_profile_reports_the_shape_of_the_results() {
     assert_eq!(profile.objects, 5);
     assert_eq!(profile.sampled, 5);
     assert_eq!(profile.with_geo, 1);
-    assert_eq!(profile.with_event, 1);
+    assert_eq!(profile.with_event, 2);
+    assert_eq!(profile.with_span, 1);
+    assert_eq!(profile.event_first, Some(1_000));
+    assert_eq!(profile.event_last, Some(9_000));
     assert_eq!(profile.with_children, 0);
     assert_eq!(profile.with_relations, 0);
 

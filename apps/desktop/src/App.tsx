@@ -32,6 +32,7 @@ import {
   FolderSync,
   IconButton,
   Menu,
+  type MenuItem,
   PanelLeft,
   Redo2,
   Search,
@@ -62,6 +63,7 @@ import {
   visibleViews,
   type Mode,
   type PaletteCommand,
+  useSuggestedViews,
 } from "@databaseme/views";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isTauri } from "@tauri-apps/api/core";
@@ -70,6 +72,8 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { notifyReady } from "./ipc";
 import { useShell } from "./store";
 
+/** How many views "Suggested" offers: enough to choose from, and few enough to mean something. */
+const SUGGESTED_VIEWS = 3;
 const WIDE = "(min-width: 768px)";
 const SPLIT = "(min-width: 1100px)";
 /** One empty list, so a closed Import dialog's props do not change between renders. */
@@ -667,7 +671,25 @@ function Pane({
   // The pinned views are tabs, and the rest wait in the menu until one is chosen (M8): thirteen tabs
   // fit no window, and none at 360 px.
   const shown = views.filter((candidate) => candidate.pinned === true || candidate.id === viewId);
+  // What suits this page's contents is read when someone opens the menu, not on every change to the
+  // vault, and it only ever offers: choosing is theirs (M8, Task 9).
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { suggested, failed } = useSuggestedViews(objectId, menuOpen);
+  const offered = suggested
+    .filter((result) => result.view !== viewId)
+    .flatMap((result) => {
+      const candidate = views.find((one) => one.id === result.view);
+      return candidate ? [{ candidate, why: result.why }] : [];
+    })
+    .slice(0, SUGGESTED_VIEWS);
   const more = views.filter((candidate) => candidate.pinned !== true);
+  const choose = (candidate: (typeof views)[number]): MenuItem => ({
+    label: candidate.label,
+    icon: candidate.icon,
+    onSelect: () => {
+      setView(index, candidate.id);
+    },
+  });
 
   const onKeyDown = (event: KeyboardEvent) => {
     const at = shown.findIndex((candidate) => candidate.id === viewId);
@@ -720,13 +742,21 @@ function Pane({
           <Menu
             label="More views"
             icon={Ellipsis}
-            items={more.map((candidate) => ({
-              label: candidate.label,
-              icon: candidate.icon,
-              onSelect: () => {
-                setView(index, candidate.id);
-              },
-            }))}
+            items={more.map(choose)}
+            onOpenChange={setMenuOpen}
+            section={
+              offered.length > 0
+                ? {
+                    heading: "Suggested",
+                    items: offered.map(({ candidate, why }) => ({
+                      ...choose(candidate),
+                      description: why,
+                    })),
+                  }
+                : failed
+                  ? { heading: "Suggested", items: [], note: "Suggestions could not be read." }
+                  : null
+            }
           />
         ) : null}
       </div>
