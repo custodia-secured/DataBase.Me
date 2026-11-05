@@ -24,13 +24,20 @@ computer carries none of it.
 
 - **Simple: a plain notes app.** Pages, text, links, search, the files folder and import; the
   Document, Outline, Mind map and Gallery views; **Today** for a dated page under Journal. Types,
-  fields and the Table view are hidden.
+  fields, the Table view and everything in **More views** are hidden.
 - **Organizer: types, fields and tables too.** Everything in Simple, and the types line and
-  fields on each page, the Table view, the type picker in the Gallery and Table views, and type
-  facets in search results.
+  fields on each page, the Table view, **More views** (Kanban, Calendar, Timeline, Charts, Dashboard,
+  Map, Graph and Canvas), the type picker in the Gallery and Table views, and type facets in search
+  results.
 
 The mode is a filter on what is shown. Switching never changes the vault: a page typed in
 Organizer keeps its types in Simple, unseen, and shows them again when you switch back.
+
+## Map
+
+Maps show coastlines that come with the app, and ask for nothing from anywhere. **A PMTiles file** on this
+device, version 3, replaces them with whatever it holds. The app reads only that file, and only when a map
+is open. If it goes bad, the map says so and carries on with the coastlines.
 
 ## Theme
 

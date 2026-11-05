@@ -66,6 +66,84 @@ test("Simple hides types, fields and the Table view, and Organizer shows them ag
   );
 });
 
+test("Simple leaves out everything in More views, and Organizer brings it back", async ({
+  seed,
+  app,
+}) => {
+  await seed(workspace());
+  await app.open({ mode: "simple" });
+  const pane = app.pane();
+  await expect(pane.getByRole("button", { name: "More views" })).toHaveCount(0);
+
+  await runCommand(app, "Mode: Organizer");
+  await app.press(pane.getByRole("button", { name: "More views" }));
+  for (const name of [
+    "Kanban",
+    "Calendar",
+    "Timeline",
+    "Charts",
+    "Dashboard",
+    "Map",
+    "Graph",
+    "Canvas",
+  ]) {
+    await expect(app.page.getByRole("menuitem", { name, exact: true }).first()).toBeVisible();
+  }
+});
+
+test("a drawing in hand is saved when Simple takes the Canvas away", async ({ seed, app }) => {
+  await seed(workspace());
+  await app.open();
+  await app.openPage("Home", "Alpha");
+  await app.view("Canvas");
+  await app.page.waitForFunction(() => "__dbmeCanvas" in window);
+  await app.page.evaluate(() => {
+    const { __dbmeCanvas: api } = window as unknown as {
+      __dbmeCanvas: { updateScene: (scene: unknown) => void };
+    };
+    api.updateScene({
+      captureUpdate: "IMMEDIATELY",
+      elements: [
+        {
+          id: "kept",
+          type: "rectangle",
+          x: 1,
+          y: 2,
+          width: 30,
+          height: 40,
+          angle: 0,
+          strokeColor: "#1e1e1e",
+          backgroundColor: "transparent",
+          fillStyle: "solid",
+          strokeWidth: 2,
+          strokeStyle: "solid",
+          roughness: 1,
+          opacity: 100,
+          groupIds: [],
+          frameId: null,
+          index: "a1",
+          roundness: null,
+          seed: 1,
+          version: 2,
+          versionNonce: 2,
+          isDeleted: false,
+          boundElements: null,
+          updated: 1,
+          link: null,
+          locked: false,
+        },
+      ],
+    });
+  });
+  await runCommand(app, "Mode: Simple");
+  await expect(app.title()).toHaveValue("Alpha");
+  await runCommand(app, "Mode: Organizer");
+  await app.view("Canvas");
+  await expect(app.pane().locator(".dbme-canvas__count")).toHaveText(
+    "0 cards and 1 drawn element.",
+  );
+});
+
 test("Today opens the day's page under Journal, and only makes it once", async ({ seed, app }) => {
   await seed(workspace());
   await app.open({ mode: "simple" });
