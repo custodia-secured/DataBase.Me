@@ -43,6 +43,11 @@ All notable changes to DataBase.Me are recorded here. The format follows
 - The mind map's rename box follows a name that changes while it is open. F2 straight after naming
   a node could open the box on the old name, and then what was typed landed in front of the new
   name, or Enter with nothing typed wrote the old name back over it.
+- A PDF the parser cannot finish no longer stops an import. The 10-second budget was only checked
+  between pages, so a small hostile file could hold an import without end. The parser now runs on
+  a thread of its own: after 20 seconds the file is attached without its text, with a warning. A
+  parser left behind holds a core until the app closes, and after two, PDFs are attached without
+  trying. A later change on ADR-0026.
 
 ## [0.1.0] - 2026-11-03
 
