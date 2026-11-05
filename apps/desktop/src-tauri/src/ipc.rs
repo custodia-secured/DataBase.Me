@@ -932,7 +932,7 @@ mod tests {
         let list = &build[build.find("const COMMANDS").unwrap()..];
         let list = &list[..list.find("];").unwrap()];
         let commands: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
-        assert_eq!(commands.len(), 64);
+        assert_eq!(commands.len(), 67);
         let capability = include_str!("../capabilities/default.json");
         let source = include_str!("ipc.rs");
         let registered = &source[source.find("collect_commands![").unwrap()..];
