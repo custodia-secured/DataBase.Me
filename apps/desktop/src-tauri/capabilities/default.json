@@ -51,6 +51,8 @@
     "allow-object-rename",
     "allow-object-set-event",
     "allow-object-set-geo",
+    "allow-canvas-read",
+    "allow-canvas-apply",
     "allow-map-file-set",
     "allow-map-file-read",
     "allow-object-set-prop",

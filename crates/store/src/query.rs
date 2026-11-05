@@ -8,17 +8,17 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use dbme_core::chain::OpRecord;
 use dbme_core::model::{
-    AttachmentRole, AttachmentRow, BlockRow, FieldRow, ObjectRow, ProvenanceRow, RelationRow,
-    TypeRow,
+    AttachmentRole, AttachmentRow, BlockRow, CANVAS_RENDERER, CanvasItemRow, FieldRow, ObjectRow,
+    ProvenanceRow, RelationRow, TypeRow, ViewRow,
 };
 use dbme_core::op::{Entity, Row, RowKey};
 use dbme_core::{ContentHash, Id, SortKey};
 
 use crate::log::op_columns;
 use crate::rows::{
-    self, attachment_row, attachment_select, block_columns, block_row, field_columns, field_row,
-    object_columns, object_row, provenance_columns, provenance_row, relation_columns, relation_row,
-    type_columns, type_row,
+    self, attachment_row, attachment_select, block_columns, block_row, canvas_item_columns,
+    canvas_item_row, field_columns, field_row, object_columns, object_row, provenance_columns,
+    provenance_row, relation_columns, relation_row, type_columns, type_row, view_columns, view_row,
 };
 use crate::sql::{self, to_json};
 use crate::vault::VaultMeta;
@@ -385,6 +385,74 @@ impl Reader<'_> {
             .query_map(params![hash.as_str(), role.as_str()], |r| sql::id(r, 0))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(ids)
+    }
+
+    /// The view that holds a page's canvas, if anything has been put on it (ADR-0035).
+    pub fn canvas_view(&self, owner: Id) -> Result<Option<ViewRow>> {
+        Ok(self
+            .conn
+            .prepare_cached(concat!(
+                "SELECT ",
+                view_columns!(),
+                " FROM views WHERE owner_object_id = ?1 AND renderer = ?2 ORDER BY id LIMIT 1"
+            ))?
+            .query_row(params![owner.to_string(), CANVAS_RENDERER], view_row)
+            .optional()?)
+    }
+
+    /// Every element of a canvas, bottom of the stack first.
+    pub fn canvas_items(&self, view_id: Id) -> Result<Vec<CanvasItemRow>> {
+        collect(
+            self.conn,
+            concat!(
+                "SELECT ",
+                canvas_item_columns!(),
+                " FROM canvas_items WHERE view_id = ?1 ORDER BY z, item_id"
+            ),
+            [view_id.to_string()],
+            canvas_item_row,
+        )
+    }
+
+    /// One element of a canvas, by the name the drawing library gave it.
+    pub(crate) fn canvas_item(&self, view_id: Id, item_id: &str) -> Result<Option<CanvasItemRow>> {
+        Ok(self
+            .conn
+            .prepare_cached(concat!(
+                "SELECT ",
+                canvas_item_columns!(),
+                " FROM canvas_items WHERE view_id = ?1 AND item_id = ?2"
+            ))?
+            .query_row(params![view_id.to_string(), item_id], canvas_item_row)
+            .optional()?)
+    }
+
+    /// The cards that show an object, on any canvas.
+    pub(crate) fn canvas_cards_of(&self, object_id: Id) -> Result<Vec<CanvasItemRow>> {
+        collect(
+            self.conn,
+            concat!(
+                "SELECT ",
+                canvas_item_columns!(),
+                " FROM canvas_items WHERE object_id = ?1 ORDER BY id"
+            ),
+            [object_id.to_string()],
+            canvas_item_row,
+        )
+    }
+
+    /// The saved views that belong to an object, canvases included.
+    pub(crate) fn views_owned_by(&self, owner: Id) -> Result<Vec<ViewRow>> {
+        collect(
+            self.conn,
+            concat!(
+                "SELECT ",
+                view_columns!(),
+                " FROM views WHERE owner_object_id = ?1 ORDER BY id"
+            ),
+            [owner.to_string()],
+            view_row,
+        )
     }
 
     /// Where an object came from: its provenance rows, oldest first (ADR-0026).

@@ -20,6 +20,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/0002_search.sql"),
     include_str!("migrations/0003_mirror.sql"),
     include_str!("migrations/0004_provenance.sql"),
+    include_str!("migrations/0005_canvas.sql"),
 ];
 
 /// The migration that adds the search index. A vault that reaches it with objects already in it

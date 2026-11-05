@@ -311,7 +311,7 @@ fn a_vault_from_before_the_index_gets_one_when_it_opens() {
         "DROP TRIGGER search_text_insert; DROP TRIGGER search_text_delete; DROP TRIGGER search_text_update; \
          DROP TABLE fts; DROP TABLE search_text; DROP TABLE search_dirty; DROP TABLE views; \
          DROP TABLE mirror_state; DROP TABLE mirror_dirty; DROP TABLE mirror_meta; DROP TABLE conflicts; \
-         DROP TABLE provenance; PRAGMA user_version = 1",
+         DROP TABLE canvas_items; DROP TABLE provenance; PRAGMA user_version = 1",
     )
     .unwrap();
     drop(raw);

@@ -340,6 +340,30 @@ pub struct ViewRow {
     pub updated_at: i64,
 }
 
+/// The renderer of the view a canvas's items belong to.
+pub const CANVAS_RENDERER: &str = "canvas";
+
+/// One element of a canvas (ADR-0035): a shape, a line, a piece of text, or a card, which is an
+/// element with an `object_id`.
+#[allow(missing_docs, reason = "columns are documented in FORMAT.md §3.1")]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct CanvasItemRow {
+    pub id: Id,
+    pub view_id: Id,
+    pub item_id: String,
+    pub object_id: Option<Id>,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub z: String,
+    pub style_json: Value,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 /// A file in the blob store.
 #[allow(missing_docs, reason = "columns are documented in FORMAT.md §3.1")]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -604,6 +628,33 @@ impl ProvenanceRow {
             self.confidence.is_finite() && (0.0..=1.0).contains(&self.confidence),
             "provenance confidence",
             "must be a number from 0 to 1",
+        )
+    }
+}
+
+impl CanvasItemRow {
+    /// Checks the row against the data model. The numbers must be finite: a NaN or an infinity
+    /// would be written as `null` and never read back (M6 gate 1e).
+    pub fn validate(&self) -> Result<(), CoreError> {
+        let name = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_';
+        check(
+            !self.item_id.is_empty() && self.item_id.len() <= 64 && self.item_id.chars().all(name),
+            "canvas item id",
+            "must be 1 to 64 letters, digits, dashes or underscores",
+        )?;
+        check(
+            [self.x, self.y, self.w, self.h]
+                .iter()
+                .all(|n| n.is_finite()),
+            "canvas item place",
+            "must be finite numbers",
+        )?;
+        check(!self.z.is_empty(), "canvas item z", "must not be empty")?;
+        check_text(&self.z, "canvas item z", 256)?;
+        check(
+            self.style_json.is_object(),
+            "canvas item style",
+            "must be a JSON object",
         )
     }
 }

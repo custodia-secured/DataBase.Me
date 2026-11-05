@@ -16,10 +16,10 @@ use std::sync::Arc;
 use dbme_core::model::{AttachmentRole, FieldKind, Props};
 use dbme_core::query::Query;
 use dbme_core::{Clock, ContentHash, Id, ManualClock};
-use dbme_export::{ExportError, OPS_FILE, SCHEMA_FILE, export, import, is_export};
+use dbme_export::{CANVAS_DIR, ExportError, OPS_FILE, SCHEMA_FILE, export, import, is_export};
 use dbme_store::{
-    Identity, NewAttachment, NewBlock, NewField, NewObject, NewProvenance, NewRelation, NewType,
-    NewView, Position, Vault, VaultOptions,
+    CanvasItem, Identity, NewAttachment, NewBlock, NewField, NewObject, NewProvenance, NewRelation,
+    NewType, NewView, Position, Vault, VaultOptions,
 };
 use serde_json::json;
 
@@ -115,6 +115,32 @@ fn populated(path: &Path) -> (Vault, Id, Id, ContentHash) {
                 config: json!({}),
                 owner_object_id: None,
             })?;
+            txn.apply_to_canvas(
+                a,
+                vec![
+                    CanvasItem {
+                        item_id: "shape".into(),
+                        object_id: None,
+                        x: 1.5,
+                        y: -2.5,
+                        w: 30.0,
+                        h: 40.0,
+                        z: "a1".into(),
+                        style_json: json!({"type": "line", "points": [[0, 0], [1.5, 2.5]]}),
+                    },
+                    CanvasItem {
+                        item_id: "card".into(),
+                        object_id: Some(b),
+                        x: 0.0,
+                        y: 100.0,
+                        w: 240.0,
+                        h: 88.0,
+                        z: "a2".into(),
+                        style_json: json!({"type": "embeddable", "link": format!("dbme:{b}")}),
+                    },
+                ],
+                vec![],
+            )?;
             Ok((a, b))
         })
         .unwrap();
@@ -158,6 +184,8 @@ fn snapshot(vault: &Vault, a: Id, b: Id) -> String {
     out.push_str(&format!("{:?}\n", read.attachments(a).unwrap()));
     out.push_str(&format!("{:?}\n", read.provenance_of(a).unwrap()));
     out.push_str(&format!("{:?}\n", read.views().unwrap()));
+    let canvas = read.canvas_view(a).unwrap().unwrap();
+    out.push_str(&format!("{:?}\n", read.canvas_items(canvas.id).unwrap()));
     out
 }
 
@@ -169,7 +197,8 @@ fn a_full_export_imports_to_the_same_vault() {
     let export_dir = dir.path().join("export");
 
     let report = export(&source, &export_dir, true).unwrap();
-    assert!(report.types >= 1 && report.views == 1, "{report:?}");
+    assert!(report.types >= 1 && report.views == 2, "{report:?}");
+    assert_eq!(report.canvases, 1, "{report:?}");
     assert_eq!(report.objects, 2, "A and B have the type; Gone has none");
     assert_eq!(report.blobs, Some(1));
     let ops = report.ops.unwrap();
@@ -202,7 +231,17 @@ fn a_full_export_imports_to_the_same_vault() {
     );
     assert_eq!(csv.lines().count(), 3, "{csv}");
     let views: Vec<_> = fs::read_dir(export_dir.join("views")).unwrap().collect();
-    assert_eq!(views.len(), 1);
+    assert_eq!(views.len(), 2, "the saved view and the canvas's");
+    let canvases: Vec<_> = fs::read_dir(export_dir.join(CANVAS_DIR))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(canvases.len(), 1);
+    let items: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(canvases[0].path()).unwrap()).unwrap();
+    assert_eq!(items[0]["item_id"], "shape");
+    assert_eq!(items[0]["style_json"]["points"][1][0], 1.5);
+    assert_eq!(items[1]["object_id"], b.to_string());
     assert_eq!(
         fs::read_to_string(export_dir.join(OPS_FILE))
             .unwrap()

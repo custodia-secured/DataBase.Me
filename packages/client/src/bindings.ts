@@ -86,6 +86,10 @@ export const commands = {
 	 *  them.
 	 */
 	graphRead: (query: Query_Deserialize, limit: number) => typedError<GraphData, IpcError>(__TAURI_INVOKE("graph_read", { query, limit })),
+	/**  What is on a page's canvas. */
+	canvasRead: (owner: Id) => typedError<CanvasScene_Serialize, IpcError>(__TAURI_INVOKE("canvas_read", { owner })),
+	/**  Writes what changed on a page's canvas, as one change. Returns its view, if it has one. */
+	canvasApply: (owner: Id, upsert: CanvasItem_Deserialize[], remove: string[]) => typedError<Id | null, IpcError>(__TAURI_INVOKE("canvas_apply", { owner, upsert, remove })),
 	/**  Every saved view, by name. */
 	viewsList: () => typedError<ViewRow_Serialize[], IpcError>(__TAURI_INVOKE("views_list")),
 	/**  A saved view. */
@@ -509,6 +513,105 @@ export type BlockRow_Serialize = {
 	updated_at: number,
 };
 
+/**
+ *  One element of a canvas, as the page has it: the columns of `canvas_items` the caller supplies
+ *  (ADR-0035).
+ */
+export type CanvasItem = CanvasItem_Serialize | CanvasItem_Deserialize;
+
+/**
+ *  One element of a canvas (ADR-0035): a shape, a line, a piece of text, or a card, which is an
+ *  element with an `object_id`.
+ */
+export type CanvasItemRow = CanvasItemRow_Serialize | CanvasItemRow_Deserialize;
+
+/**
+ *  One element of a canvas (ADR-0035): a shape, a line, a piece of text, or a card, which is an
+ *  element with an `object_id`.
+ */
+export type CanvasItemRow_Deserialize = {
+	id: Id,
+	view_id: Id,
+	item_id: string,
+	object_id?: Id | null,
+	x: number | null,
+	y: number | null,
+	w: number | null,
+	h: number | null,
+	z: string,
+	style_json: Value,
+	created_at: number,
+	updated_at: number,
+};
+
+/**
+ *  One element of a canvas (ADR-0035): a shape, a line, a piece of text, or a card, which is an
+ *  element with an `object_id`.
+ */
+export type CanvasItemRow_Serialize = {
+	id: Id,
+	view_id: Id,
+	item_id: string,
+	object_id: Id | null,
+	x: number | null,
+	y: number | null,
+	w: number | null,
+	h: number | null,
+	z: string,
+	style_json: Value,
+	created_at: number,
+	updated_at: number,
+};
+
+/**
+ *  One element of a canvas, as the page has it: the columns of `canvas_items` the caller supplies
+ *  (ADR-0035).
+ */
+export type CanvasItem_Deserialize = {
+	item_id: string,
+	object_id?: Id | null,
+	x: number | null,
+	y: number | null,
+	w: number | null,
+	h: number | null,
+	z: string,
+	style_json: Value,
+};
+
+/**
+ *  One element of a canvas, as the page has it: the columns of `canvas_items` the caller supplies
+ *  (ADR-0035).
+ */
+export type CanvasItem_Serialize = {
+	item_id: string,
+	object_id: Id | null,
+	x: number | null,
+	y: number | null,
+	w: number | null,
+	h: number | null,
+	z: string,
+	style_json: Value,
+};
+
+/**  What is on a page's canvas (ADR-0035). */
+export type CanvasScene = CanvasScene_Serialize | CanvasScene_Deserialize;
+
+/**  What is on a page's canvas (ADR-0035). */
+export type CanvasScene_Deserialize = {
+	/**  The view that holds it, or `None` if nothing has been put on it yet. */
+	view_id?: Id | null,
+	/**  Its elements, bottom of the stack first. */
+	items: CanvasItemRow_Deserialize[],
+};
+
+/**  What is on a page's canvas (ADR-0035). */
+export type CanvasScene_Serialize = {
+	/**  The view that holds it, or `None` if nothing has been put on it yet. */
+	view_id: Id | null,
+	/**  Its elements, bottom of the stack first. */
+	items: CanvasItemRow_Serialize[],
+};
+
 /**  The type a new column of a Table goes on (ADR-0030). */
 export type ColumnTarget = ColumnTarget_Serialize | ColumnTarget_Deserialize;
 
@@ -813,6 +916,8 @@ export type ExportReport_Deserialize = {
 	types: number,
 	/**  Files under `views/`. */
 	views: number,
+	/**  Files under `canvas/`. */
+	canvases: number,
 	/**  Rows across every CSV (an object with two types is counted twice). */
 	objects: number,
 	/**  Lines of `ops.jsonl`, for a full export. */
@@ -827,6 +932,8 @@ export type ExportReport_Serialize = {
 	types: number,
 	/**  Files under `views/`. */
 	views: number,
+	/**  Files under `canvas/`. */
+	canvases: number,
 	/**  Rows across every CSV (an object with two types is counted twice). */
 	objects: number,
 	/**  Lines of `ops.jsonl`, for a full export. */

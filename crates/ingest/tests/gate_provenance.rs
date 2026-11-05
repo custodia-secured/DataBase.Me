@@ -153,7 +153,7 @@ fn the_chain_hashes_a_provenance_op_like_any_other() {
 // the op targets the object; the key prints as the row's id.
 #[test]
 fn the_entity_takes_create_and_delete_only_and_targets_the_object() {
-    assert_eq!(Entity::ALL.len(), 9, "nine entities since Task 2");
+    assert_eq!(Entity::ALL.len(), 10, "ten entities since M8's canvas");
     assert_eq!(Entity::Provenance.as_str(), "provenance");
     assert!(!Entity::Provenance.has_updated_at());
     assert!(OpKind::new(Entity::Provenance, Action::Create).is_ok());

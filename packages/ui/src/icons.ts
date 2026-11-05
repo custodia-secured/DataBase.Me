@@ -64,6 +64,7 @@ export {
   Minus,
   Network,
   PanelLeft,
+  PenLine,
   Plus,
   Redo2,
   Search,

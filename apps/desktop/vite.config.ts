@@ -10,10 +10,6 @@ export default defineConfig(({ mode }) => ({
   // never be mistaken for the app's bundle.
   build: {
     outDir: mode === "e2e" ? "dist-e2e" : "dist",
-    // M8's gate page (e2e/gate-m8.spec.ts) is in the e2e build alone.
-    ...(mode === "e2e"
-      ? { rolldownOptions: { input: { main: "index.html", gate: "gate-m8.html" } } }
-      : {}),
   },
   clearScreen: false,
   define: {

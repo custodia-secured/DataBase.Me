@@ -263,7 +263,11 @@ function AddTileDialog({
 }) {
   const id = useId();
   const choices = views.filter(
-    (view) => view.renderer !== "dashboard" && !tiles.some((tile) => tile.view === view.id),
+    // A dashboard is not a tile, and a canvas is not a saved view of anything: it belongs to its page.
+    (view) =>
+      view.renderer !== "dashboard" &&
+      view.renderer !== "canvas" &&
+      !tiles.some((tile) => tile.view === view.id),
   );
   const [chosen, setChosen] = useState("");
   const value = choices.some((view) => view.id === chosen) ? chosen : (choices[0]?.id ?? "");

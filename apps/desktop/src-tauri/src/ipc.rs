@@ -560,6 +560,28 @@ pub(crate) async fn object_set_geo(
     api::object_set_geo(&session, id, lat, lon)
 }
 
+/// What is on a page's canvas.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn canvas_read(
+    session: State<'_, Arc<Session>>,
+    owner: Id,
+) -> Reply<api::CanvasScene> {
+    api::canvas_read(&session, owner)
+}
+
+/// Writes what changed on a page's canvas, as one change. Returns its view, if it has one.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn canvas_apply(
+    session: State<'_, Arc<Session>>,
+    owner: Id,
+    upsert: Vec<dbme_store::CanvasItem>,
+    remove: Vec<String>,
+) -> Reply<Option<Id>> {
+    api::canvas_apply(&session, owner, upsert, remove)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn map_file_set(
@@ -886,6 +908,8 @@ pub(crate) fn builder() -> tauri_specta::Builder<tauri::Wry> {
             aggregate,
             data_profile,
             graph_read,
+            canvas_read,
+            canvas_apply,
             views_list,
             view_get,
             view_save,
@@ -979,7 +1003,7 @@ mod tests {
         let list = &build[build.find("const COMMANDS").unwrap()..];
         let list = &list[..list.find("];").unwrap()];
         let commands: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
-        assert_eq!(commands.len(), 71);
+        assert_eq!(commands.len(), 73);
         let capability = include_str!("../capabilities/default.json");
         let source = include_str!("ipc.rs");
         let registered = &source[source.find("collect_commands![").unwrap()..];

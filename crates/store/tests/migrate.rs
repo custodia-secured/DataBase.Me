@@ -15,6 +15,8 @@ use dbme_core::{Clock, ManualClock};
 use dbme_store::{Identity, NewObject, SCHEMA_VERSION, Vault, VaultOptions};
 
 const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/vaults/v2.dbme");
+/// A vault as release 0.1 leaves it, at schema version 4.
+const FIXTURE_V4: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/vaults/v4.dbme");
 
 fn options() -> VaultOptions {
     let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_762_100_000_000));
@@ -33,6 +35,51 @@ fn copy_fixture(to: &Path) {
 }
 
 #[test]
+fn a_vault_from_release_0_1_opens_migrates_and_verifies() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("V4.dbme");
+    fs::create_dir_all(path.join("blobs")).unwrap();
+    for name in ["vault.sqlite", "FORMAT.md"] {
+        fs::copy(Path::new(FIXTURE_V4).join(name), path.join(name)).unwrap();
+    }
+    let mut vault = Vault::open(&path, options()).unwrap();
+    let report = vault.verify(true).unwrap();
+    assert!(report.is_ok(), "{:#?}", report.problems);
+    assert_eq!(report.schema_version, SCHEMA_VERSION);
+
+    // Migration 5's table is there, empty and usable, and a canvas survives the log's replay.
+    let (owner, _) = vault
+        .transact(|txn| {
+            txn.create_object(NewObject {
+                title: "A page from 0.1".into(),
+                ..Default::default()
+            })
+        })
+        .unwrap();
+    assert!(vault.read().canvas_view(owner).unwrap().is_none());
+    vault
+        .transact(|txn| {
+            txn.apply_to_canvas(
+                owner,
+                vec![dbme_store::CanvasItem {
+                    item_id: "a".into(),
+                    object_id: None,
+                    x: 1.0,
+                    y: 2.0,
+                    w: 3.0,
+                    h: 4.0,
+                    z: "a0".into(),
+                    style_json: serde_json::json!({ "type": "rectangle" }),
+                }],
+                vec![],
+            )
+        })
+        .unwrap();
+    let report = vault.verify(true).unwrap();
+    assert!(report.is_ok(), "{:#?}", report.problems);
+}
+
+#[test]
 fn a_schema_version_2_vault_opens_migrates_and_verifies() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("V2.dbme");
@@ -42,7 +89,7 @@ fn a_schema_version_2_vault_opens_migrates_and_verifies() {
     let report = vault.verify(true).unwrap();
     assert!(report.is_ok(), "{:#?}", report.problems);
     assert_eq!(report.schema_version, SCHEMA_VERSION);
-    assert_eq!(report.schema_version, 4);
+    assert_eq!(report.schema_version, 5);
     assert_eq!(
         report.ops, 25,
         "the built-in types, and nothing from the migration"
@@ -82,5 +129,5 @@ fn a_schema_version_2_vault_opens_migrates_and_verifies() {
     // Opening it again finds it already migrated.
     drop(vault);
     let vault = Vault::open(&path, options()).unwrap();
-    assert_eq!(vault.verify(false).unwrap().schema_version, 4);
+    assert_eq!(vault.verify(false).unwrap().schema_version, 5);
 }

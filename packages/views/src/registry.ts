@@ -10,6 +10,7 @@ import {
   ListTree,
   MapPin,
   LayoutDashboard,
+  PenLine,
   Network,
   CalendarDays,
   ChartColumn,
@@ -40,6 +41,7 @@ export type ViewId =
   | "gallery"
   | "map"
   | "graph"
+  | "canvas"
   | "mindmap"
   | "kanban"
   | "calendar"
@@ -117,6 +119,14 @@ export const VIEWS: readonly ViewDefinition[] = [
     ),
   },
   {
+    id: "canvas",
+    label: "Canvas",
+    icon: PenLine,
+    component: lazy(() =>
+      import("./canvas/CanvasView").then((module) => ({ default: module.CanvasView })),
+    ),
+  },
+  {
     id: "dashboard",
     label: "Dashboard",
     icon: LayoutDashboard,
@@ -135,6 +145,7 @@ const HIDDEN_IN_SIMPLE: readonly ViewId[] = [
   "table",
   "map",
   "graph",
+  "canvas",
   "kanban",
   "calendar",
   "timeline",

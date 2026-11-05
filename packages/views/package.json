@@ -7,8 +7,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./views.css": "./src/views.css",
-    "./gates/m8": "./src/gates/m8.ts"
+    "./views.css": "./src/views.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
