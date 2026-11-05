@@ -5,3 +5,6 @@ declare module "*?url" {
   const url: string;
   export default url;
 }
+interface ImportMeta {
+  readonly env: { readonly MODE: string };
+}

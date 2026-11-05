@@ -16,6 +16,7 @@ import type {
   Conflict_Serialize,
   FacetBucket,
   FieldRow,
+  GraphData,
   Id,
   MirrorStatus,
   ObjectRow_Serialize,
@@ -59,6 +60,7 @@ export const keys = {
   aggregate: (aggregate: AggregateQuery_Deserialize) => [VAULT, "aggregate", aggregate] as const,
   dataProfile: (query: Query_Deserialize, fields: readonly string[]) =>
     [VAULT, "data-profile", query, fields] as const,
+  graph: (query: Query_Deserialize, limit: number) => [VAULT, "graph", query, limit] as const,
   facets: (query: Query_Deserialize, field: string) => [VAULT, "facets", query, field] as const,
   views: () => [VAULT, "views"] as const,
   view: (id: Id) => [VAULT, "view", id] as const,
@@ -232,6 +234,18 @@ export function useDataProfile(query: Query_Deserialize | null, fields: readonly
     queryKey: keys.dataProfile(query ?? {}, fields),
     queryFn: () => unwrap(commands.dataProfile(query ?? {}, [...fields])),
     enabled: query !== null,
+  });
+}
+
+/**
+ * A query's results as a graph (ADR-0034). Structural sharing keeps each array identical when nothing in
+ * it changed, so the view can tell a renamed node from a new one without comparing them itself.
+ */
+export function useGraph(query: Query_Deserialize, limit: number) {
+  return useQuery<GraphData>({
+    queryKey: keys.graph(query, limit),
+    queryFn: () => unwrap(commands.graphRead(query, limit)),
+    placeholderData: keepPreviousData,
   });
 }
 

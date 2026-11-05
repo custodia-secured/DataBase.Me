@@ -41,4 +41,5 @@ other.
 | [0031](0031-the-view-framework.md)                   | The view framework                                           | Proposed |
 | [0032](0032-charts-and-aggregates.md)                | Charts and aggregates                                        | Proposed |
 | [0033](0033-the-map.md)                              | The map: land from the app, and a file on this device        | Proposed |
+| [0034](0034-the-graph.md)                            | The graph: WebGL, a paced layout and a list                  | Proposed |
 | [0035](0035-the-canvas.md)                           | The canvas: Excalidraw, with no network                      | Proposed |

@@ -756,6 +756,127 @@
   min-width: 10rem;
 }
 
+/* --- The Graph (M8) ----------------------------------------------------------------------- */
+
+.dbme-graph {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+  min-height: 0;
+  padding: var(--dbme-space-3);
+}
+
+.dbme-graph__count {
+  margin: 0;
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.875rem;
+}
+
+.dbme-graph__stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 14rem;
+}
+
+.dbme-graph__host {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-graph__host:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-graph__tools {
+  position: absolute;
+  top: var(--dbme-space-2);
+  right: var(--dbme-space-2);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--dbme-space-1);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+}
+
+.dbme-graph__selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbme-space-2);
+  font-size: 0.875rem;
+}
+
+.dbme-graph__selected-name {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.dbme-graph__key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbme-space-2) var(--dbme-space-4);
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.8125rem;
+}
+
+.dbme-graph__key p {
+  margin: 0;
+}
+
+.dbme-graph__types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-1) var(--dbme-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dbme-graph__types li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dbme-space-1);
+}
+
+.dbme-graph__swatch {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+}
+
+.dbme-graph__list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+  min-height: 0;
+}
+
+.dbme-graph__nearby {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+  max-height: 40%;
+  overflow: auto;
+}
+
+.dbme-graph__nearby-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 /* --- The filter editor (M8) ------------------------------------------------- */
 
 .dbme-filter {

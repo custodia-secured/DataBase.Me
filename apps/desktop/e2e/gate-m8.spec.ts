@@ -27,19 +27,6 @@ async function run(page: import("@playwright/test").Page, query: string, timeout
   return gate;
 }
 
-test("1c: Sigma draws 100,000 nodes", async ({ page }) => {
-  test.slow();
-  const gate = await run(page, "gate=graph&nodes=100000", 170_000);
-  expect(gate.nodes).toBe(100_000);
-  expect(gate.ink).toBe(true);
-});
-
-test("1c: ForceAtlas2 in a worker of ours", async ({ page }) => {
-  test.slow();
-  const gate = await run(page, "gate=layout&nodes=100000", 170_000);
-  expect(gate.moved).toBe(1);
-});
-
 test("1d: Excalidraw", async ({ page }) => {
   const gate = await run(page, "gate=canvas");
   expect(gate.elements).toBe(2);

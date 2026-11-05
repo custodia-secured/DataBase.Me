@@ -12,6 +12,8 @@
   --dbme-map-sea: #dbe6ee;
   --dbme-map-land: #f1efe6;
   --dbme-map-line: #b9bfb4;
+  --dbme-graph-relation: #57606a;
+  --dbme-graph-parent: #8c959f;
   --dbme-chart-1: #2a78d6;
   --dbme-chart-2: #eb6834;
   --dbme-chart-3: #1baf7a;
@@ -54,6 +56,8 @@
     --dbme-map-sea: #10171f;
     --dbme-map-land: #262d35;
     --dbme-map-line: #47505a;
+    --dbme-graph-relation: #9aa4ae;
+    --dbme-graph-parent: #6e7781;
     --dbme-chart-1: #3987e5;
     --dbme-chart-2: #d95926;
     --dbme-chart-3: #199e70;
@@ -80,6 +84,8 @@
   --dbme-map-sea: #10171f;
   --dbme-map-land: #262d35;
   --dbme-map-line: #47505a;
+  --dbme-graph-relation: #9aa4ae;
+  --dbme-graph-parent: #6e7781;
   --dbme-chart-1: #3987e5;
   --dbme-chart-2: #d95926;
   --dbme-chart-3: #199e70;

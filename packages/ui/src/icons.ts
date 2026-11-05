@@ -74,6 +74,7 @@ export {
   TextQuote,
   Trash2,
   Undo2,
+  Waypoints,
   X,
   ZoomIn,
   ZoomOut,

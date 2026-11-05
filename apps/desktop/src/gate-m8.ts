@@ -4,7 +4,7 @@
  * the e2e server serves it with the app's real CSP. It goes when the views that replace each gate
  * land.
  */
-import { runGate, type GateName } from "@databaseme/views/gates/m8";
+import { runGate } from "@databaseme/views/gates/m8";
 import "./gate-m8.css";
 
 declare global {
@@ -13,10 +13,9 @@ declare global {
   }
 }
 
-const params = new URLSearchParams(location.search);
 const root = document.getElementById("gate-root");
 if (!root) throw new Error("no gate root");
-runGate((params.get("gate") ?? "") as GateName, root, params).then(
+runGate(root).then(
   (result) => {
     window.__gate = { done: true, ...result };
   },

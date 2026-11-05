@@ -32,6 +32,7 @@ export {
   useQueryCount,
   useAggregate,
   useDataProfile,
+  useGraph,
   useQueryResults,
   useSearch,
   useSettings,
