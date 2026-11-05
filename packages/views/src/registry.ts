@@ -33,6 +33,8 @@ export interface ViewDefinition {
   label: string;
   icon: LucideIcon;
   component: ComponentType<ViewProps>;
+  /** Always a tab in the pane; the rest are in its "More views" menu until one is chosen (M8). */
+  pinned?: boolean;
 }
 
 const DOCUMENT: ViewDefinition = {
@@ -40,14 +42,15 @@ const DOCUMENT: ViewDefinition = {
   label: "Document",
   icon: DocumentIcon,
   component: DocumentView,
+  pinned: true,
 };
 
 export const VIEWS: readonly ViewDefinition[] = [
   DOCUMENT,
-  { id: "outline", label: "Outline", icon: ListTree, component: OutlineView },
-  { id: "table", label: "Table", icon: Table2, component: TableView },
-  { id: "gallery", label: "Gallery", icon: LayoutGrid, component: GalleryView },
-  { id: "mindmap", label: "Mind map", icon: Network, component: MindMapView },
+  { id: "outline", label: "Outline", icon: ListTree, component: OutlineView, pinned: true },
+  { id: "table", label: "Table", icon: Table2, component: TableView, pinned: true },
+  { id: "gallery", label: "Gallery", icon: LayoutGrid, component: GalleryView, pinned: true },
+  { id: "mindmap", label: "Mind map", icon: Network, component: MindMapView, pinned: true },
 ];
 
 export function viewById(id: ViewId): ViewDefinition {

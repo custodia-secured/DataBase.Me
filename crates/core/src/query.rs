@@ -21,7 +21,7 @@ pub const MAX_SEARCH: usize = 1000;
 
 /// The built-in columns a condition or a sort may name, each written with a leading `$` so that
 /// it can never be confused with a field key.
-pub const COLUMNS: [&str; 10] = [
+pub const COLUMNS: [&str; 11] = [
     "$title",
     "$summary",
     "$created_at",
@@ -32,6 +32,7 @@ pub const COLUMNS: [&str; 10] = [
     "$sensitivity",
     "$geo_lat",
     "$geo_lon",
+    "$parent_id",
 ];
 
 /// The columns a query may sort by as a field: those with no [`SortBy`] of their own.

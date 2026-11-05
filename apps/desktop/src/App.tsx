@@ -27,9 +27,11 @@ import {
   Button,
   Columns2,
   Dialog,
+  Ellipsis,
   FolderInput,
   FolderSync,
   IconButton,
+  Menu,
   PanelLeft,
   Redo2,
   Search,
@@ -54,6 +56,7 @@ import {
   ResultsView,
   Sidebar,
   useMode,
+  ViewBoundary,
   viewById,
   visibleViews,
   type Mode,
@@ -660,17 +663,21 @@ function Pane({
     views.find((candidate) => candidate.id === chosenId) ?? views[0] ?? viewById("document");
   const viewId = view.id;
   const View = view.component;
+  // The pinned views are tabs, and the rest wait in the menu until one is chosen (M8): thirteen tabs
+  // fit no window, and none at 360 px.
+  const shown = views.filter((candidate) => candidate.pinned === true || candidate.id === viewId);
+  const more = views.filter((candidate) => candidate.pinned !== true);
 
   const onKeyDown = (event: KeyboardEvent) => {
-    const at = views.findIndex((candidate) => candidate.id === viewId);
+    const at = shown.findIndex((candidate) => candidate.id === viewId);
     const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
     let next = at + step;
     if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = views.length - 1;
+    else if (event.key === "End") next = shown.length - 1;
     else if (step === 0) return;
     event.preventDefault();
-    next = (next + views.length) % views.length;
-    const target = views[next];
+    next = (next + shown.length) % shown.length;
+    const target = shown[next];
     if (!target) return;
     setView(index, target.id);
     tabs.current[next]?.focus();
@@ -678,34 +685,49 @@ function Pane({
 
   return (
     <section className="pane" aria-label={index === 0 ? "Main pane" : "Second pane"}>
-      <div className="pane__tabs" role="tablist" aria-label="Views" onKeyDown={onKeyDown}>
-        {views.map((candidate, i) => {
-          const Icon = candidate.icon;
-          const chosen = candidate.id === viewId;
-          return (
-            <button
-              key={candidate.id}
-              ref={(button) => {
-                tabs.current[i] = button;
-              }}
-              type="button"
-              role="tab"
-              id={`${base}-tab-${candidate.id}`}
-              aria-selected={chosen}
-              aria-label={candidate.label}
-              title={candidate.label}
-              aria-controls={`${base}-panel`}
-              tabIndex={chosen ? 0 : -1}
-              className="pane__tab"
-              onClick={() => {
+      <div className="pane__views">
+        <div className="pane__tabs" role="tablist" aria-label="Views" onKeyDown={onKeyDown}>
+          {shown.map((candidate, i) => {
+            const Icon = candidate.icon;
+            const chosen = candidate.id === viewId;
+            return (
+              <button
+                key={candidate.id}
+                ref={(button) => {
+                  tabs.current[i] = button;
+                }}
+                type="button"
+                role="tab"
+                id={`${base}-tab-${candidate.id}`}
+                aria-selected={chosen}
+                aria-label={candidate.label}
+                title={candidate.label}
+                aria-controls={`${base}-panel`}
+                tabIndex={chosen ? 0 : -1}
+                className="pane__tab"
+                onClick={() => {
+                  setView(index, candidate.id);
+                }}
+              >
+                <Icon aria-hidden="true" size={16} />
+                <span>{candidate.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {more.length > 0 ? (
+          <Menu
+            label="More views"
+            icon={Ellipsis}
+            items={more.map((candidate) => ({
+              label: candidate.label,
+              icon: candidate.icon,
+              onSelect: () => {
                 setView(index, candidate.id);
-              }}
-            >
-              <Icon aria-hidden="true" size={16} />
-              <span>{candidate.label}</span>
-            </button>
-          );
-        })}
+              },
+            }))}
+          />
+        ) : null}
       </div>
       {object.data?.deleted_at != null ? (
         <div className="pane__trashed">
@@ -727,7 +749,9 @@ function Pane({
         id={`${base}-panel`}
         aria-labelledby={`${base}-tab-${view.id}`}
       >
-        <View objectId={objectId} onOpen={onOpen} />
+        <ViewBoundary key={view.id}>
+          <View objectId={objectId} onOpen={onOpen} />
+        </ViewBoundary>
       </div>
     </section>
   );

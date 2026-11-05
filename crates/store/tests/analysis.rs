@@ -431,6 +431,34 @@ fn the_dsl_reads_geo_and_sorts_by_event_columns() {
 }
 
 #[test]
+fn the_dsl_names_a_parent() {
+    let world = world();
+    let read = world.t.vault.read();
+    let home = read
+        .query(&Query {
+            conditions: vec![Condition {
+                field: "$parent_id".into(),
+                op: Compare::IsEmpty,
+                value: Value::Null,
+            }],
+            ..Query::default()
+        })
+        .unwrap();
+    assert_eq!(home.len(), 1, "only Home is at the top level");
+    let children = read
+        .query(&Query {
+            conditions: vec![Condition {
+                field: "$parent_id".into(),
+                op: Compare::Eq,
+                value: json!(home[0].object.id.to_string()),
+            }],
+            ..Query::default()
+        })
+        .unwrap();
+    assert_eq!(children.len(), 5);
+}
+
+#[test]
 fn a_sort_cannot_name_a_column_with_its_own_order() {
     let world = world();
     let query = Query {

@@ -200,12 +200,20 @@ h3 {
   min-height: 0;
 }
 
+.pane__views {
+  display: flex;
+  align-items: center;
+  padding-right: var(--dbme-space-2);
+  border-bottom: 1px solid var(--dbme-color-border);
+}
+
 .pane__tabs {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: var(--dbme-space-1);
   padding: var(--dbme-space-1) var(--dbme-space-2);
   overflow-x: auto;
-  border-bottom: 1px solid var(--dbme-color-border);
 }
 
 .pane__tab {
