@@ -1,0 +1,9 @@
+{
+  "name": "@excalidraw/mermaid-to-excalidraw",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Stands in for Excalidraw's optional Mermaid importer, which DataBase.Me does not offer (ADR-0035). pnpm-workspace.yaml overrides the real package with this folder, so Mermaid and what it brings are not installed.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": "./index.js"
+}

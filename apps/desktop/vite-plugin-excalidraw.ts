@@ -8,8 +8,9 @@
  *   library stops having it, so an upgrade cannot quietly bring it back.
  * - The fonts are copied into the build. Xiaolai (CJK) is left out: it is 13 MB of the 13.5 MB, and
  *   CJK text falls back to the system's fonts.
- * - The optional Mermaid importer, with Mermaid, KaTeX and Cytoscape behind it, is replaced by an
- *   empty module (see `src/excalidraw-no-mermaid.ts`): the plan does not offer it.
+ *
+ * The optional Mermaid importer is not here: `pnpm-workspace.yaml` overrides it with an empty package,
+ * so neither it nor what it brings is installed.
  */
 import { cpSync, existsSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -29,7 +30,6 @@ const FONTS = [
 ];
 // The literal holds a nested template (the package and its version), so it ends at its known tail.
 const CDN = /`https:\/\/esm\.sh\/[\s\S]*?\/dist\/prod\/`/;
-const MERMAID = "@excalidraw/mermaid-to-excalidraw";
 
 export function excalidrawOffline(): Plugin {
   let outDir = "";
@@ -39,11 +39,6 @@ export function excalidrawOffline(): Plugin {
     enforce: "pre",
     configResolved(config) {
       outDir = path.resolve(config.root, config.build.outDir);
-    },
-    resolveId(source) {
-      if (source === MERMAID)
-        return path.resolve(import.meta.dirname, "src/excalidraw-no-mermaid.ts");
-      return null;
     },
     transform(code, id) {
       if (!id.includes("@excalidraw") || !code.includes("ASSETS_FALLBACK_URL")) return null;

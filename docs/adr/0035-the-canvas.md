@@ -29,7 +29,10 @@ Excalidraw stays, pinned to an exact version, with a Vite plugin in the app
    fallback in a build that loads Excalidraw, so an upgrade cannot bring it back unnoticed.
 2. **Copies the fonts into the build, without Xiaolai.** Xiaolai, the CJK face, is 13 MB of the
    13.5 MB. CJK text on a canvas falls back to the system's fonts.
-3. **Replaces the Mermaid importer with an empty module,** and the app does not offer its dialog.
+3. **Keeps the Mermaid importer out.** `pnpm-workspace.yaml` overrides it with an empty package in
+   `patches/no-mermaid`, so Mermaid, KaTeX, Cytoscape and what they bring are not even installed, and
+   the app does not offer the dialog. (The first run on CI found one of them, `khroma`, with a licence
+   `pnpm` reads as "Unknown" there: a package the app did not ship was failing its check.)
 
 With these, the e2e build goes from 32 MB to 9 MB, the gate records no CSP report, and no file in the
 build names the CDN.
