@@ -46,6 +46,7 @@ export {
   ChartGantt,
   Columns2,
   Ellipsis,
+  LayoutDashboard,
   FileText as DocumentIcon,
   FolderInput,
   FolderSync,

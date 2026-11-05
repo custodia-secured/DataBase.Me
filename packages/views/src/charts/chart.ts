@@ -338,11 +338,14 @@ function slotsOf(chart: ResolvedChart, names: readonly string[]): (number | null
 /** What the store returned, as what a chart and a table show. */
 export function chartData(chart: ResolvedChart, result: AggregateResult | undefined): ChartData {
   const { x, series, bin, measure } = chart;
-  const raw = (result?.rows ?? []).map((row) => ({
-    xKey: row.keys[0] ?? null,
-    seriesKey: series ? (row.keys[1] ?? null) : null,
-    value: row.values[0] ?? null,
-  }));
+  // A date field can hold what is not a date, from a file, and that has no place on an axis of time.
+  const raw = (result?.rows ?? [])
+    .map((row) => ({
+      xKey: row.keys[0] ?? null,
+      seriesKey: series ? (row.keys[1] ?? null) : null,
+      value: row.values[0] ?? null,
+    }))
+    .filter(({ xKey }) => !isDate(x) || xKey !== null);
 
   // The axis: periods in order with the empty ones between, values in order, else largest first.
   const totals = new Map<string, number>();

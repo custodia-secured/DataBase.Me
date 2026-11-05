@@ -623,6 +623,70 @@
   text-align: end;
 }
 
+/* --- Dashboard (M8) -------------------------------------------------------- */
+
+.dbme-dashboard {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dbme-dashboard__grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-auto-rows: 24rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--dbme-space-3);
+  min-height: 0;
+  overflow: auto;
+}
+
+.dbme-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--dbme-space-1) var(--dbme-space-3) var(--dbme-space-2);
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-tile.is-wide {
+  grid-column: 1 / -1;
+}
+
+.dbme-tile__head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--dbme-space-2);
+}
+
+.dbme-tile__title {
+  flex: 1 1 auto;
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dbme-tile__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 767px) {
+  .dbme-dashboard__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* --- The filter editor (M8) ------------------------------------------------- */
 
 .dbme-filter {

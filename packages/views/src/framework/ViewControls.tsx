@@ -38,6 +38,7 @@ export function ViewControls<O>({
   objectId,
   renderer,
   alternative = false,
+  bare = false,
   saveWith,
   children,
 }: {
@@ -47,6 +48,8 @@ export function ViewControls<O>({
   renderer: string;
   /** Whether the view has an accessible alternative to switch to. */
   alternative?: boolean;
+  /** Whether it lists nothing of its own, so has no source to choose or filter. */
+  bare?: boolean;
   /** What a saved view keeps beside its settings. */
   saveWith?: () => Pick<SavedConfig<O>, "spec">;
   children?: ReactNode;
@@ -55,15 +58,17 @@ export function ViewControls<O>({
   const switchId = useId();
   return (
     <div className="dbme-view-bar">
-      <SourcePicker
-        objectId={objectId}
-        source={state.listing.source}
-        onChange={(source) => {
-          // Another source has other fields, so what filtered this one may mean nothing there.
-          state.setListing({ source, conditions: [] });
-        }}
-      />
-      {organizing ? (
+      {bare ? null : (
+        <SourcePicker
+          objectId={objectId}
+          source={state.listing.source}
+          onChange={(source) => {
+            // Another source has other fields, so what filtered this one may mean nothing there.
+            state.setListing({ source, conditions: [] });
+          }}
+        />
+      )}
+      {organizing && !bare ? (
         <FilterButton
           listing={state.listing}
           onChange={(conditions) => {

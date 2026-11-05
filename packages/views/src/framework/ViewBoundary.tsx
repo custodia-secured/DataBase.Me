@@ -8,7 +8,7 @@ import { StatusMessage } from "@databaseme/ui";
 import { Component, Suspense, type ErrorInfo, type ReactNode } from "react";
 import { reportError } from "../actions";
 
-class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+class Boundary extends Component<{ quiet: boolean; children: ReactNode }, { failed: boolean }> {
   override state = { failed: false };
 
   static getDerivedStateFromError() {
@@ -17,7 +17,7 @@ class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
 
   override componentDidCatch(error: unknown, info: ErrorInfo) {
     console.error(error, info.componentStack);
-    reportError(error);
+    if (!this.props.quiet) reportError(error);
   }
 
   override render() {
@@ -28,9 +28,16 @@ class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   }
 }
 
-export function ViewBoundary({ children }: { children: ReactNode }) {
+export function ViewBoundary({
+  quiet = false,
+  children,
+}: {
+  /** Says so here and nowhere else: a dashboard's tile, where the rest of the page is still fine. */
+  quiet?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <Boundary>
+    <Boundary quiet={quiet}>
       <Suspense fallback={<StatusMessage>Loading…</StatusMessage>}>{children}</Suspense>
     </Boundary>
   );

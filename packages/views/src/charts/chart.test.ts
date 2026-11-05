@@ -235,6 +235,18 @@ describe("the rows", () => {
     expect(data.categories).toHaveLength(2);
   });
 
+  it("leave out of a time axis what is not a date", () => {
+    const data = chartData(
+      resolved({ x: "due" }),
+      result([
+        [[null], 4],
+        [["2026-11"], 2],
+      ]),
+    );
+    expect(data.categories).toEqual(["Nov 2026"]);
+    expect(data.table).toHaveLength(1);
+  });
+
   it("say when the store had more than a chart asks for", () => {
     expect(chartData(resolved({}), result([[["todo"], 1]], true)).truncated).toBe(true);
     expect(chartData(resolved({}), result([[["todo"], 1]])).truncated).toBe(false);
