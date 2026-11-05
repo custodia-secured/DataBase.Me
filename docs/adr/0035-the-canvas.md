@@ -113,6 +113,8 @@ for nothing.
 - **Migration 5 means 0.1 refuses a vault that has been opened by this version.** That is what a schema
   version is for (FORMAT.md §9), and 0.1 has not been published.
 - A picture does not last, which a person can find surprising, so the view says so on the spot.
+- A card is drawn over the canvas, not in it, so anything drawn under or above it in the stack is hidden
+  where they overlap. Moving one of them is the way round it. Excalidraw draws every embed this way.
 - What is hidden is hidden by Excalidraw's class names and test IDs. An upgrade that renames one brings the
   control back, and `canvas.spec.ts` is what notices.
 - Every change the scene reports compares every element with what is stored. **Not measured** at thousands
