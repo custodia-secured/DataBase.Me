@@ -427,32 +427,41 @@ impl Reader<'_> {
             .optional()?)
     }
 
-    /// The cards that show an object, on any canvas.
+    /// The cards that show an object, on any canvas, in id order.
+    ///
+    /// Deleting an object asks this of every object it deletes, and nearly always nothing is
+    /// there, so the order is made here and not by an `ORDER BY`: SQLite opens a sorter for one
+    /// on every run, empty or not, which cost 10,000 deletes about 100 ms (M8, PR #26).
     pub(crate) fn canvas_cards_of(&self, object_id: Id) -> Result<Vec<CanvasItemRow>> {
-        collect(
+        let mut cards = collect(
             self.conn,
             concat!(
                 "SELECT ",
                 canvas_item_columns!(),
-                " FROM canvas_items WHERE object_id = ?1 ORDER BY id"
+                " FROM canvas_items WHERE object_id = ?1"
             ),
             [object_id.to_string()],
             canvas_item_row,
-        )
+        )?;
+        cards.sort_unstable_by_key(|card| card.id);
+        Ok(cards)
     }
 
-    /// The saved views that belong to an object, canvases included.
+    /// The saved views that belong to an object, canvases included, in id order. Sorted here
+    /// for the reason `canvas_cards_of` gives.
     pub(crate) fn views_owned_by(&self, owner: Id) -> Result<Vec<ViewRow>> {
-        collect(
+        let mut views = collect(
             self.conn,
             concat!(
                 "SELECT ",
                 view_columns!(),
-                " FROM views WHERE owner_object_id = ?1 ORDER BY id"
+                " FROM views WHERE owner_object_id = ?1"
             ),
             [owner.to_string()],
             view_row,
-        )
+        )?;
+        views.sort_unstable_by_key(|view| view.id);
+        Ok(views)
     }
 
     /// Where an object came from: its provenance rows, oldest first (ADR-0026).
