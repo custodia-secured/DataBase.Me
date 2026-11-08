@@ -14,8 +14,9 @@ use serde_json::Value;
 use dbme_core::block::{self, MENTIONS};
 use dbme_core::chain::OpEntry;
 use dbme_core::model::{
-    AttachmentRole, AttachmentRow, BlockRow, FieldKind, FieldRow, ObjectRow, ObjectTypeRow, Props,
-    ProvenanceRow, RelationRow, Sensitivity, TypeRow, ViewRow, key_from_label,
+    AttachmentRole, AttachmentRow, BlockRow, CANVAS_RENDERER, CanvasItemRow, FieldKind, FieldRow,
+    ObjectRow, ObjectTypeRow, Props, ProvenanceRow, RelationRow, Sensitivity, TypeRow, ViewRow,
+    key_from_label,
 };
 use dbme_core::op::{Action, Entity, Op, OpBody, OpKind, Row, RowKey};
 use dbme_core::query::Query;
@@ -230,6 +231,24 @@ pub struct NewView {
     pub owner_object_id: Option<Id>,
 }
 
+/// One element of a canvas, as the page has it: the columns of `canvas_items` the caller supplies
+/// (ADR-0035).
+#[allow(missing_docs, reason = "the columns of `canvas_items`")]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct CanvasItem {
+    pub item_id: String,
+    #[serde(default)]
+    pub object_id: Option<Id>,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub z: String,
+    pub style_json: Value,
+}
+
 /// A blob, already in the blob store, to attach to an object.
 #[allow(missing_docs, reason = "the columns of `attachments`")]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -424,9 +443,9 @@ impl<'v> Txn<'v> {
         let action = op.kind().action();
         match (entity, op.body()) {
             (Entity::Type | Entity::Field, _) => self.full_rewrite = true,
-            // Neither is in a file: views are the app's, and the files folder carries no
+            // None is in a file: views and canvases are the app's, and the files folder carries no
             // provenance (M5 Decision 1).
-            (Entity::View | Entity::Provenance, _) => {}
+            (Entity::View | Entity::CanvasItem | Entity::Provenance, _) => {}
             (Entity::Object, _) => {
                 let id = op.key().target_id();
                 self.mirror_touched.insert(id);
@@ -979,6 +998,12 @@ impl<'v> Txn<'v> {
                 for provenance in t.read().provenance_of(object.id)? {
                     t.apply(Op::delete(Row::Provenance(provenance)))?;
                 }
+                for card in t.read().canvas_cards_of(object.id)? {
+                    t.apply(Op::delete(Row::CanvasItem(card)))?;
+                }
+                for view in t.read().views_owned_by(object.id)? {
+                    t.remove_view(view)?;
+                }
                 for attachment in t.read().attachments(object.id)? {
                     t.apply(Op::delete(Row::Attachment(attachment)))?;
                 }
@@ -1386,7 +1411,87 @@ impl<'v> Txn<'v> {
     pub fn delete_view(&mut self, id: Id) -> Result<()> {
         self.guard(|t| {
             let view = t.read().view(id)?;
-            t.apply(Op::delete(Row::View(view)))
+            t.remove_view(view)
+        })
+    }
+
+    /// A view goes with whatever is on its canvas.
+    fn remove_view(&mut self, view: ViewRow) -> Result<()> {
+        for item in self.read().canvas_items(view.id)? {
+            self.apply(Op::delete(Row::CanvasItem(item)))?;
+        }
+        self.apply(Op::delete(Row::View(view)))
+    }
+
+    // Canvases.
+
+    /// Writes what changed on a page's canvas, all as one change, so one undo takes it all back.
+    /// The canvas's view is made by the first thing put on it. Removing an element that is not
+    /// there does nothing. Returns the view, or `None` if nothing was there and nothing came.
+    pub fn apply_to_canvas(
+        &mut self,
+        owner: Id,
+        upsert: Vec<CanvasItem>,
+        remove: Vec<String>,
+    ) -> Result<Option<Id>> {
+        self.guard(|t| {
+            t.live_object(owner)?;
+            let view_id = match t.read().canvas_view(owner)? {
+                Some(view) => view.id,
+                None if upsert.is_empty() => return Ok(None),
+                None => t.create_view(NewView {
+                    name: "Canvas".to_owned(),
+                    renderer: CANVAS_RENDERER.to_owned(),
+                    query: Query::default(),
+                    config: Value::Object(serde_json::Map::new()),
+                    owner_object_id: Some(owner),
+                })?,
+            };
+            for item in upsert {
+                match t.read().canvas_item(view_id, &item.item_id)? {
+                    Some(before) => {
+                        let mut after = before.clone();
+                        after.object_id = item.object_id;
+                        after.x = item.x;
+                        after.y = item.y;
+                        after.w = item.w;
+                        after.h = item.h;
+                        after.z = item.z;
+                        after.style_json = item.style_json;
+                        t.update(
+                            kind(Entity::CanvasItem, Action::Update)?,
+                            Row::CanvasItem(before),
+                            Row::CanvasItem(after),
+                        )?;
+                    }
+                    None => {
+                        if let Some(object) = item.object_id {
+                            t.live_object(object)?;
+                        }
+                        let id = t.new_id()?;
+                        t.apply(Op::create(Row::CanvasItem(CanvasItemRow {
+                            id,
+                            view_id,
+                            item_id: item.item_id,
+                            object_id: item.object_id,
+                            x: item.x,
+                            y: item.y,
+                            w: item.w,
+                            h: item.h,
+                            z: item.z,
+                            style_json: item.style_json,
+                            created_at: t.ts,
+                            updated_at: t.ts,
+                        })))?;
+                    }
+                }
+            }
+            for item_id in remove {
+                if let Some(item) = t.read().canvas_item(view_id, &item_id)? {
+                    t.apply(Op::delete(Row::CanvasItem(item)))?;
+                }
+            }
+            Ok(Some(view_id))
         })
     }
 

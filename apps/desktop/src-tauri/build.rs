@@ -50,6 +50,8 @@ const COMMANDS: &[&str] = &[
     "object_rename",
     "object_set_event",
     "object_set_geo",
+    "canvas_read",
+    "canvas_apply",
     "map_file_set",
     "map_file_read",
     "object_set_prop",

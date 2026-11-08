@@ -24,6 +24,8 @@ use dbme_store::{BLOBS_FOLDER, StoreError, Vault, VaultMeta, VaultOptions};
 pub const SCHEMA_FILE: &str = "schema/types.json";
 /// One JSON file per saved view, named by the view's ID.
 pub const VIEWS_DIR: &str = "views";
+/// Where a full or plain export writes each canvas, as read-only JSON (FORMAT.md §6.4).
+pub const CANVAS_DIR: &str = "canvas";
 /// One CSV per type, named by the type.
 pub const DATA_DIR: &str = "data";
 /// The `vault_meta` table as an object (full export).
@@ -98,6 +100,8 @@ pub struct ExportReport {
     pub types: usize,
     /// Files under `views/`.
     pub views: usize,
+    /// Files under `canvas/`.
+    pub canvases: usize,
     /// Rows across every CSV (an object with two types is counted twice).
     pub objects: usize,
     /// Lines of `ops.jsonl`, for a full export.
@@ -131,6 +135,13 @@ pub fn export(vault: &Vault, dir: &Path, full: bool) -> Result<ExportReport> {
     for view in read.views()? {
         write_json(&views_dir.join(format!("{}.json", view.id)), &view)?;
         report.views += 1;
+        let items = read.canvas_items(view.id)?;
+        if !items.is_empty() {
+            let canvas_dir = dir.join(CANVAS_DIR);
+            fs::create_dir_all(&canvas_dir).map_err(io("creating", &canvas_dir))?;
+            write_json(&canvas_dir.join(format!("{}.json", view.id)), &items)?;
+            report.canvases += 1;
+        }
     }
 
     // data/<Type>.csv

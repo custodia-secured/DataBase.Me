@@ -11,7 +11,7 @@ use dbme_api::Reply;
 use dbme_core::Id;
 use dbme_core::model::{AttachmentRole, FieldKind, Props};
 use dbme_store::{
-    NewAttachment, NewBlock, NewField, NewObject, NewType, Position, StoreError, Txn,
+    NewAttachment, NewBlock, NewField, NewObject, NewRelation, NewType, Position, StoreError, Txn,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -26,6 +26,8 @@ pub(crate) enum Seed {
         types: Vec<SeedType>,
         objects: Vec<SeedObject>,
     },
+    /// `count` objects under a new top-level parent, each with a relation or two to one before it.
+    Graph { count: u32, parent_title: String },
     /// `count` objects of a new type with four fields, under a new top-level parent.
     Bulk {
         count: u32,
@@ -93,10 +95,14 @@ pub(crate) fn run(session: &dbme_api::Session, seed: Seed) -> Reply<Value> {
                 collect_covers(vault, objects, &mut covers)?;
                 covers
             }
-            Seed::Bulk { .. } => BTreeMap::new(),
+            Seed::Graph { .. } | Seed::Bulk { .. } => BTreeMap::new(),
         };
         let (ids, _) = vault.transact(|txn| match seed {
             Seed::Tree { types, objects } => tree(txn, types, objects, &covers),
+            Seed::Graph {
+                count,
+                parent_title,
+            } => graph(txn, count, &parent_title),
             Seed::Bulk {
                 count,
                 type_name,
@@ -259,6 +265,42 @@ fn create_blocks(
         create_blocks(txn, object_id, Some(id), block.children, ids)?;
     }
     Ok(())
+}
+
+/// The graph budget's shape, as M8's gate 1c had it: each object joined to a couple before it.
+fn graph(txn: &mut Txn<'_>, count: u32, parent_title: &str) -> Result<Value, StoreError> {
+    let parent_id = txn.create_object(NewObject {
+        title: parent_title.to_owned(),
+        ..Default::default()
+    })?;
+    let mut ids = Vec::with_capacity(count as usize);
+    for n in 0..count {
+        ids.push(txn.create_object(NewObject {
+            title: format!("Node {:06}", n + 1),
+            parent_id: Some(parent_id),
+            position: Position::Last,
+            ..Default::default()
+        })?);
+    }
+    for n in 1..count as usize {
+        // An earlier object that looks picked at random but is the same every time (Knuth's multiplier).
+        let mut targets = vec![(n.wrapping_mul(2_654_435_761) >> 7) % n];
+        if n > 2 {
+            targets.push(n >> 1);
+        }
+        for target in targets {
+            txn.create_relation(NewRelation {
+                src_id: ids[n],
+                dst_id: ids[target],
+                rel_type: "relates_to".into(),
+                field_id: None,
+                src_block_id: None,
+                label: None,
+                props: Props::new(),
+            })?;
+        }
+    }
+    Ok(json!({ "parent_id": parent_id }))
 }
 
 const STATUSES: [&str; 3] = ["todo", "doing", "done"];

@@ -49,14 +49,14 @@ fn an_object(vault: &mut Vault, title: &str) -> Id {
 }
 
 #[test]
-fn a_new_vault_is_at_schema_version_4() {
+fn a_new_vault_is_at_schema_version_5() {
     let t = new_vault();
-    assert_eq!(SCHEMA_VERSION, 4);
-    assert_eq!(user_version(&t), 4);
+    assert_eq!(SCHEMA_VERSION, 5);
+    assert_eq!(user_version(&t), 5);
     let report = t.vault.verify(true).unwrap();
     assert!(report.is_ok(), "{:#?}", report.problems);
-    assert_eq!(report.ops, 25, "migrations 3 and 4 write no ops");
-    assert_eq!(report.schema_version, 4);
+    assert_eq!(report.ops, 25, "migrations 3, 4 and 5 write no ops");
+    assert_eq!(report.schema_version, 5);
 }
 
 #[test]
@@ -69,13 +69,13 @@ fn a_version_2_vault_migrates_and_keeps_its_objects() {
         let raw = t.raw();
         raw.execute_batch(
             "DROP TABLE mirror_state; DROP TABLE mirror_dirty; DROP TABLE mirror_meta; \
-             DROP TABLE conflicts; DROP TABLE provenance; PRAGMA user_version = 2",
+             DROP TABLE conflicts; DROP TABLE provenance; DROP TABLE canvas_items; \n             PRAGMA user_version = 2",
         )
         .unwrap();
     }
     assert_eq!(user_version(&t), 2);
     let t = t.reopen();
-    assert_eq!(user_version(&t), 4);
+    assert_eq!(user_version(&t), 5);
     assert_eq!(common::snapshot(&t.path), before);
     assert_eq!(t.vault.read().object(id).unwrap().title, "Kept");
     assert!(t.vault.mirror_states(None).unwrap().is_empty());

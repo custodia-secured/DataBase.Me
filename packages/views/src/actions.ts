@@ -6,6 +6,7 @@
 import {
   commands,
   unwrap,
+  type CanvasItem_Deserialize,
   type Id,
   type NewColumn_Deserialize,
   type NewObject_Deserialize,
@@ -110,6 +111,10 @@ export const actions = {
   },
   setGeo(id: Id, lat: number | null, lon: number | null) {
     return attempt(() => unwrap(commands.objectSetGeo(id, lat, lon)));
+  },
+  /** Writes what changed on a page's canvas, as one change. */
+  applyToCanvas(owner: Id, upsert: CanvasItem_Deserialize[], remove: string[]) {
+    return attempt(() => unwrap(commands.canvasApply(owner, upsert, remove)));
   },
   move(id: Id, parent: Id | null, position: Position) {
     return attempt(() => unwrap(commands.objectMove(id, parent, position)));

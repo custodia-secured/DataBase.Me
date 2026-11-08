@@ -113,6 +113,9 @@ jobs:
   desktop:
     name: Desktop (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # The longest green run took 12 minutes (Windows). Without a limit, a test that hangs holds a
+    # runner for GitHub's six hours, as one did on PR #26.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

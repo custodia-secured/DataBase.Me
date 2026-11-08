@@ -157,12 +157,19 @@ fn mutate(bytes: &mut Vec<u8>, mutation: &Mutation) {
                 .position(|b| *b == b'\n')
                 .map_or(n, |p| at + p + 1);
             let line = bytes[at..line_end].to_vec();
-            for _ in 0..*times {
+            // A last line with no newline makes `line` the rest of the file, and the next Repeat
+            // almost surely lands in what this one made, so without a cap the size multiplies
+            // with each one: on CI's Windows runner (PR #26) a case ran for 45 minutes.
+            let room = MAX_MUTATED.saturating_sub(bytes.len());
+            for _ in 0..(*times).min(room / line.len()) {
                 bytes.extend_from_slice(&line);
             }
         }
     }
 }
+
+/// The most a mutation grows a table to, as `arbitrary_bytes_never_panic` bounds its input.
+const MAX_MUTATED: usize = 65_536;
 
 proptest! {
     #![proptest_config(ProptestConfig {
@@ -188,6 +195,28 @@ proptest! {
         }
         check(&bytes)?;
     }
+}
+
+/// The worst case for growth: the last line loses its newline, then each mutation repeats that
+/// whole line as often as it can. Uncapped, the line grows 50 times over with each, to 50^7 times
+/// its length.
+#[test]
+fn mutations_keep_a_table_bounded() {
+    let mut bytes = std::fs::read(fixture("csv/people.csv")).unwrap();
+    let at = bytes.len() - 1;
+    mutate(&mut bytes, &Mutation::Truncate { at });
+    let last_line = bytes.iter().rposition(|b| *b == b'\n').unwrap() + 1;
+    for _ in 0..7 {
+        mutate(
+            &mut bytes,
+            &Mutation::Repeat {
+                at: last_line,
+                times: 49,
+            },
+        );
+    }
+    assert!(bytes.len() <= MAX_MUTATED, "{} bytes", bytes.len());
+    check(&bytes).unwrap();
 }
 
 #[test]

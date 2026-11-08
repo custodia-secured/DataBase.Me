@@ -7,8 +7,8 @@ use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use dbme_core::model::{
-    AttachmentRole, AttachmentRow, BlockRow, FieldKind, FieldRow, ObjectRow, ObjectTypeRow,
-    ProvenanceRow, RelationRow, Sensitivity, TypeRow, ViewRow,
+    AttachmentRole, AttachmentRow, BlockRow, CanvasItemRow, FieldKind, FieldRow, ObjectRow,
+    ObjectTypeRow, ProvenanceRow, RelationRow, Sensitivity, TypeRow, ViewRow,
 };
 use dbme_core::op::{Entity, Op, Row, RowKey};
 use dbme_core::{CoreError, Id};
@@ -48,6 +48,11 @@ macro_rules! view_columns {
         "id, name, renderer, query_json, config_json, owner_object_id, created_at, updated_at"
     };
 }
+macro_rules! canvas_item_columns {
+    () => {
+        "id, view_id, item_id, object_id, x, y, w, h, z, style_json, created_at, updated_at"
+    };
+}
 macro_rules! provenance_columns {
     () => {
         "id, object_id, source_kind, source_uri, import_run_id, original_blob, extractor, \
@@ -64,8 +69,8 @@ macro_rules! attachment_select {
     };
 }
 pub(crate) use {
-    attachment_select, block_columns, field_columns, object_columns, provenance_columns,
-    relation_columns, type_columns, view_columns,
+    attachment_select, block_columns, canvas_item_columns, field_columns, object_columns,
+    provenance_columns, relation_columns, type_columns, view_columns,
 };
 
 pub(crate) fn type_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TypeRow> {
@@ -168,6 +173,23 @@ pub(crate) fn attachment_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Attachme
     })
 }
 
+pub(crate) fn canvas_item_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<CanvasItemRow> {
+    Ok(CanvasItemRow {
+        id: sql::id(r, 0)?,
+        view_id: sql::id(r, 1)?,
+        item_id: r.get(2)?,
+        object_id: sql::optional_id(r, 3)?,
+        x: r.get(4)?,
+        y: r.get(5)?,
+        w: r.get(6)?,
+        h: r.get(7)?,
+        z: r.get(8)?,
+        style_json: sql::json(r, 9)?,
+        created_at: r.get(10)?,
+        updated_at: r.get(11)?,
+    })
+}
+
 pub(crate) fn provenance_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<ProvenanceRow> {
     Ok(ProvenanceRow {
         id: sql::id(r, 0)?,
@@ -249,6 +271,17 @@ pub(crate) fn load(conn: &Connection, key: &RowKey) -> Result<Option<Row>> {
             view_row,
         )?
         .map(Row::View),
+        RowKey::Id(Entity::CanvasItem, id) => by_id(
+            conn,
+            concat!(
+                "SELECT ",
+                canvas_item_columns!(),
+                " FROM canvas_items WHERE id = ?1"
+            ),
+            *id,
+            canvas_item_row,
+        )?
+        .map(Row::CanvasItem),
         RowKey::Provenance { id, .. } => by_id(
             conn,
             concat!(
@@ -382,6 +415,20 @@ fn values(row: &Row) -> Result<Vec<Value>> {
             r.created_at.into(),
             r.updated_at.into(),
         ],
+        Row::CanvasItem(r) => vec![
+            id(r.id),
+            id(r.view_id),
+            r.item_id.clone().into(),
+            optional_id(r.object_id),
+            r.x.into(),
+            r.y.into(),
+            r.w.into(),
+            r.h.into(),
+            r.z.clone().into(),
+            to_json(&r.style_json)?.into(),
+            r.created_at.into(),
+            r.updated_at.into(),
+        ],
         Row::Provenance(r) => vec![
             id(r.id),
             id(r.object_id),
@@ -450,6 +497,11 @@ fn insert(conn: &Connection, row: &Row) -> Result<()> {
             view_columns!(),
             ") VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
         ),
+        Entity::CanvasItem => concat!(
+            "INSERT INTO canvas_items (",
+            canvas_item_columns!(),
+            ") VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"
+        ),
         Entity::Provenance => concat!(
             "INSERT INTO provenance (",
             provenance_columns!(),
@@ -473,6 +525,7 @@ fn update(conn: &Connection, before: &Row, after: &Row) -> Result<()> {
         Row::Block(_) => ("blocks", block_columns!()),
         Row::Relation(_) => ("relations", relation_columns!()),
         Row::View(_) => ("views", view_columns!()),
+        Row::CanvasItem(_) => ("canvas_items", canvas_item_columns!()),
         Row::ObjectType(_) | Row::Attachment(_) => return Err(not_keyed_by_id(after.entity())),
         Row::Provenance(_) => {
             return Err(CoreError::invalid("row key", "provenance rows are never updated").into());
@@ -511,6 +564,7 @@ fn delete(conn: &Connection, key: &RowKey) -> Result<()> {
                 Entity::Block => "DELETE FROM blocks WHERE id = ?1",
                 Entity::Relation => "DELETE FROM relations WHERE id = ?1",
                 Entity::View => "DELETE FROM views WHERE id = ?1",
+                Entity::CanvasItem => "DELETE FROM canvas_items WHERE id = ?1",
                 Entity::ObjectType | Entity::Attachment | Entity::Provenance => {
                     return Err(not_keyed_by_id(*entity));
                 }

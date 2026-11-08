@@ -22,8 +22,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
 use crate::model::{
-    AttachmentRole, AttachmentRow, BlockRow, FieldRow, ObjectRow, ObjectTypeRow, ProvenanceRow,
-    RelationRow, TypeRow, ViewRow,
+    AttachmentRole, AttachmentRow, BlockRow, CanvasItemRow, FieldRow, ObjectRow, ObjectTypeRow,
+    ProvenanceRow, RelationRow, TypeRow, ViewRow,
 };
 use crate::{ContentHash, CoreError, Id};
 
@@ -40,11 +40,12 @@ pub enum Entity {
     Attachment,
     View,
     Provenance,
+    CanvasItem,
 }
 
 impl Entity {
     /// Every entity.
-    pub const ALL: [Entity; 9] = [
+    pub const ALL: [Entity; 10] = [
         Self::Type,
         Self::Field,
         Self::Object,
@@ -54,6 +55,7 @@ impl Entity {
         Self::Attachment,
         Self::View,
         Self::Provenance,
+        Self::CanvasItem,
     ];
 
     /// The name used in op kinds.
@@ -68,6 +70,7 @@ impl Entity {
             Self::Attachment => "attachment",
             Self::View => "view",
             Self::Provenance => "provenance",
+            Self::CanvasItem => "canvas_item",
         }
     }
 
@@ -77,7 +80,10 @@ impl Entity {
 
     /// Whether the table has an `updated_at` column, which every update sets to the op's time.
     pub fn has_updated_at(self) -> bool {
-        matches!(self, Self::Type | Self::Object | Self::Block | Self::View)
+        matches!(
+            self,
+            Self::Type | Self::Object | Self::Block | Self::View | Self::CanvasItem
+        )
     }
 }
 
@@ -222,6 +228,9 @@ impl OpKind {
                 "config_json",
                 "owner_object_id",
             ],
+            (Entity::CanvasItem, Action::Update) => {
+                &["object_id", "x", "y", "w", "h", "z", "style_json"]
+            }
             (_, Action::Trash | Action::Restore) => &["deleted_at"],
             _ => &[],
         }
@@ -319,6 +328,7 @@ pub enum Row {
     Attachment(AttachmentRow),
     View(ViewRow),
     Provenance(ProvenanceRow),
+    CanvasItem(CanvasItemRow),
 }
 
 fn to_map<T: Serialize>(row: &T) -> Result<Map<String, Value>, CoreError> {
@@ -344,6 +354,7 @@ impl Row {
             Self::Attachment(_) => Entity::Attachment,
             Self::View(_) => Entity::View,
             Self::Provenance(_) => Entity::Provenance,
+            Self::CanvasItem(_) => Entity::CanvasItem,
         }
     }
 
@@ -356,6 +367,7 @@ impl Row {
             Self::Block(r) => RowKey::Id(Entity::Block, r.id),
             Self::Relation(r) => RowKey::Id(Entity::Relation, r.id),
             Self::View(r) => RowKey::Id(Entity::View, r.id),
+            Self::CanvasItem(r) => RowKey::Id(Entity::CanvasItem, r.id),
             Self::Provenance(r) => RowKey::Provenance {
                 id: r.id,
                 object_id: r.object_id,
@@ -384,6 +396,7 @@ impl Row {
             Self::Attachment(r) => r.validate(),
             Self::View(r) => r.validate(),
             Self::Provenance(r) => r.validate(),
+            Self::CanvasItem(r) => r.validate(),
         }
     }
 
@@ -399,6 +412,7 @@ impl Row {
             Self::Attachment(r) => serde_json::to_string(r),
             Self::View(r) => serde_json::to_string(r),
             Self::Provenance(r) => serde_json::to_string(r),
+            Self::CanvasItem(r) => serde_json::to_string(r),
         }?)
     }
 
@@ -418,6 +432,7 @@ impl Row {
             Entity::Attachment => Self::Attachment(serde_json::from_value(value)?),
             Entity::View => Self::View(serde_json::from_value(value)?),
             Entity::Provenance => Self::Provenance(serde_json::from_value(value)?),
+            Entity::CanvasItem => Self::CanvasItem(serde_json::from_value(value)?),
         })
     }
 
@@ -432,6 +447,7 @@ impl Row {
             Self::Attachment(r) => to_map(r),
             Self::View(r) => to_map(r),
             Self::Provenance(r) => to_map(r),
+            Self::CanvasItem(r) => to_map(r),
         }
     }
 
@@ -444,6 +460,7 @@ impl Row {
                 Self::Object(r) => r.updated_at = 0,
                 Self::Block(r) => r.updated_at = 0,
                 Self::View(r) => r.updated_at = 0,
+                Self::CanvasItem(r) => r.updated_at = 0,
                 _ => {}
             }
             row
@@ -930,9 +947,11 @@ mod tests {
         }
         assert!(Entity::Object.has_updated_at() && !Entity::Relation.has_updated_at());
         assert!(!Entity::Provenance.has_updated_at());
+        assert!(Entity::CanvasItem.has_updated_at());
+        assert!(kind("canvas_item.update").columns().contains(&"style_json"));
         assert!(kind("object.update").allows_props() && !kind("object.move").allows_props());
         assert!(kind("object_type.create").columns().is_empty());
-        assert_eq!(Entity::ALL.len(), 9);
+        assert_eq!(Entity::ALL.len(), 10);
     }
 
     fn provenance(n: u128, object: u128) -> ProvenanceRow {

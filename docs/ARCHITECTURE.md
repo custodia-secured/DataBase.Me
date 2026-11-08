@@ -41,6 +41,22 @@ is the map; the decisions behind it are in [adr/](adr/), and the on-disk format 
 
 Undo, history, provenance and later sync all come from the op log (ADR-0002).
 
+## How the views are built
+
+The registry (`packages/views/src/registry.ts`) is a list of views, each given one object and a way to open
+another, and a mode is a filter on it (ADR-0027). The five views of 0.1 stay in the first bundle. The rest load with
+`React.lazy`, so Vega, MapLibre, Sigma and Excalidraw each stay in a chunk of their own and a cold start does not
+pay for them. `framework/` holds what they share: a listing and its filters, settings that last until **Save
+view**, the error boundary around each view, and the keyboard grid behind **Show as list** (ADR-0031). Anything drawn
+from numbers reads them from SQL first, through `aggregate` (ADR-0032). The recommender is plain TypeScript with no
+React, and never switches a view by itself.
+
+Two views keep something the op log does not simply refresh. The Graph's layout runs in a worker of ours, paced by
+the page, and is never stored (ADR-0034). The Canvas keeps Excalidraw's scene and the store's rows the same through
+`canvas/sync.ts`: the store is the truth, and what is being drawn goes in first (ADR-0035).
+`apps/desktop/vite-plugin-excalidraw.ts` is what keeps that library from asking a CDN for its fonts, and the build
+fails if it stops finding what it replaces.
+
 ## Code map
 
 | Path                         | Role                                                                                                              | Milestone         |

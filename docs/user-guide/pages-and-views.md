@@ -16,8 +16,10 @@ The breadcrumbs at the top name the open page and the pages above it; each is a 
 
 ## The views
 
-The tabs above the pane switch the view of the open page. Each view is live: a change made in one
-shows at once in every other, including a second pane in **Split view**, and in the pages list.
+The tabs above the pane switch the view of the open page, and the **More views** menu at the end of
+them holds the rest. A view from the menu gets a tab while it is chosen. Each view is live: a change
+made in one shows at once in every other, including a second pane in **Split view**, and in the pages
+list.
 
 - **Document.** The title, the types and their fields (Organizer mode), and the text: paragraphs,
   headings, bulleted and numbered lists, to-do boxes, quotes, code and dividers, with bold, italic
@@ -37,8 +39,64 @@ shows at once in every other, including a second pane in **Split view**, and in 
 - **Gallery.** The pages inside this one, or of a type, as cards with a cover picture when the
   page has one.
 
-The view chosen for a pane is kept while the app runs. In Simple mode the Table view is not
-offered; the others are.
+In **More views** (Organizer mode):
+
+- **Kanban.** The pages inside this one as cards in columns, one column for each choice of a list
+  field and one for no value. **Group by** chooses the field when there is more than one. Drag a card
+  to move it, or use its **Move to** control. A first press selects a card, and a second opens it. On
+  a phone, one column at a time, with the others a swipe away.
+- **Calendar.** Month or week, by the event date or any date field. A day shows the first few things
+  on it and **+N more** for the rest. Drag an item to another day, or use **Move to**. An event keeps
+  its time of day and its length. **New item** adds one, and the list of what has no date holds the
+  rest. On a phone, an agenda of the days that have something on them. A day is the same day for
+  anyone who opens the vault, so a timed event from a file can land on the next day far from UTC.
+- **Timeline.** One lane by a date field or the event date, from days to decades. Close in, it draws
+  each thing, an event as long as it runs. Far out, it draws how many fall in each month, year or
+  decade. It shows and opens; the Calendar is where a date moves. Down the screen on a phone.
+- **Charts.** Bars, a line, an area or points, by any field, with dates grouped by day up to year, as
+  a count, sum, average, smallest or largest, split into series if you like. **Save view** keeps a
+  chart.
+- **Dashboard.** Saved charts and views side by side. **Add tile** puts one here, and each tile's
+  menu moves it, widens it or removes it. A tile that fails says so and leaves the others alone. One
+  column on a phone.
+- **Map.** The pages inside this one that have a location, grouped where they crowd. Choose a group to
+  go in, or a place to open, move or remove it. **Place on the map** sets a location by a click on the
+  map or by typing it. There is no address search, since that would have to ask someone. The map is
+  coastlines that come with the app; a map file of your own can replace them, in
+  [Settings](settings.md).
+- **Graph.** How what is below this page joins up, by relations and by what is inside what, or the
+  whole vault. Up to 200,000 pages. A page starts where its ID puts it, then the layout spreads them,
+  and **Pause layout** stops it. Choose a page to see what it joins. A phone starts on the list.
+- **Canvas.** This page's own drawing: shapes, lines, text and freehand, and **Add card**, which puts
+  a page from inside this one on the canvas as a card that follows its name. A card's corner icon, or
+  **Open** when it is chosen, opens its page. If its page goes to the Trash, the card says so. Each
+  stroke or move is one undo with the app's Undo, as anywhere else. **Pictures are not kept yet:** one
+  dropped on a canvas lasts until you leave the page, and the view says so.
+
+The view chosen for a pane is kept while the app runs. Simple mode offers Document, Outline, Mind
+map and Gallery. Everything else is hidden there and comes back with Organizer, with nothing lost.
+
+### Show as list
+
+Every view in **More views** has **Show as list**, in the same place: what the picture shows as a
+keyboard grid, with what it encodes written out in columns. It is the same pages, not a summary. The
+Map's has each place's coordinates, the Graph's each page's neighbours and what lies within a few
+relations of it, and the Canvas's each thing's position, which it can also move. A device that cannot
+draw a map or a graph gets the list and is told so. See
+[keyboard and accessibility](keyboard-and-accessibility.md).
+
+### Filters and saved views
+
+**Filter** narrows what a view shows, one row per condition: a field, a comparison and a value. Filters
+change nothing in the vault, and last while the view is open on this page. **Save view** keeps the
+filter, the order and the view's settings under a name. A saved view belongs to its page and its kind of
+view, and is listed in the bar above the view. Nothing is saved by looking at something.
+
+### Suggested
+
+**More views** ends with up to three views worth trying on what this page holds, each with its reason:
+a calendar if things have dates, a map if they have locations. It reads what is here only when the menu
+opens, and never switches a view by itself. The rules are in the app and nothing is sent anywhere.
 
 ## Types and fields (Organizer mode)
 

@@ -11,11 +11,13 @@ import type {
   AttachmentRow_Serialize,
   Backlink_Serialize,
   BlockRow_Serialize,
+  CanvasScene_Serialize,
   ColumnTarget_Serialize,
   DataProfile_Serialize,
   Conflict_Serialize,
   FacetBucket,
   FieldRow,
+  GraphData,
   Id,
   MirrorStatus,
   ObjectRow_Serialize,
@@ -59,6 +61,9 @@ export const keys = {
   aggregate: (aggregate: AggregateQuery_Deserialize) => [VAULT, "aggregate", aggregate] as const,
   dataProfile: (query: Query_Deserialize, fields: readonly string[]) =>
     [VAULT, "data-profile", query, fields] as const,
+  graph: (query: Query_Deserialize, limit: number) => [VAULT, "graph", query, limit] as const,
+  canvas: (owner: Id) => [VAULT, "canvas", owner] as const,
+  summaries: (ids: readonly Id[]) => [VAULT, "summaries", ids] as const,
   facets: (query: Query_Deserialize, field: string) => [VAULT, "facets", query, field] as const,
   views: () => [VAULT, "views"] as const,
   view: (id: Id) => [VAULT, "view", id] as const,
@@ -103,6 +108,24 @@ export function useSummary(id: Id | null) {
     queryKey: keys.summary(id ?? ""),
     queryFn: async () => (await unwrap(commands.objectSummaries([id ?? ""])))[0] ?? null,
     enabled: id !== null,
+  });
+}
+
+/** Several objects at once, each with its types, child count and cover. One that is gone is left out. */
+export function useSummaries(ids: readonly Id[]) {
+  return useQuery<ObjectSummary_Serialize[]>({
+    queryKey: keys.summaries(ids),
+    queryFn: () => unwrap(commands.objectSummaries([...ids])),
+    enabled: ids.length > 0,
+  });
+}
+
+/** What is on a page's canvas (ADR-0035). */
+export function useCanvas(owner: Id | null) {
+  return useQuery<CanvasScene_Serialize>({
+    queryKey: keys.canvas(owner ?? ""),
+    queryFn: () => unwrap(commands.canvasRead(owner ?? "")),
+    enabled: owner !== null,
   });
 }
 
@@ -232,6 +255,18 @@ export function useDataProfile(query: Query_Deserialize | null, fields: readonly
     queryKey: keys.dataProfile(query ?? {}, fields),
     queryFn: () => unwrap(commands.dataProfile(query ?? {}, [...fields])),
     enabled: query !== null,
+  });
+}
+
+/**
+ * A query's results as a graph (ADR-0034). Structural sharing keeps each array identical when nothing in
+ * it changed, so the view can tell a renamed node from a new one without comparing them itself.
+ */
+export function useGraph(query: Query_Deserialize, limit: number) {
+  return useQuery<GraphData>({
+    queryKey: keys.graph(query, limit),
+    queryFn: () => unwrap(commands.graphRead(query, limit)),
+    placeholderData: keepPreviousData,
   });
 }
 

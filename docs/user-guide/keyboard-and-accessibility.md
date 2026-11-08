@@ -73,6 +73,43 @@ drops it; Space ticks a box. The column headers sort.
 column dialog Enter adds the column. In Edit columns, Enter or leaving a name saves it. In both,
 Escape closes the dialog and keeps nothing still being typed.
 
+## Show as list
+
+Every view in **More views** has this switch, and the list is the way to use that view from the
+keyboard or with a screen reader. It is a grid with one tab stop: the arrows move, Home and End go to the
+ends of a row, the page keys move by a screen, Ctrl+Home and Ctrl+End go to the first and last rows, and
+Enter opens the row's page.
+
+## Kanban
+
+Left and Right go between columns, and Up, Down, Home, End and the page keys move within one. **Alt with the
+arrows** carries the chosen card along its column or to the next one, and says where it went. The **Move to**
+control does the same without those keys. Enter opens the card.
+
+## The Calendar
+
+A grid with one tab stop. Left and Right move by a day, Up and Down by a week, Home and End go to the ends of a
+week, and the page keys move by a month or a week, as the view shows. Enter goes into a day, where Up and Down choose among its items. **Alt with the arrows**
+carries the chosen item to another day, and Escape comes back out. The **Move to** control does the same.
+
+## The Timeline
+
+One tab stop. The arrows go to the previous or next thing, the page keys move by a screen, and Home and End
+go to the first and last. **+** and **-** zoom. Enter opens what is chosen.
+
+## The Graph and the Map
+
+The picture is one tab stop, with buttons to zoom, and on the Graph to show everything and pause the layout.
+The arrows pan, **+** and **-** zoom, and on the Graph **0** shows everything. With reduced motion, the
+layout waits to be asked. The Map's **Place on the map** dialog does with a form what a click on the map does.
+
+## The Canvas
+
+Drawing is by mouse or touch. **The list is how to use a canvas from the keyboard:** it has everything on the
+canvas with its kind, position and size. **Alt with the arrows** moves the chosen thing 20 pixels and says where
+it went, and buttons do the same. Enter opens a card. **Remove from canvas** takes the chosen thing off, and
+**Add card** is a form. Excalidraw's own markup is not part of what axe checks here, and the list is.
+
 ## Screen readers
 
 Regions, dialogs, trees, grids, tabs and menus are named and carry the roles assistive technology

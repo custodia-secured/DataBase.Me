@@ -204,8 +204,8 @@ function Chosen({
   onMove: () => void;
 }) {
   return (
-    <div className="dbme-map__selected" role="status">
-      <span className="dbme-map__selected-name">
+    <div className="dbme-geo__selected" role="status">
+      <span className="dbme-geo__selected-name">
         <strong>{place.title}</strong> <span>{placeLabel(place.lat, place.lon)}</span>
       </span>
       <Button
@@ -252,7 +252,7 @@ export function MapView({ objectId, onOpen }: ViewProps) {
   }, [picking]);
 
   return (
-    <section className="dbme-map" aria-label="Map">
+    <section className="dbme-geo" aria-label="Map">
       <ViewControls state={state} objectId={objectId} renderer="map" alternative />
       <div className="dbme-view-bar">
         <Button
@@ -262,7 +262,7 @@ export function MapView({ objectId, onOpen }: ViewProps) {
         >
           Place on the map
         </Button>
-        <p className="dbme-map__count" role="status">
+        <p className="dbme-geo__count" role="status">
           {ready ? summary : ""}
         </p>
       </div>
@@ -279,7 +279,7 @@ export function MapView({ objectId, onOpen }: ViewProps) {
         </StatusMessage>
       ) : null}
       {picking ? (
-        <div className="dbme-map__picking" role="status">
+        <div className="dbme-geo__picking" role="status">
           <span>Click the map to place {picking.title}.</span>
           <Button
             onClick={() => {

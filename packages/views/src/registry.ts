@@ -10,12 +10,14 @@ import {
   ListTree,
   MapPin,
   LayoutDashboard,
+  PenLine,
   Network,
   CalendarDays,
   ChartColumn,
   ChartGantt,
   SquareKanban,
   Table2,
+  Waypoints,
   type LucideIcon,
 } from "@databaseme/ui";
 import { lazy, type ComponentType } from "react";
@@ -38,6 +40,8 @@ export type ViewId =
   | "table"
   | "gallery"
   | "map"
+  | "graph"
+  | "canvas"
   | "mindmap"
   | "kanban"
   | "calendar"
@@ -107,6 +111,22 @@ export const VIEWS: readonly ViewDefinition[] = [
     component: lazy(() => import("./map/MapView").then((module) => ({ default: module.MapView }))),
   },
   {
+    id: "graph",
+    label: "Graph",
+    icon: Waypoints,
+    component: lazy(() =>
+      import("./graph/GraphView").then((module) => ({ default: module.GraphView })),
+    ),
+  },
+  {
+    id: "canvas",
+    label: "Canvas",
+    icon: PenLine,
+    component: lazy(() =>
+      import("./canvas/CanvasView").then((module) => ({ default: module.CanvasView })),
+    ),
+  },
+  {
     id: "dashboard",
     label: "Dashboard",
     icon: LayoutDashboard,
@@ -124,6 +144,8 @@ export function viewById(id: ViewId): ViewDefinition {
 const HIDDEN_IN_SIMPLE: readonly ViewId[] = [
   "table",
   "map",
+  "graph",
+  "canvas",
   "kanban",
   "calendar",
   "timeline",

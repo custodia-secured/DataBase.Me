@@ -13,8 +13,9 @@ and your edits flow back into the app.
 > opens in Obsidian; importing of Markdown folders, CSV, Excel, PDF and pictures; export; Simple
 > and Organizer modes; light and dark themes; installers for Windows, macOS and Linux. Progress is
 > tracked milestone by milestone in [docs/milestones/](docs/milestones/); the full plan is in
-> [DataBase.Me_Build_Plan.md](DataBase.Me_Build_Plan.md). Canvas, graph, timeline, map and chart
-> views, encryption, plugins, AI and sync are later milestones.
+> [DataBase.Me_Build_Plan.md](DataBase.Me_Build_Plan.md). Kanban, calendar, timeline, chart,
+> dashboard, map, graph and canvas views are built on the `m8-visual` branch and not released yet.
+> Encryption, plugins, AI and sync are later milestones.
 
 ## What it promises
 
@@ -77,6 +78,10 @@ pnpm dev                     # run the desktop app with hot reload
 pnpm test && cargo test --workspace
 pnpm --filter @databaseme/desktop tauri build   # build an installer for your OS
 ```
+
+On Windows, `Open DataBase.Me.cmd` runs `pnpm dev` with a double-click. Like `pnpm dev`, it opens the
+same vault and settings as an installed copy of the app, so a branch that changes the vault format
+upgrades that vault as it opens.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) lists every check CI runs.
 

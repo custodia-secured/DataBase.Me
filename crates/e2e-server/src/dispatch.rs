@@ -200,6 +200,13 @@ pub(crate) fn dispatch(session: &TestSession, cmd: &str, args: &Value) -> Reply<
             arg(args, "lat")?,
             arg(args, "lon")?,
         )),
+        "canvas_read" => ok(api::canvas_read(s, arg(args, "owner")?)),
+        "canvas_apply" => ok(api::canvas_apply(
+            s,
+            arg(args, "owner")?,
+            arg(args, "upsert")?,
+            arg(args, "remove")?,
+        )),
         "map_file_set" => ok(api::map_file_set(s, arg(args, "path")?)),
         "map_file_read" => ok(api::map_file_read(
             s,

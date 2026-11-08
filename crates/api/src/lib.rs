@@ -17,14 +17,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use dbme_core::model::{
-    AttachmentRole, AttachmentRow, BlockRow, FieldRow, ObjectRow, TypeRow, ViewRow,
+    AttachmentRole, AttachmentRow, BlockRow, CanvasItemRow, FieldRow, ObjectRow, TypeRow, ViewRow,
 };
 use dbme_core::query::{AggregateQuery, Query};
 use dbme_core::{ContentHash, CoreError, Id};
 use dbme_store::{
-    AggregateResult, Backlink, ColumnTarget, Committed, DataProfile, FacetBucket, GraphData,
-    NewAttachment, NewColumn, NewField, NewObject, NewRelation, NewView, ObjectSummary, ObjectTree,
-    Position, SearchHit, Sort, Source, StoreError, Txn, Vault, VaultOptions,
+    AggregateResult, Backlink, CanvasItem, ColumnTarget, Committed, DataProfile, FacetBucket,
+    GraphData, NewAttachment, NewColumn, NewField, NewObject, NewRelation, NewView, ObjectSummary,
+    ObjectTree, Position, SearchHit, Sort, Source, StoreError, Txn, Vault, VaultOptions,
 };
 
 mod blocks;
@@ -744,6 +744,41 @@ pub fn view_update(session: &Session, id: Id, view: NewView) -> Reply<bool> {
 /// Deletes a saved view. Undo brings it back.
 pub fn view_delete(session: &Session, id: Id) -> Reply<()> {
     session.transact(|txn| txn.delete_view(id))
+}
+
+// Canvases.
+
+/// What is on a page's canvas (ADR-0035).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct CanvasScene {
+    /// The view that holds it, or `None` if nothing has been put on it yet.
+    pub view_id: Option<Id>,
+    /// Its elements, bottom of the stack first.
+    pub items: Vec<CanvasItemRow>,
+}
+
+/// What is on a page's canvas.
+pub fn canvas_read(session: &Session, owner: Id) -> Reply<CanvasScene> {
+    session.with(|vault| {
+        let read = vault.read();
+        let view_id = read.canvas_view(owner)?.map(|view| view.id);
+        let items = match view_id {
+            Some(view) => read.canvas_items(view)?,
+            None => Vec::new(),
+        };
+        Ok(CanvasScene { view_id, items })
+    })
+}
+
+/// Writes what changed on a page's canvas, as one change. Returns its view, if it has one.
+pub fn canvas_apply(
+    session: &Session,
+    owner: Id,
+    upsert: Vec<CanvasItem>,
+    remove: Vec<String>,
+) -> Reply<Option<Id>> {
+    session.transact(|txn| txn.apply_to_canvas(owner, upsert, remove))
 }
 
 // Blocks.

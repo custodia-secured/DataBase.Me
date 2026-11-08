@@ -124,6 +124,11 @@ export function bulk(count: number): unknown {
   return { kind: "bulk", count, type_name: "Load item", parent_title: "Big table" };
 }
 
+/** `count` objects under one page, joined by relations: the graph budget's vault. */
+export function graphLoad(count: number): unknown {
+  return { kind: "graph", count, parent_title: "Big graph" };
+}
+
 /** A map too tall to read when fitted, so it opens on its root: three families of 30. */
 export function tallMap(): unknown {
   const range = (count: number) => Array.from({ length: count }, (_, i) => i + 1);

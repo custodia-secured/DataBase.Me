@@ -31,8 +31,8 @@ function plan(pins: readonly Pin[]): unknown {
   };
 }
 
-const host = (app: App): Locator => app.pane().locator(".dbme-map__host");
-const count = (app: App): Locator => app.pane().locator(".dbme-map__count");
+const host = (app: App): Locator => app.pane().locator(".dbme-geo__host");
+const count = (app: App): Locator => app.pane().locator(".dbme-geo__count");
 
 /** Waits for the map to settle with what the test expects drawn. */
 async function drawn(app: App, what: { points?: number; clusters?: number }): Promise<void> {
@@ -97,7 +97,7 @@ test("it draws the land and the places, and says how many in words", async ({
     "aria-label",
     "Map. 3 places on the map. 1 item has no location.",
   );
-  await expectAccessible(page, ".dbme-map");
+  await expectAccessible(page, ".dbme-geo");
 });
 
 test("what is close together clusters, and the buttons zoom and show it all again", async ({
@@ -152,7 +152,7 @@ test("a click on a place selects it, and it can be opened from there", async ({ 
   await open(app, seed, [{ title: "Reykjavik", at: [64.15, -21.94] }]);
   await drawn(app, { points: 1 });
   await app.press(host(app).locator("canvas"));
-  const chosen = app.pane().locator(".dbme-map__selected");
+  const chosen = app.pane().locator(".dbme-geo__selected");
   await expect(chosen).toContainText("Reykjavik");
   await expect(chosen).toContainText("64.15, -21.94");
   await app.press(chosen.getByRole("button", { name: "Open" }));
@@ -182,7 +182,7 @@ test("a location can be typed, and what is not one is refused and says why", asy
   await expect(dialog).toBeHidden();
   await expect(count(app)).toHaveText("1 place on the map.");
   expect(await geoOf(app, "Reykjavik")).toEqual([64.15, -21.94]);
-  await expect(app.pane().locator(".dbme-map__selected")).toContainText("Reykjavik");
+  await expect(app.pane().locator(".dbme-geo__selected")).toContainText("Reykjavik");
 });
 
 test("a location can be set by a click, and the click can be called off", async ({
@@ -194,13 +194,13 @@ test("a location can be set by a click, and the click can be called off", async 
   const pickOnMap = async () => {
     await app.press(app.pane().getByRole("button", { name: "Place on the map" }));
     await app.press(page.getByRole("button", { name: "Pick on the map" }));
-    await expect(app.pane().locator(".dbme-map__picking")).toContainText(
+    await expect(app.pane().locator(".dbme-geo__picking")).toContainText(
       "Click the map to place Reykjavik.",
     );
   };
   await pickOnMap();
-  await app.press(app.pane().locator(".dbme-map__picking").getByRole("button", { name: "Cancel" }));
-  await expect(app.pane().locator(".dbme-map__picking")).toHaveCount(0);
+  await app.press(app.pane().locator(".dbme-geo__picking").getByRole("button", { name: "Cancel" }));
+  await expect(app.pane().locator(".dbme-geo__picking")).toHaveCount(0);
   expect(await geoOf(app, "Reykjavik")).toEqual([null, null]);
 
   await pickOnMap();
@@ -209,7 +209,7 @@ test("a location can be set by a click, and the click can be called off", async 
   const [lat, lon] = await geoOf(app, "Reykjavik");
   expect(lat).not.toBeNull();
   expect(lon).not.toBeNull();
-  await expect(app.pane().locator(".dbme-map__picking")).toHaveCount(0);
+  await expect(app.pane().locator(".dbme-geo__picking")).toHaveCount(0);
   await drawn(app, { points: 1 });
 });
 
@@ -217,7 +217,7 @@ test("a location can be removed, and undone", async ({ app, seed }) => {
   await open(app, seed, [{ title: "Reykjavik", at: [64.15, -21.94] }]);
   await drawn(app, { points: 1 });
   await app.press(host(app).locator("canvas"));
-  const chosen = app.pane().locator(".dbme-map__selected");
+  const chosen = app.pane().locator(".dbme-geo__selected");
   await app.press(chosen.getByRole("button", { name: "Remove location" }));
   await expect(count(app)).toHaveText("0 places on the map. 1 item has no location.");
   await expect(chosen).toHaveCount(0);
@@ -238,7 +238,7 @@ test("the list has every item with its coordinates, by keyboard alone", async ({
   await expect(grid).toContainText("64.15, -21.94");
   await expect(grid).toContainText("Nowhere yet");
   await expect(grid).toContainText("No location");
-  await expectAccessible(page, ".dbme-map");
+  await expectAccessible(page, ".dbme-geo");
   if (app.phone) return;
   await grid.focus();
   await page.keyboard.press("Enter");
@@ -381,14 +381,14 @@ test("it holds in dark, in colours of its own", async ({ app, seed, page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await app.view("Map");
   await drawn(app, { points: 3 });
-  await expectAccessible(page, ".dbme-map");
+  await expectAccessible(page, ".dbme-geo");
 });
 
 test("it fits a phone", async ({ app, seed, page }) => {
   await open(app, seed, SCATTERED);
   await drawn(app, { points: 3 });
   const width = page.viewportSize()?.width ?? 0;
-  const box = await app.pane().locator(".dbme-map").boundingBox();
+  const box = await app.pane().locator(".dbme-geo").boundingBox();
   expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(width);
   const mapBox = await host(app).boundingBox();
   expect(mapBox?.height ?? 0).toBeGreaterThan(200);

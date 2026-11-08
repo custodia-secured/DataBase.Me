@@ -689,7 +689,7 @@
 
 /* --- The Map (M8) ------------------------------------------------------------------------- */
 
-.dbme-map {
+.dbme-geo {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -698,40 +698,40 @@
   padding: var(--dbme-space-3);
 }
 
-.dbme-map__count {
+.dbme-geo__count {
   margin: 0;
   color: var(--dbme-color-fg-muted);
   font-size: 0.875rem;
 }
 
-.dbme-map__stage {
+.dbme-geo__stage {
   position: relative;
   display: flex;
   flex: 1;
   min-height: 14rem;
 }
 
-.dbme-map__host {
+.dbme-geo__host {
   flex: 1;
   overflow: hidden;
   border: 1px solid var(--dbme-color-border);
   border-radius: var(--dbme-radius);
 }
 
-.dbme-map__host .maplibregl-canvas:focus-visible {
+.dbme-geo__host .maplibregl-canvas:focus-visible {
   outline: 2px solid var(--dbme-color-focus);
   outline-offset: -2px;
 }
 
-.dbme-map__host .maplibregl-canvas.is-over {
+.dbme-geo__host .maplibregl-canvas.is-over {
   cursor: pointer;
 }
 
-.dbme-map__stage.is-picking .maplibregl-canvas {
+.dbme-geo__stage.is-picking .maplibregl-canvas {
   cursor: crosshair;
 }
 
-.dbme-map__tools {
+.dbme-geo__tools {
   position: absolute;
   top: var(--dbme-space-2);
   right: var(--dbme-space-2);
@@ -742,8 +742,8 @@
   background: var(--dbme-color-bg);
 }
 
-.dbme-map__selected,
-.dbme-map__picking {
+.dbme-geo__selected,
+.dbme-geo__picking {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -751,9 +751,130 @@
   font-size: 0.875rem;
 }
 
-.dbme-map__selected-name {
+.dbme-geo__selected-name {
   flex: 1;
   min-width: 10rem;
+}
+
+/* --- The Graph (M8) ----------------------------------------------------------------------- */
+
+.dbme-graph {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+  min-height: 0;
+  padding: var(--dbme-space-3);
+}
+
+.dbme-graph__count {
+  margin: 0;
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.875rem;
+}
+
+.dbme-graph__stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 14rem;
+}
+
+.dbme-graph__host {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-graph__host:focus-visible {
+  outline: 2px solid var(--dbme-color-focus);
+  outline-offset: -2px;
+}
+
+.dbme-graph__tools {
+  position: absolute;
+  top: var(--dbme-space-2);
+  right: var(--dbme-space-2);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--dbme-space-1);
+  border-radius: var(--dbme-radius);
+  background: var(--dbme-color-bg);
+}
+
+.dbme-graph__selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbme-space-2);
+  font-size: 0.875rem;
+}
+
+.dbme-graph__selected-name {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.dbme-graph__key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbme-space-2) var(--dbme-space-4);
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.8125rem;
+}
+
+.dbme-graph__key p {
+  margin: 0;
+}
+
+.dbme-graph__types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-1) var(--dbme-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dbme-graph__types li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dbme-space-1);
+}
+
+.dbme-graph__swatch {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+}
+
+.dbme-graph__list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+  min-height: 0;
+}
+
+.dbme-graph__nearby {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+  max-height: 40%;
+  overflow: auto;
+}
+
+.dbme-graph__nearby-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbme-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 /* --- The filter editor (M8) ------------------------------------------------- */
@@ -2493,4 +2614,109 @@ li.ProseMirror-selectednode::after {
 
 .dbme-settings__footer {
   justify-content: flex-end;
+}
+
+/* --- The Canvas (M8) ---------------------------------------------------------------------- */
+
+.dbme-canvas {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--dbme-space-2);
+  min-height: 0;
+  padding: var(--dbme-space-3);
+}
+
+.dbme-canvas__as-list {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dbme-space-1);
+  font-size: 0.875rem;
+}
+
+.dbme-canvas__count {
+  margin: 0;
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.875rem;
+}
+
+.dbme-canvas__selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbme-space-2);
+  font-size: 0.875rem;
+}
+
+.dbme-canvas__selected-name {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.dbme-canvas__stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 14rem;
+}
+
+.dbme-canvas__host {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border: 1px solid var(--dbme-color-border);
+  border-radius: var(--dbme-radius);
+}
+
+.dbme-canvas__list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dbme-canvas__card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--dbme-space-1);
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: var(--dbme-space-2) var(--dbme-space-3);
+  overflow: hidden;
+  background: var(--dbme-color-bg);
+  color: var(--dbme-color-fg);
+  font-size: 0.875rem;
+}
+
+.dbme-canvas__card strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dbme-canvas__card span {
+  color: var(--dbme-color-fg-muted);
+  font-size: 0.8125rem;
+}
+
+/*
+ * What Excalidraw has that the app does not offer (ADR-0035): its library, its Undo and Redo, which the
+ * app's stand in for, its links, and the tools that embed a web page or ask a service for something. Help
+ * loses its header, which is all links out. Ctrl+F still finds text on the canvas, in the sidebar the library
+ * shares, so only the tabs between the two go. Its stylesheet loads after this one and its own rules outweigh
+ * a plain one, and this has to hold through an upgrade, so this is the one place the app says !important.
+ */
+.excalidraw .default-sidebar-trigger,
+.excalidraw .default-sidebar .sidebar-triggers,
+.excalidraw .library-menu-browse-button,
+.excalidraw .undo-redo-buttons,
+.excalidraw .excalidraw__embeddable-hint,
+.excalidraw .excalidraw-hyperlinkContainer,
+.excalidraw [data-testid="hyperlink"],
+.excalidraw [data-testid="toolbar-embeddable"],
+.excalidraw [data-testid="toolbar-magicframe"],
+.excalidraw .HelpDialog__header {
+  display: none !important;
 }

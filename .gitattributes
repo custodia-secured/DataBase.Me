@@ -1,6 +1,9 @@
 # Keep every text file LF in the repository, whatever the contributor's OS.
 * text=auto eol=lf
 
+# cmd.exe misreads a script with LF endings.
+*.cmd text eol=crlf
+
 *.png binary
 *.ico binary
 *.icns binary

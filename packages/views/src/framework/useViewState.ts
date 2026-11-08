@@ -39,17 +39,19 @@ export function useViewState<O>(
   objectId: Id,
   defaults: O,
   defaultSort: Sort = MANUAL,
+  /** Whether the view starts as its alternative, as the Graph does on a phone. */
+  startAsList = false,
 ): ViewState<O> {
   const [listing, setListing] = useState<Listing>(() => listingOf(objectId));
   const [sort, setSort] = useState<Sort>(defaultSort);
   const [options, setOptions] = useState<O>(defaults);
-  const [asList, setAsList] = useState(false);
+  const [asList, setAsList] = useState(startAsList);
   const [savedId, setSavedId] = useState<Id | null>(null);
   const reset = () => {
     setListing(listingOf(objectId));
     setSort(defaultSort);
     setOptions(defaults);
-    setAsList(false);
+    setAsList(startAsList);
     setSavedId(null);
   };
   // Another object starts over: settings belong to the object they were chosen on.

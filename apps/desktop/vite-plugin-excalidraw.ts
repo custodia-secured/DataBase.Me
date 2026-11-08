@@ -6,28 +6,20 @@
  *   The CSP refuses it, but the attempt is a report per font, and the promise is that the app does
  *   not try. The transform points the fallback at the app's own copy and fails the build if the
  *   library stops having it, so an upgrade cannot quietly bring it back.
- * - The fonts are copied into the build. Xiaolai (CJK) is left out: it is 13 MB of the 13.5 MB, and
- *   CJK text falls back to the system's fonts.
+ * - The fonts are copied into the build with their licences (third-party/excalidraw-fonts-NOTICE.txt,
+ *   ADR-0035). Xiaolai (CJK) is left out: it is 13 MB of the 13.5 MB, and CJK text falls back to the
+ *   system's fonts. So is Liberation, which only a server-side export of Excalidraw's asks for.
  *
  * The optional Mermaid importer is not here: `pnpm-workspace.yaml` overrides it with an empty package,
  * so neither it nor what it brings is installed.
  */
-import { cpSync, existsSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type { Plugin } from "vite";
 
 export const EXCALIDRAW_ASSETS = "excalidraw-assets";
-const FONTS = [
-  "Assistant",
-  "Cascadia",
-  "ComicShanns",
-  "Excalifont",
-  "Liberation",
-  "Lilita",
-  "Nunito",
-  "Virgil",
-];
+const FONTS = ["Assistant", "Cascadia", "ComicShanns", "Excalifont", "Lilita", "Nunito", "Virgil"];
 // The literal holds a nested template (the package and its version), so it ends at its known tail.
 const CDN = /`https:\/\/esm\.sh\/[\s\S]*?\/dist\/prod\/`/;
 
@@ -66,6 +58,10 @@ export function excalidrawOffline(): Plugin {
           recursive: true,
         });
       }
+      copyFileSync(
+        path.resolve(import.meta.dirname, "third-party/excalidraw-fonts-NOTICE.txt"),
+        path.join(outDir, EXCALIDRAW_ASSETS, "NOTICE.txt"),
+      );
     },
   };
 }

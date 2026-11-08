@@ -109,6 +109,14 @@ grep -E 'connect|sendto|sendmsg' /tmp/dbme-trace.txt | grep -v AF_UNIX
 Every line left should name `127.0.0.1`, `::1` or no address at all. The repository's
 `scripts/network-probe.mjs` reads the same file and prints the verdict, if you have Node.js.
 
+## The views that look as if they would ask
+
+None of them does. **The Map's** coastlines come with the app, and a map file is one you chose on this device.
+There is no address search, and no map from a server. **The Canvas's** drawing library and fonts come with the
+app, and what it has that would lead out (a library of shapes from a website, web pages in a frame, links on
+shapes) is hidden. **Charts** are drawn from numbers the app counted, and **Suggested** runs in the app. The app's
+policy stops any request the code might attempt, and the tests fail if one is tried.
+
 ## What would change this
 
 Two features on the roadmap would make a request, and both are opt-in, off by default, and

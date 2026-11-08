@@ -6,7 +6,33 @@ All notable changes to DataBase.Me are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- M8 Visual v1: eight more views behind **More views**, each with **Show as list** and a phone layout.
+  **Kanban**, by any list field. **Calendar**, month and week, with an agenda on a phone. **Timeline**, from
+  days to decades. **Charts**, drawn by Vega-Lite from numbers the store counts. **Dashboard**, saved charts and
+  views as tiles. **Map**, on coastlines that come with the app, or a PMTiles file of your own, and with no
+  address search. **Graph**, on WebGL, up to 200,000 pages, with a layout you can pause. **Canvas**, on Excalidraw,
+  with cards that follow their pages. Nothing here makes a network request. ADR-0031 to ADR-0035.
+- Filters and saved views on every view that lists pages: the filter editor writes query conditions, and
+  **Save view** keeps them with the view's settings. Nothing is saved by looking at something.
+- **Suggested** at the foot of **More views**: up to three views worth trying, each with its reason, from rules in
+  the app. Their agreement with labelled fixtures is 95% on a held-out set, and the labels are the author's and not an
+  independent expert's.
+- New reads for these: aggregates in SQL, a profile of a page's contents, the whole graph in one call, and
+  `related_to` to a depth of six.
+
+### Changed
+
+- **The vault format moves to migration 5**, which adds `canvas_items` (FORMAT.md §3.1). A vault opened by this
+  version is refused by 0.1, as a newer vault always is.
+- A full export also writes `canvas/<view-id>.json` for each canvas with anything on it.
+
 ### Fixed
+
+- A page with a saved view can be deleted from the Trash. It failed on a foreign key.
+- At 360 pixels the top bar's buttons were wider than the screen, with Redo off the edge and the page scrolling
+  sideways.
 
 - The Table can add columns ([#15](https://github.com/custodia-secured/DataBase.Me/issues/15)).
   Nothing in the app could create a field or a type, and the built-in types have no fields, so only

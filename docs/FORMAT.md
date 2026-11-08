@@ -147,13 +147,24 @@ deleted for good, and with the undo of the transaction that wrote it.
 | ------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `provenance` | Where an object came from: one row per import or capture | `id`, `object_id` → `objects`, `source_kind` (`manual`, `import:<importer>`, `clip`, `feed`, `file:external`, `ai:<model>` or `plugin:<id>`), `source_uri?` (the file, page or address), `import_run_id?` (the run's ULID; the run's rows are its receipt), `original_blob?` (the source file in the blob store, usually the object's `original` attachment; not a foreign key, since `blobs` rows exist only once an attachment refers to a blob), `extractor`, `extractor_version`, `confidence` (0 to 1), `accepted`, `created_at` |
 
+Migration 5 (M8, ADR-0035; Proposed) adds one more table the op log produces: what is drawn on a canvas.
+A canvas is a `views` row with the renderer `canvas`, owned by its page; there is at most one for a page,
+and it is made by the first thing put on it.
+
+| Table          | Purpose                                                             | Columns                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `canvas_items` | One element of a canvas: a shape, a line, a piece of text or a card | `id`, `view_id` → `views`, `item_id` (the drawing library's name for the element, which other elements use to refer to it; 1 to 64 of letters, digits, `-` and `_`; unique in its view), `object_id?` → `objects` (what a card shows; only a card has one), `x`, `y`, `w`, `h` (finite `REAL`s, in canvas units), `z` (its fractional place in the stack; rows sort by `z`, then `item_id`), `style_json` (a JSON object, everything else about it, as Excalidraw 0.18 has it), `created_at`, `updated_at` |
+
 Rules the schema does not express, which an app MUST keep:
 
 - An object's parents never loop, and a block's parents never loop or leave its object. A type's
   `extends` chain never loops.
 - Trashing an object sets `deleted_at` on it and on every live object below it; restoring clears
   them. An object is deleted for good only from the Trash, together with its blocks, its type
-  assignments, its attachments and the relations that start or end at it.
+  assignments, its attachments, the relations that start or end at it, the views it owns with what
+  is on them, and the cards that show it on other canvases.
+- A new card shows a live object. A card already on a canvas stays while its object is in the Trash.
+  A trashed page's canvas takes no changes.
 - A system type (`is_system` = 1) is never deleted. A type is deleted only when no object has it,
   no type extends it and no relation uses one of its fields; its fields go with it.
 - A relation drawn by hand has `rel_type` `related`, and no `field_id` or `src_block_id`. It never
@@ -199,14 +210,14 @@ reachable URL. The options of a `select` or `multi_select` field are listed in `
 These tables arrive with the migrations of the milestones that use them. Their columns are the
 handoff brief's draft.
 
-| Table          | Purpose                                                               | Columns                                                                                       |
-| -------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `canvas_items` | Positions on a canvas view                                            | `view_id`, `item_id`, `object_id`, `x`, `y`, `w`, `h`, `z`, `style_json`                      |
-| `spaces`       | Top-level spaces and their AI policy                                  | `id`, `name`, `ai_policy` (`none`, `local_only`, `any`), `settings_json`                      |
-| `ai_audit`     | Every AI call                                                         | `id`, `ts`, `provider`, `model`, `purpose`, `object_ids_json`, `bytes_sent`, `user_initiated` |
-| `vec_chunks`   | sqlite-vec embeddings (derived; only with an embedding provider, M11) | `chunk_id`, `embedding`                                                                       |
+| Table        | Purpose                                                               | Columns                                                                                       |
+| ------------ | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `spaces`     | Top-level spaces and their AI policy                                  | `id`, `name`, `ai_policy` (`none`, `local_only`, `any`), `settings_json`                      |
+| `ai_audit`   | Every AI call                                                         | `id`, `ts`, `provider`, `model`, `purpose`, `object_ids_json`, `bytes_sent`, `user_initiated` |
+| `vec_chunks` | sqlite-vec embeddings (derived; only with an embedding provider, M11) | `chunk_id`, `embedding`                                                                       |
 
-`mirror_state` and `conflicts` arrived with migration 3, and `provenance` with migration 4 (§3.1).
+`mirror_state` and `conflicts` arrived with migration 3, `provenance` with migration 4 and
+`canvas_items` with migration 5 (§3.1).
 
 ### 3.5 Block content (Decided, ADR-0016)
 
@@ -274,8 +285,8 @@ verification does this (§5.5). Rows of `ops` are never updated or deleted.
 ### 5.2 Kinds
 
 An op changes exactly one row. Its entity names the table: `type`, `field`, `object`,
-`object_type`, `block`, `relation`, `attachment`, from migration 2 `view`, and from migration 4
-`provenance`. The actions are:
+`object_type`, `block`, `relation`, `attachment`, from migration 2 `view`, from migration 4
+`provenance`, and from migration 5 `canvas_item`, whose table is `canvas_items`. The actions are:
 
 | Action    | Entities             | Payload | Columns it may change                                                                                            |
 | --------- | -------------------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -287,6 +298,7 @@ An op changes exactly one row. Its entity names the table: `type`, `field`, `obj
 | `update`  | `block`              | update  | `kind`, `content_json`                                                                                           |
 | `update`  | `relation`           | update  | `label`, `props_json`                                                                                            |
 | `update`  | `view`               | update  | `name`, `renderer`, `query_json`, `config_json`, `owner_object_id`                                               |
+| `update`  | `canvas_item`        | update  | `object_id`, `x`, `y`, `w`, `h`, `z`, `style_json`                                                               |
 | `move`    | `object`, `block`    | update  | `parent_id` and `sort_key` (objects); `parent_block_id` and `sort_key` (blocks)                                  |
 | `trash`   | `object`, `relation` | update  | `deleted_at`                                                                                                     |
 | `restore` | `object`, `relation` | update  | `deleted_at`                                                                                                     |
@@ -421,8 +433,8 @@ links:
 
 ### 6.4 Not in the files folder
 
-Canvas layouts, view configurations, the op log and the AI audit log stay in the database. They are
-exported as read-only JSON.
+Canvases, view configurations, the op log and the AI audit log stay in the database. They are
+exported as read-only JSON (§7).
 
 ### 6.5 Merge, identity and `schema.json`
 
@@ -445,7 +457,10 @@ exported as read-only JSON.
 ## 7. Export folder (Draft, M5, ADR-0021)
 
 - `export/schema/types.json`: every type with its fields.
-- `export/views/<view-id>.json`: one file per saved view.
+- `export/views/<view-id>.json`: one file per saved view, a canvas's view among them.
+- `export/canvas/<view-id>.json`: for a view with anything on it, its `canvas_items` rows in stack
+  order. A reader needs to know Excalidraw 0.18's elements to draw one from `style_json`; the columns
+  say where everything is and what a card shows.
 - `export/data/<Type>.csv`: one CSV per type, one row per live (not trashed) object of the type:
   `id`, `title`, `parent_id`, `created_at`, `updated_at`, then the type's fields in `sort_order`,
   inherited fields included. Multi-valued fields are JSON arrays in a single cell. RFC 4180
@@ -482,13 +497,14 @@ export followed by an import therefore reproduces every table and the chain (M5 
 
 ## 10. Changes to this document
 
-| Version | Date       | Change                                                                                                                                                                                               |
-| ------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Draft 0 | 2026-10-25 | First draft (M0).                                                                                                                                                                                    |
-| Draft 1 | 2026-10-25 | M1: vault lock and creation (§1), sort keys (§2.1), the tables of migration 1 (§3), field values (§3.3) and the op log (§5) are decided.                                                             |
-| Draft 2 | 2026-10-25 | M2: block content and mentions (§3.5) are decided.                                                                                                                                                   |
-| Draft 3 | 2026-11-01 | M3: `related` is the `rel_type` of a relation drawn on the mind map; it has no `field_id` or `src_block_id` (§3.1).                                                                                  |
-| Draft 4 | 2026-11-02 | M4: migration 2 adds `views` and the derived search tables (§3.1), and the `view` entity (§5.2). Proposed, with ADR-0020.                                                                            |
-| Draft 5 | 2026-11-02 | M5: migration 3 adds the files folder's bookkeeping (§3.1); the files folder (§6) and the full export and import (§7). Proposed, with ADR-0021.                                                      |
-| Draft 6 | 2026-11-03 | M6: migration 4 adds `provenance` (§3.1) and the `provenance` entity, created and deleted only, targeting its object (§5). Proposed, with ADR-0026.                                                  |
-| v0.1    | 2026-11-03 | M7: published with DataBase.Me 0.1. No change to the bytes: §1 to §3.3, §3.5, §4 and §5 are Decided; §3.4, §6, §7 and §8 are Draft with their ADR or milestone; `themes/` stays reserved (ADR-0027). |
+| Version    | Date       | Change                                                                                                                                                                                                                                                                                             |
+| ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Draft 0    | 2026-10-25 | First draft (M0).                                                                                                                                                                                                                                                                                  |
+| Draft 1    | 2026-10-25 | M1: vault lock and creation (§1), sort keys (§2.1), the tables of migration 1 (§3), field values (§3.3) and the op log (§5) are decided.                                                                                                                                                           |
+| Draft 2    | 2026-10-25 | M2: block content and mentions (§3.5) are decided.                                                                                                                                                                                                                                                 |
+| Draft 3    | 2026-11-01 | M3: `related` is the `rel_type` of a relation drawn on the mind map; it has no `field_id` or `src_block_id` (§3.1).                                                                                                                                                                                |
+| Draft 4    | 2026-11-02 | M4: migration 2 adds `views` and the derived search tables (§3.1), and the `view` entity (§5.2). Proposed, with ADR-0020.                                                                                                                                                                          |
+| Draft 5    | 2026-11-02 | M5: migration 3 adds the files folder's bookkeeping (§3.1); the files folder (§6) and the full export and import (§7). Proposed, with ADR-0021.                                                                                                                                                    |
+| Draft 6    | 2026-11-03 | M6: migration 4 adds `provenance` (§3.1) and the `provenance` entity, created and deleted only, targeting its object (§5). Proposed, with ADR-0026.                                                                                                                                                |
+| v0.1       | 2026-11-03 | M7: published with DataBase.Me 0.1. No change to the bytes: §1 to §3.3, §3.5, §4 and §5 are Decided; §3.4, §6, §7 and §8 are Draft with their ADR or milestone; `themes/` stays reserved (ADR-0027).                                                                                               |
+| v0.2 draft | 2026-11-05 | M8: migration 5 adds `canvas_items` (§3.1) and the `canvas_item` entity (§5.2), moved up from §3.4, with `id`, `created_at` and `updated_at` beyond the brief's draft; the rules for a page deleted for good now name what it owns (§3.1); the export has `canvas/` (§7). Proposed, with ADR-0035. |

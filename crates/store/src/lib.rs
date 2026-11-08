@@ -44,8 +44,8 @@ pub use query::Reader;
 pub use results::FacetBucket;
 pub use search::{SearchHit, match_expression};
 pub use txn::{
-    NewAttachment, NewBlock, NewColumn, NewField, NewObject, NewProvenance, NewRelation, NewType,
-    NewView, Position, Txn,
+    CanvasItem, NewAttachment, NewBlock, NewColumn, NewField, NewObject, NewProvenance,
+    NewRelation, NewType, NewView, Position, Txn,
 };
 pub use vault::{
     BLOBS_FOLDER, Committed, DATABASE_FILE, FORMAT_FILE, LOCK_FILE, VAULT_EXTENSION, Vault,
